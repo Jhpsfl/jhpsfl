@@ -399,7 +399,9 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const displayGallery = resolvedGallery.length ? resolvedGallery : FALLBACK_GALLERY;
 
   // ─── Hero / promo images ───
-  const heroImageSrc = getSanityImageSrc(homePage?.heroImage, 700, 500) || "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop";
+  // Hero uses fit("max") — no crop, full image always visible
+  const heroImageSrc = homePage?.heroImage ? getLogoSrc(homePage.heroImage, 900) || "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop" : "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop";
+  // Promos are background banners — crop to fill is correct
   const promoFeaturedSrc = getSanityImageSrc(homePage?.promoFeaturedImage, 800, 400) || "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=400&fit=crop";
   const promoSecondarySrc = getSanityImageSrc(homePage?.promoSecondaryImage, 800, 400) || "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=400&fit=crop";
 
@@ -700,13 +702,16 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   borderRadius: 24, overflow: "hidden",
                   boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
                   border: `1px solid ${primaryHex}26`,
-                  position: "relative", height: 420,
+                  position: "relative", minHeight: 320,
+                  background: "rgba(5,14,5,0.6)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   <Image
                     src={heroImageSrc}
                     alt="Professional property service"
-                    fill
-                    style={{ objectFit: "cover" }}
+                    width={900}
+                    height={900}
+                    style={{ width: "100%", height: "auto", display: "block", borderRadius: 24 }}
                     sizes="(max-width: 768px) 100vw, 50vw"
                     priority
                   />
