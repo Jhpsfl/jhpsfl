@@ -949,13 +949,13 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
             {filteredGallery.map((img, i) => (
               <FadeIn key={img.src + i} delay={0.08 * i}>
                 <div className="gallery-item" onClick={() => setLightboxImg(img)}>
-                  <div style={{ position: "relative", overflow: "hidden", height: 260 }}>
+                  <div style={{ position: "relative", overflow: "hidden", height: img.imageFit === "contain" ? "auto" : 260, minHeight: img.imageFit === "contain" ? 180 : 260, aspectRatio: img.imageFit === "contain" ? "16/9" : undefined }}>
                     <Image
                       src={img.src}
                       alt={img.caption}
                       fill
                       className="gallery-img"
-                      style={{ objectFit: img.imageFit || 'cover', objectPosition: img.imagePosition || 'center' }}
+                      style={{ objectFit: img.imageFit || 'cover', objectPosition: img.imagePosition || 'center', background: '#0a1a0a' }}
                       sizes="(max-width: 768px) 100vw, 33vw"
                     />
                     <div style={{
