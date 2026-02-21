@@ -11,6 +11,7 @@ interface GalleryItemLocal {
   tag: string;
   imageFit?: CSSProperties['objectFit'];
   imagePosition?: string;
+  fullSrc?: string;
 }
 
 interface SanityGalleryItem {
@@ -436,13 +437,18 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
     'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop',
   ];
 
-  const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g, i) => ({
-    src: getSanityImageSrc(g.image, 800, 600, g.imageFit || 'cover') || g.imageUrl || FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length],
-    caption: g.caption || '',
-    tag: g.tag || 'Lawn Care',
-    imageFit: (g.imageFit || 'cover') as CSSProperties['objectFit'],
-    imagePosition: g.imagePosition || 'center',
-  }));
+  const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g, i) => {
+    const fallback = FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length];
+    const fit = g.imageFit || 'cover';
+    return {
+      src: getSanityImageSrc(g.image, 800, 600, fit) || g.imageUrl || fallback,
+      fullSrc: (g.image?.asset ? urlFor(g.image).width(1600).fit("max").url() : null) || g.imageUrl || fallback,
+      caption: g.caption || '',
+      tag: g.tag || 'Lawn Care',
+      imageFit: fit as CSSProperties['objectFit'],
+      imagePosition: g.imagePosition || 'center',
+    };
+  });
   const displayGallery = resolvedGallery.length ? resolvedGallery : FALLBACK_GALLERY;
 
   // ─── Hero / promo images ───
@@ -949,7 +955,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
             {filteredGallery.map((img, i) => (
               <FadeIn key={img.src + i} delay={0.08 * i}>
                 <div className="gallery-item" onClick={() => setLightboxImg(img)}>
-                  <div style={{ position: "relative", overflow: "hidden", height: img.imageFit === "contain" ? "auto" : 260, minHeight: img.imageFit === "contain" ? 180 : 260, aspectRatio: img.imageFit === "contain" ? "16/9" : undefined }}>
+                  <div style={{ position: "relative", overflow: "hidden", height: img.imageFit === "contain" ? 0 : 260, paddingBottom: img.imageFit === "contain" ? "56.25%" : 0, minHeight: img.imageFit === "contain" ? 0 : 260 }}>
                     <Image
                       src={img.src}
                       alt={img.caption}
@@ -1192,7 +1198,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
 
       {/* ─── MODALS ─── */}
       {showEstimate && <EstimateModal onClose={() => setShowEstimate(false)} email={email} />}
-      {lightboxImg && <Lightbox src={lightboxImg.src} alt={lightboxImg.caption} onClose={() => setLightboxImg(null)} />}
+      {lightboxImg && <Lightbox src={lightboxImg.fullSrc || lightboxImg.src} alt={lightboxImg.caption} onClose={() => setLightboxImg(null)} />}
     </div>
   );
 }
