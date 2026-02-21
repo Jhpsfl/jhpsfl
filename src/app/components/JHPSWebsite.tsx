@@ -9,6 +9,8 @@ interface GalleryItemLocal {
   src: string;
   caption: string;
   tag: string;
+  imageFit?: CSSProperties['objectFit'];
+  imagePosition?: string;
 }
 
 interface SanityGalleryItem {
@@ -16,6 +18,9 @@ interface SanityGalleryItem {
   caption?: string;
   tag?: string;
   image?: { asset?: { _ref?: string; url?: string } };
+  imageUrl?: string;
+  imageFit?: string;
+  imagePosition?: string;
 }
 
 interface SanityService {
@@ -24,6 +29,9 @@ interface SanityService {
   description?: string;
   icon?: string;
   image?: { asset?: { _ref?: string; url?: string } };
+  imageUrl?: string;
+  imageFit?: string;
+  imagePosition?: string;
 }
 
 interface SanityStep {
@@ -56,6 +64,9 @@ interface SiteSettings {
   email?: string;
   logo?: { asset?: { _ref?: string; url?: string } };
   logoMaxWidth?: number;
+  logoMaxHeight?: number;
+  logoFit?: string;
+  logoPadding?: number;
   primaryColor?: SanityColor;
   darkColor?: SanityColor;
   backgroundColor?: SanityColor;
@@ -71,11 +82,22 @@ interface HomePage {
   heroHighlight?: string;
   heroDescription?: string;
   heroImage?: { asset?: { _ref?: string; url?: string } };
+  heroUrl?: string;
+  heroFit?: string;
+  heroPosition?: string;
   promoFeaturedImage?: { asset?: { _ref?: string; url?: string } };
+  promoFeaturedUrl?: string;
+  promoFeaturedFit?: string;
+  promoFeaturedPosition?: string;
+  promoFeaturedHeight?: number;
   promoFeaturedHeadline?: string;
   promoFeaturedTag?: string;
   promoFeaturedSubtext?: string;
   promoSecondaryImage?: { asset?: { _ref?: string; url?: string } };
+  promoSecondaryUrl?: string;
+  promoSecondaryFit?: string;
+  promoSecondaryPosition?: string;
+  promoSecondaryHeight?: number;
   promoSecondaryHeadline?: string;
   promoSecondaryTag?: string;
   promoSecondarySubtext?: string;
@@ -345,6 +367,9 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const phone = settings?.phone || "4076869817";
   const email = settings?.email || "FRLawnCareFL@gmail.com";
   const logoMaxWidth = settings?.logoMaxWidth || 160;
+  const logoMaxHeight = settings?.logoMaxHeight || 64;
+  const logoFit = (settings?.logoFit || 'contain') as CSSProperties['objectFit'];
+  const logoPadding = settings?.logoPadding || 0;
   const primaryHex = settings?.primaryColor?.hex || "#4CAF50";
   const darkHex = settings?.darkColor?.hex || "#2E7D32";
   const bgHex = settings?.backgroundColor?.hex || "#050e05";
@@ -382,28 +407,68 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   }));
 
   // ─── Resolve services ───
-  const resolvedServices = (services?.length ? services : []).map((s) => ({
-    title: s.title || "",
-    desc: s.description || "",
-    icon: s.icon || "🌿",
-    image: getSanityImageSrc(s.image, 600, 400) || FALLBACK_SERVICES[0].image,
+  const FALLBACK_SERVICE_IMAGES = [
+    'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1530587191325-3db32d826c18?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&h=400&fit=crop',
+  ];
+
+  const resolvedServices = (services?.length ? services : []).map((s, i) => ({
+    title: s.title || '',
+    desc: s.description || '',
+    icon: s.icon || '🌿',
+    image: getSanityImageSrc(s.image, 600, 400) || s.imageUrl || FALLBACK_SERVICE_IMAGES[i % FALLBACK_SERVICE_IMAGES.length],
+    imageFit: (s.imageFit || 'cover') as CSSProperties['objectFit'],
+    imagePosition: s.imagePosition || 'center',
   }));
   const displayServices = resolvedServices.length ? resolvedServices : FALLBACK_SERVICES;
 
   // ─── Resolve gallery ───
-  const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g) => ({
-    src: getSanityImageSrc(g.image, 800, 600) || FALLBACK_GALLERY[0].src,
-    caption: g.caption || "",
-    tag: g.tag || "Lawn Care",
+  const FALLBACK_GALLERY_IMAGES = [
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=800&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop',
+  ];
+
+  const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g, i) => ({
+    src: getSanityImageSrc(g.image, 800, 600) || g.imageUrl || FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length],
+    caption: g.caption || '',
+    tag: g.tag || 'Lawn Care',
+    imageFit: (g.imageFit || 'cover') as CSSProperties['objectFit'],
+    imagePosition: g.imagePosition || 'center',
   }));
   const displayGallery = resolvedGallery.length ? resolvedGallery : FALLBACK_GALLERY;
 
   // ─── Hero / promo images ───
-  // Hero uses fit("max") — no crop, full image always visible
-  const heroImageSrc = homePage?.heroImage ? getLogoSrc(homePage.heroImage, 900) || "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop" : "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop";
-  // Promos are background banners — crop to fill is correct
-  const promoFeaturedSrc = getSanityImageSrc(homePage?.promoFeaturedImage, 800, 400) || "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=400&fit=crop";
-  const promoSecondarySrc = getSanityImageSrc(homePage?.promoSecondaryImage, 800, 400) || "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=400&fit=crop";
+  const HERO_STOCK = 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop';
+  const PROMO_FEATURED_STOCK = 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=400&fit=crop';
+  const PROMO_SECONDARY_STOCK = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=400&fit=crop';
+
+  const heroImageSrc = homePage?.heroImage
+    ? (getLogoSrc(homePage.heroImage, 900) || homePage?.heroUrl || HERO_STOCK)
+    : (homePage?.heroUrl || HERO_STOCK);
+
+  const promoFeaturedSrc = homePage?.promoFeaturedImage
+    ? (getSanityImageSrc(homePage.promoFeaturedImage, 800, 400) || homePage?.promoFeaturedUrl || PROMO_FEATURED_STOCK)
+    : (homePage?.promoFeaturedUrl || PROMO_FEATURED_STOCK);
+
+  const promoSecondarySrc = homePage?.promoSecondaryImage
+    ? (getSanityImageSrc(homePage.promoSecondaryImage, 800, 400) || homePage?.promoSecondaryUrl || PROMO_SECONDARY_STOCK)
+    : (homePage?.promoSecondaryUrl || PROMO_SECONDARY_STOCK);
+
+  const promoFeaturedHeight = homePage?.promoFeaturedHeight || 320;
+  const promoSecondaryHeight = homePage?.promoSecondaryHeight || 320;
+  const heroFit = (homePage?.heroFit || 'contain') as CSSProperties['objectFit'];
+  const heroPosition = homePage?.heroPosition || 'center';
+  const promoFeaturedFit = (homePage?.promoFeaturedFit || 'cover') as CSSProperties['objectFit'];
+  const promoFeaturedPosition = homePage?.promoFeaturedPosition || 'center';
+  const promoSecondaryFit = (homePage?.promoSecondaryFit || 'cover') as CSSProperties['objectFit'];
+  const promoSecondaryPosition = homePage?.promoSecondaryPosition || 'center';
 
   // ─── Logo ───
   const logoSrc = settings?.logo ? getLogoSrc(settings.logo, logoMaxWidth * 2) : null;
@@ -568,7 +633,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {logoSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 64, objectFit: "contain" }} />
+              <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
             ) : (
               <>
                 <div style={{
@@ -711,7 +776,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                     alt="Professional property service"
                     width={900}
                     height={900}
-                    style={{ width: "100%", height: "auto", display: "block", borderRadius: 24 }}
+                    style={{ width: "100%", height: "auto", display: "block", borderRadius: 24, objectFit: heroFit, objectPosition: heroPosition }}
                     sizes="(max-width: 768px) 100vw, 50vw"
                     priority
                   />
@@ -754,8 +819,8 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
 
           <div className="promo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             <FadeIn delay={0.1}>
-              <div className="promo-banner promo-banner-gold" style={{ height: 320 }}>
-                <Image src={promoFeaturedSrc} alt={promoFeaturedHeadline} fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, 50vw" />
+              <div className="promo-banner promo-banner-gold" style={{ height: promoFeaturedHeight }}>
+                <Image src={promoFeaturedSrc} alt={promoFeaturedHeadline} fill style={{ objectFit: promoFeaturedFit, objectPosition: promoFeaturedPosition }} sizes="(max-width: 768px) 100vw, 50vw" />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "32px 28px", zIndex: 3 }}>
                   <div style={{ fontSize: 11, letterSpacing: 3, color: "#ffd700", marginBottom: 6, fontWeight: 700 }}>{promoFeaturedTag}</div>
                   <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: "#fff", fontWeight: 700, marginBottom: 8 }}>{promoFeaturedHeadline}</h3>
@@ -764,8 +829,8 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
               </div>
             </FadeIn>
             <FadeIn delay={0.2}>
-              <div className="promo-banner" style={{ height: 320 }}>
-                <Image src={promoSecondarySrc} alt={promoSecondaryHeadline} fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, 50vw" />
+              <div className="promo-banner" style={{ height: promoSecondaryHeight }}>
+                <Image src={promoSecondarySrc} alt={promoSecondaryHeadline} fill style={{ objectFit: promoSecondaryFit, objectPosition: promoSecondaryPosition }} sizes="(max-width: 768px) 100vw, 50vw" />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "32px 28px", zIndex: 3 }}>
                   <div style={{ fontSize: 11, letterSpacing: 3, color: primaryHex, marginBottom: 6, fontWeight: 700 }}>{promoSecondaryTag}</div>
                   <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: "#fff", fontWeight: 700, marginBottom: 8 }}>{promoSecondaryHeadline}</h3>
@@ -810,7 +875,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                       alt={service.title}
                       fill
                       className="card-img"
-                      style={{ objectFit: "cover" }}
+                      style={{ objectFit: service.imageFit || 'cover', objectPosition: service.imagePosition || 'center' }}
                       sizes="(max-width: 768px) 100vw, 33vw"
                     />
                   </div>
@@ -886,7 +951,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                       alt={img.caption}
                       fill
                       className="gallery-img"
-                      style={{ objectFit: "cover" }}
+                      style={{ objectFit: img.imageFit || 'cover', objectPosition: img.imagePosition || 'center' }}
                       sizes="(max-width: 768px) 100vw, 33vw"
                     />
                     <div style={{
@@ -1053,7 +1118,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
                 {logoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 80, objectFit: "contain" }} />
+                  <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
                 ) : (
                   <>
                     <div style={{
