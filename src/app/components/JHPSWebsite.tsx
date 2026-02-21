@@ -311,11 +311,21 @@ const FALLBACK_TRUST = [
   { icon: "🛡️", title: "Reliable & Insured", description: "Professional service you can trust" },
 ];
 
-// ─── Helper: get image src ───
+// ─── Helper: get image src (cropped) ───
 function getSanityImageSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 800, height = 600): string | null {
   if (!img?.asset) return null;
   try {
     return urlFor(img).width(width).height(height).fit("crop").url();
+  } catch {
+    return null;
+  }
+}
+
+// ─── Helper: get logo src (no crop, preserves aspect ratio) ───
+function getLogoSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 320): string | null {
+  if (!img?.asset) return null;
+  try {
+    return urlFor(img).width(width).fit("max").url();
   } catch {
     return null;
   }
@@ -394,7 +404,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const promoSecondarySrc = getSanityImageSrc(homePage?.promoSecondaryImage, 800, 400) || "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=400&fit=crop";
 
   // ─── Logo ───
-  const logoSrc = settings?.logo ? getSanityImageSrc(settings.logo, logoMaxWidth * 2, logoMaxWidth) : null;
+  const logoSrc = settings?.logo ? getLogoSrc(settings.logo, logoMaxWidth * 2) : null;
 
   useEffect(() => {
     const handler = () => setScrollY(window.scrollY);
@@ -556,7 +566,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {logoSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 48 }} />
+              <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 64, objectFit: "contain" }} />
             ) : (
               <>
                 <div style={{
@@ -1038,7 +1048,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
                 {logoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 56 }} />
+                  <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: 80, objectFit: "contain" }} />
                 ) : (
                   <>
                     <div style={{
