@@ -783,7 +783,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   />
                 </div>
                 <div style={{
-                  position: "absolute", bottom: -24, left: -24, background: "rgba(5,14,5,0.9)",
+                  position: "absolute", bottom: -24, right: -16, background: "rgba(5,14,5,0.9)",
                   border: "1px solid #2a5a2a", borderRadius: 16, padding: "16px 24px",
                   backdropFilter: "blur(10px)", animation: "float 6s ease-in-out infinite",
                 }}>
@@ -793,7 +793,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   <div style={{ fontSize: 12, color: "#7a9a7a", letterSpacing: 1 }}>{(stats[0]?.label || "JOBS COMPLETED").toUpperCase()}</div>
                 </div>
                 <div style={{
-                  position: "absolute", top: -16, right: -16,
+                  position: "absolute", top: -16, left: -16,
                   background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`,
                   borderRadius: 14, padding: "14px 20px", animation: "float 7s ease-in-out infinite 1s",
                   boxShadow: "0 8px 30px rgba(76,175,80,0.3)",
