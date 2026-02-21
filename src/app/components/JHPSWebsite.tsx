@@ -334,10 +334,11 @@ const FALLBACK_TRUST = [
 ];
 
 // ─── Helper: get image src (cropped) ───
-function getSanityImageSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 800, height = 600): string | null {
+function getSanityImageSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 800, height = 600, fit: string = "crop"): string | null {
   if (!img?.asset) return null;
   try {
-    return urlFor(img).width(width).height(height).fit("crop").url();
+    const sanityFit = fit === "contain" ? "max" : fit === "fill" ? "scale" : "crop";
+    return urlFor(img).width(width).height(height).fit(sanityFit as "crop" | "clip" | "fill" | "max" | "min" | "scale").url();
   } catch {
     return null;
   }
@@ -419,7 +420,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
     title: s.title || '',
     desc: s.description || '',
     icon: s.icon || '🌿',
-    image: getSanityImageSrc(s.image, 600, 400) || s.imageUrl || FALLBACK_SERVICE_IMAGES[i % FALLBACK_SERVICE_IMAGES.length],
+    image: getSanityImageSrc(s.image, 600, 400, s.imageFit || 'cover') || s.imageUrl || FALLBACK_SERVICE_IMAGES[i % FALLBACK_SERVICE_IMAGES.length],
     imageFit: (s.imageFit || 'cover') as CSSProperties['objectFit'],
     imagePosition: s.imagePosition || 'center',
   }));
@@ -436,7 +437,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   ];
 
   const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g, i) => ({
-    src: getSanityImageSrc(g.image, 800, 600) || g.imageUrl || FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length],
+    src: getSanityImageSrc(g.image, 800, 600, g.imageFit || 'cover') || g.imageUrl || FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length],
     caption: g.caption || '',
     tag: g.tag || 'Lawn Care',
     imageFit: (g.imageFit || 'cover') as CSSProperties['objectFit'],
