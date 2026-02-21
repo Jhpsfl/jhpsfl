@@ -783,9 +783,14 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   />
                 </div>
                 <div style={{
-                  position: "absolute", bottom: -24, right: -16, background: "rgba(5,14,5,0.9)",
-                  border: "1px solid #2a5a2a", borderRadius: 16, padding: "16px 24px",
-                  backdropFilter: "blur(10px)", animation: "float 6s ease-in-out infinite",
+                  position: "absolute", bottom: -24, right: -16,
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 16, padding: "16px 24px",
+                  backdropFilter: "blur(16px)",
+                  WebkitBackdropFilter: "blur(16px)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)",
+                  animation: "float 6s ease-in-out infinite",
                 }}>
                   <div style={{ fontSize: 28, fontWeight: 800, color: primaryHex, fontFamily: "'Playfair Display', serif" }}>
                     <AnimatedCounter end={stats[0]?.value || 500} suffix={stats[0]?.suffix || "+"} />
