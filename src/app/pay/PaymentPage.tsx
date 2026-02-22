@@ -174,6 +174,10 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const nameRef = useRef<HTMLDivElement>(null);
+  const phoneRef = useRef<HTMLDivElement>(null);
+  const amountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = () => setScrollY(window.scrollY);
@@ -199,7 +203,28 @@ export default function PaymentPage() {
     return cleaned;
   };
 
-  const canProceedToPayment = formData.name && formData.phone && formData.amount && parseFloat(formData.amount) > 0;
+  const handleContinue = () => {
+    const valid = !!(formData.name && formData.phone && formData.amount && parseFloat(formData.amount) > 0);
+    if (!valid) {
+      setShowErrors(true);
+      // Scroll to first missing required field
+      const firstError = !formData.name ? nameRef : !formData.phone ? phoneRef : amountRef;
+      firstError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Re-trigger shake animation by toggling class (force reflow)
+      const inputs = firstError.current?.querySelectorAll(".pay-input, .amount-input-wrapper");
+      inputs?.forEach(el => {
+        (el as HTMLElement).style.animation = "none";
+        (el as HTMLElement).offsetHeight; // reflow
+        (el as HTMLElement).style.animation = "";
+      });
+      return;
+    }
+    setShowErrors(false);
+    setPaymentError(null);
+    setSquareCard(null);
+    setStep("payment");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handlePayment = async () => {
     if (!squareCard || isProcessing) return;
@@ -267,6 +292,14 @@ export default function PaymentPage() {
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
         @keyframes checkmark { 0% { transform: scale(0) rotate(-45deg); opacity: 0; } 50% { transform: scale(1.2) rotate(0deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 15%{transform:translateX(-7px)} 30%{transform:translateX(7px)} 45%{transform:translateX(-5px)} 60%{transform:translateX(5px)} 75%{transform:translateX(-3px)} 90%{transform:translateX(3px)} }
+        .field-invalid .pay-input, .field-invalid .pay-select, .field-invalid .amount-input-wrapper {
+          border-color: #ef5350 !important;
+          box-shadow: 0 0 0 3px rgba(239,83,80,0.2) !important;
+          animation: shake 0.45s cubic-bezier(0.36,0.07,0.19,0.97);
+        }
+        .field-invalid .amount-input-wrapper { border: 1px solid #ef5350; border-radius: 12px; }
+        .field-error-msg { font-size: 12px; color: #ef9a9a; margin-top: 5px; display: block; }
         @keyframes shimmer {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -653,15 +686,17 @@ export default function PaymentPage() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                         {/* Name + Phone row */}
                         <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                          <div>
+                          <div ref={nameRef} className={showErrors && !formData.name ? "field-invalid" : ""}>
                             <label style={labelStyle}>Full Name *</label>
                             <input className="pay-input" placeholder="John Smith" value={formData.name}
                               onChange={(e) => updateField("name", e.target.value)} />
+                            {showErrors && !formData.name && <span className="field-error-msg">Name is required</span>}
                           </div>
-                          <div>
+                          <div ref={phoneRef} className={showErrors && !formData.phone ? "field-invalid" : ""}>
                             <label style={labelStyle}>Phone Number *</label>
                             <input className="pay-input" placeholder="(407) 555-0123" type="tel" value={formData.phone}
                               onChange={(e) => updateField("phone", e.target.value)} />
+                            {showErrors && !formData.phone && <span className="field-error-msg">Phone is required</span>}
                           </div>
                         </div>
 
@@ -724,18 +759,19 @@ export default function PaymentPage() {
                             <input className="pay-input" placeholder="INV-001" value={formData.invoiceNumber}
                               onChange={(e) => updateField("invoiceNumber", e.target.value)} />
                           </div>
-                          <div>
+                          <div ref={amountRef} className={showErrors && !(formData.amount && parseFloat(formData.amount) > 0) ? "field-invalid" : ""}>
                             <label style={labelStyle}>Payment Amount *</label>
                             <div className="amount-input-wrapper">
                               <input className="pay-input amount-input" placeholder="0.00" value={formData.amount}
                                 onChange={(e) => updateField("amount", formatAmount(e.target.value))}
                                 inputMode="decimal" />
                             </div>
+                            {showErrors && !(formData.amount && parseFloat(formData.amount) > 0) && <span className="field-error-msg">Enter a valid amount</span>}
                           </div>
                         </div>
 
                         {/* Continue button */}
-                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setSquareCard(null); setStep("payment"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        <button className="cta-pay" onClick={handleContinue}
                           style={{ marginTop: 8 }}>
                           Continue to Payment →
                         </button>
@@ -753,7 +789,7 @@ export default function PaymentPage() {
                         <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
                           Payment Details
                         </h2>
-                        <button onClick={() => { setStep("form"); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
+                        <button onClick={() => { setStep("form"); setShowErrors(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
                           background: "none", border: "none", color: "#5a8a5a", fontSize: 14,
                           cursor: "pointer", fontFamily: "inherit",
                         }}>← Edit Info</button>
