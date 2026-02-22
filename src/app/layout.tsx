@@ -49,9 +49,7 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
-  verification: {
-    google: "", // TODO: paste Google Search Console verification code here
-  },
+  // Google Search Console verified via IONOS DNS (no meta tag needed)
 };
 
 export default function RootLayout({
