@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
   verification: {
-    google: "",
+    google: "", // TODO: paste Google Search Console verification code here
   },
 };
 
@@ -107,7 +107,10 @@ export default function RootLayout({
                   { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Property Cleanups", "description": "Vacant house cleanup, overgrown yards & full property restoration" } }
                 ]
               },
-              "sameAs": [],
+              "sameAs": [
+                // TODO: add Facebook URL for First Responders Lawn Care & Maintenance (DBA of JHPS)
+                // TODO: add Google Business Profile URL once verified
+              ],
               "openingHoursSpecification": [
                 { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "07:00", "closes": "18:00" },
                 { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "08:00", "closes": "16:00" }
