@@ -78,11 +78,12 @@ export default function PaymentPage() {
   });
   const [squareSdkLoaded, setSquareSdkLoaded] = useState(false);
   const [squareCard, setSquareCard] = useState<SquareCard | null>(null);
+  const [cardLoading, setCardLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
-  const [cardKey, setCardKey] = useState(0); // incremented each time we enter payment step → forces fresh DOM node
-  const squarePaymentsRef = useRef<SquarePayments | null>(null);
+  const [cardKey, setCardKey] = useState(0); // incremented each visit → forces fresh DOM node
+  const squarePaymentsRef = useRef<SquarePayments | null>(null); // cached — Square.payments() must only be called once
 
   useEffect(() => {
     const handler = () => setScrollY(window.scrollY);
@@ -104,6 +105,7 @@ export default function PaymentPage() {
 
   // Initialize Square card element when on payment step.
   // cardKey increments each visit → forces a fresh DOM node via key prop on the container.
+  // squarePaymentsRef is cached — Square.payments() must only ever be called once per page load.
   useEffect(() => {
     if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
 
@@ -119,10 +121,13 @@ export default function PaymentPage() {
     let cardInstance: SquareCard | null = null;
 
     const initCard = async () => {
+      setCardLoading(true);
       try {
-        const payments = window.Square!.payments(appId, locationId);
-        squarePaymentsRef.current = payments;
-        cardInstance = await payments.card();
+        // Reuse cached payments object — calling Square.payments() more than once causes conflicts
+        if (!squarePaymentsRef.current) {
+          squarePaymentsRef.current = window.Square!.payments(appId, locationId);
+        }
+        cardInstance = await squarePaymentsRef.current.card();
         if (cancelled) { cardInstance.destroy().catch(console.error); return; }
         await cardInstance.attach("#square-card-container");
         if (cancelled) { cardInstance.destroy().catch(console.error); return; }
@@ -131,7 +136,9 @@ export default function PaymentPage() {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
         console.error("Square card init error:", msg);
-        setPaymentError(`Payment form error: ${msg}. Please call us at 407-686-9817.`);
+        setPaymentError(`Card form error: ${msg}. Please call us at 407-686-9817.`);
+      } finally {
+        if (!cancelled) setCardLoading(false);
       }
     };
 
@@ -139,6 +146,7 @@ export default function PaymentPage() {
 
     return () => {
       cancelled = true;
+      setCardLoading(false);
       setSquareCard(null);
       if (cardInstance) cardInstance.destroy().catch(console.error);
     };
@@ -741,18 +749,29 @@ export default function PaymentPage() {
                           </div>
                         </div>
 
+                        {/* Loading indicator — shown while Square initializes its iframe */}
+                        {(cardLoading || (!squareSdkLoaded && !paymentError)) && (
+                          <div style={{ color: "#4a7a4a", fontSize: 13, padding: "24px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+                            Loading secure payment form…
+                          </div>
+                        )}
+
                         {/* Square renders its secure card iframe here. key=cardKey forces a fresh DOM node each visit. */}
-                        <div key={cardKey} id="square-card-container" style={{ minHeight: 89 }}>
-                          {!squareSdkLoaded && (
-                            <div style={{ color: "#3a5a3a", fontSize: 13, padding: "24px 0", textAlign: "center" }}>
-                              Loading secure payment form…
-                            </div>
-                          )}
-                        </div>
+                        <div key={cardKey} id="square-card-container" style={{ minHeight: cardLoading ? 0 : 89 }} />
+
+                        {paymentError && (
+                          <div style={{ marginTop: 12 }}>
+                            <button onClick={() => { setPaymentError(null); setCardKey(k => k + 1); }}
+                              style={{ background: "rgba(76,175,80,0.1)", border: "1px solid #2a5a2a", color: "#4CAF50", padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>
+                              ↺ Retry loading card form
+                            </button>
+                          </div>
+                        )}
 
                         {paymentError && (
                           <div style={{
-                            marginTop: 14, padding: "12px 16px", background: "rgba(244,67,54,0.08)",
+                            padding: "12px 16px", background: "rgba(244,67,54,0.08)",
                             borderRadius: 10, border: "1px solid rgba(244,67,54,0.2)",
                             fontSize: 13, color: "#ef9a9a", lineHeight: 1.5,
                           }}>
