@@ -7,7 +7,7 @@ import Link from "next/link";
 declare global {
   interface Window {
     Square?: {
-      payments: (appId: string, locationId: string) => Promise<SquarePayments>;
+      payments: (appId: string, locationId: string) => SquarePayments;
     };
   }
 }
@@ -104,29 +104,28 @@ export default function PaymentPage() {
   // Initialize Square card element when on payment step
   useEffect(() => {
     if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
+
+    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID;
+    const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID;
+
+    if (!appId || !locationId) {
+      setPaymentError("Payment configuration missing. Please call us to complete payment.");
+      return;
+    }
+
     let cardInstance: SquareCard | null = null;
 
     const initCard = async () => {
       try {
-        const payments = await window.Square!.payments(
-          process.env.NEXT_PUBLIC_SQUARE_APP_ID!,
-          process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
-        );
+        const payments = window.Square!.payments(appId, locationId);
         squarePaymentsRef.current = payments;
-        cardInstance = await payments.card({
-          style: {
-            ".input-container": { borderColor: "#1a3a1a", borderRadius: "12px" },
-            ".input-container.is-focus": { borderColor: "#4CAF50" },
-            ".input-container.is-error": { borderColor: "#f44336" },
-            input: { color: "#e8f5e8", backgroundColor: "#0d1a0d", fontFamily: "DM Sans, sans-serif" },
-            "::placeholder": { color: "#3a5a3a" },
-          },
-        });
+        cardInstance = await payments.card();
         await cardInstance.attach("#square-card-container");
         setSquareCard(cardInstance);
       } catch (err) {
-        console.error("Square card init error:", err);
-        setPaymentError("Failed to load payment form. Please refresh or call us directly.");
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Square card init error:", msg);
+        setPaymentError(`Payment form error: ${msg}. Please call us at 407-686-9817.`);
       }
     };
 
