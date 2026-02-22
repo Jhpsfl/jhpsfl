@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { urlFor } from "@/sanity/lib/image";
 
 // ─── Types ───
@@ -657,6 +658,15 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
               onMouseOut={(e) => { e.currentTarget.style.color = "#8aba8a"; }}
               >{label}</button>
             ))}
+            <Link href="/pay" style={{
+              color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
+              padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
+              transition: "all 0.3s",
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(76,175,80,0.1)"; e.currentTarget.style.borderColor = "#4CAF50"; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#2a5a2a"; }}>
+              💳 Pay
+            </Link>
             <button className="cta-primary" onClick={() => setShowEstimate(true)} style={{ padding: "10px 24px", fontSize: 14 }}>
               Free Estimate
             </button>
@@ -679,6 +689,9 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
           {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
             <a key={id} href={`#${id}`} onClick={() => { scrollTo(id!); setMenuOpen(false); }}>{label}</a>
           ))}
+          <Link href="/pay" onClick={() => setMenuOpen(false)} style={{ color: "#e8f5e8", fontSize: 28, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
+            Make Payment
+          </Link>
           <button className="cta-primary" onClick={() => { setMenuOpen(false); setShowEstimate(true); }} style={{ marginTop: 16 }}>
             Get Free Estimate
           </button>
@@ -1150,6 +1163,11 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   onMouseOut={(e) => { e.currentTarget.style.color = "#6a9a6a"; }}
                 >{label}</div>
               ))}
+              <Link href="/pay" style={{ color: "#6a9a6a", fontSize: 14, marginBottom: 10, display: "block", textDecoration: "none", transition: "color 0.3s" }}
+                onMouseOver={(e) => { e.currentTarget.style.color = primaryHex; }}
+                onMouseOut={(e) => { e.currentTarget.style.color = "#6a9a6a"; }}>
+                Make Payment
+              </Link>
             </div>
           </div>
           <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
