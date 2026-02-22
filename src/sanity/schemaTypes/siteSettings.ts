@@ -8,7 +8,7 @@ export const siteSettings = defineType({
     defineField({ name: 'companyName', title: 'Company Name', type: 'string', initialValue: 'Jenkins Home & Property Solutions' }),
     defineField({ name: 'shortName', title: 'Short Name (Navbar)', type: 'string', initialValue: 'JHPS' }),
     defineField({ name: 'phone', title: 'Phone Number', type: 'string', initialValue: '4076869817' }),
-    defineField({ name: 'email', title: 'Email Address', type: 'string', initialValue: 'FRLawnCareFL@gmail.com' }),
+    defineField({ name: 'email', title: 'Email Address', type: 'string', initialValue: 'Info@jhpsfl.com' }),
 
     // ─── Logo ───
     defineField({

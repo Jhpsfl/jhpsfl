@@ -367,7 +367,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const companyName = settings?.companyName || "Jenkins Home & Property Solutions";
   const shortName = settings?.shortName || "JHPS";
   const phone = settings?.phone || "4076869817";
-  const email = settings?.email || "FRLawnCareFL@gmail.com";
+  const email = settings?.email || "Info@jhpsfl.com";
   const logoMaxWidth = settings?.logoMaxWidth || 160;
   const logoMaxHeight = settings?.logoMaxHeight || 64;
   const logoFit = (settings?.logoFit || 'contain') as CSSProperties['objectFit'];
