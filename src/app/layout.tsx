@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "https://jhpsfl.com/og-image.jpg",
+        url: "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
         width: 1200,
         height: 630,
         alt: "Jenkins Home & Property Solutions - Central Florida Property Services",
@@ -78,8 +78,8 @@ export default function RootLayout({
               "url": "https://jhpsfl.com",
               "telephone": "+14076869817",
               "email": "FRLawnCareFL@gmail.com",
-              "logo": "https://jhpsfl.com/jhps-logo.png",
-              "image": "https://jhpsfl.com/og-image.jpg",
+              "logo": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
+              "image": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
               "priceRange": "$$",
               "currenciesAccepted": "USD",
               "paymentAccepted": "Cash, Credit Card, Check",
