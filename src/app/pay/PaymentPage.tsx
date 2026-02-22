@@ -1,0 +1,794 @@
+"use client";
+
+import { useState, useEffect, useRef, type CSSProperties } from "react";
+import Link from "next/link";
+
+// ─── Animation Hook ───
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); obs.disconnect(); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return [ref, isVisible] as const;
+}
+
+function FadeIn({ children, delay = 0, direction = "up", className = "" }: {
+  children: React.ReactNode; delay?: number; direction?: string; className?: string;
+}) {
+  const [ref, isVisible] = useInView(0.1);
+  const transforms: Record<string, string> = {
+    up: "translateY(40px)", down: "translateY(-40px)",
+    left: "translateX(40px)", right: "translateX(-40px)", none: "none",
+  };
+  return (
+    <div ref={ref} className={className} style={{
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? "none" : (transforms[direction] || transforms.up),
+      transition: `opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`,
+    }}>{children}</div>
+  );
+}
+
+// ─── Types ───
+interface FormData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  zip: string;
+  service: string;
+  jobDescription: string;
+  invoiceNumber: string;
+  amount: string;
+  cardNumber: string;
+  cardExpiry: string;
+  cardCvc: string;
+  cardName: string;
+}
+
+export default function PaymentPage() {
+  const [scrollY, setScrollY] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
+  const [formData, setFormData] = useState<FormData>({
+    name: "", email: "", phone: "", address: "", city: "", zip: "",
+    service: "", jobDescription: "", invoiceNumber: "", amount: "",
+    cardNumber: "", cardExpiry: "", cardCvc: "", cardName: "",
+  });
+
+  useEffect(() => {
+    const handler = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    setMenuOpen(false);
+  };
+
+  const updateField = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Format card number with spaces
+  const formatCardNumber = (val: string) => {
+    const digits = val.replace(/\D/g, "").slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+  };
+
+  // Format expiry as MM/YY
+  const formatExpiry = (val: string) => {
+    const digits = val.replace(/\D/g, "").slice(0, 4);
+    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return digits;
+  };
+
+  // Format amount
+  const formatAmount = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    if (parts.length > 2) return parts[0] + "." + parts.slice(1).join("");
+    if (parts[1]?.length > 2) return parts[0] + "." + parts[1].slice(0, 2);
+    return cleaned;
+  };
+
+  const canProceedToPayment = formData.name && formData.phone && formData.amount && parseFloat(formData.amount) > 0;
+
+  const handlePayment = () => {
+    // Phase 1: Show confirmation with fallback CTA
+    // Phase 2: This is where Square Web Payments SDK will process the card
+    setStep("confirm");
+  };
+
+  const inputStyle: CSSProperties = {
+    width: "100%", padding: "14px 16px", background: "#0d1a0d",
+    border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
+    fontSize: 15, outline: "none", fontFamily: "'DM Sans', sans-serif",
+    transition: "border-color 0.3s, box-shadow 0.3s",
+  };
+
+  const inputFocusStyle = "focus-within:border-[#4CAF50] focus-within:shadow-[0_0_0_3px_rgba(76,175,80,0.15)]";
+
+  const labelStyle: CSSProperties = {
+    fontSize: 12, fontWeight: 600, color: "#7a9a7a", letterSpacing: 1.5,
+    textTransform: "uppercase" as const, marginBottom: 6, display: "block",
+  };
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'DM Sans', sans-serif; background: #050e05; color: #c8e0c8; overflow-x: hidden; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        @keyframes checkmark { 0% { transform: scale(0) rotate(-45deg); opacity: 0; } 50% { transform: scale(1.2) rotate(0deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+
+        .nav-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+
+        .pay-input {
+          width: 100%; padding: 14px 16px; background: #0d1a0d;
+          border: 1px solid #1a3a1a; border-radius: 12px; color: #e8f5e8;
+          font-size: 15px; outline: none; font-family: 'DM Sans', sans-serif;
+          transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .pay-input:focus {
+          border-color: #4CAF50;
+          box-shadow: 0 0 0 3px rgba(76,175,80,0.15);
+        }
+        .pay-input::placeholder { color: #3a5a3a; }
+        .pay-input-mono {
+          font-family: 'JetBrains Mono', monospace;
+          letter-spacing: 1.5px;
+        }
+
+        .pay-select {
+          width: 100%; padding: 14px 16px; background: #0d1a0d;
+          border: 1px solid #1a3a1a; border-radius: 12px; color: #e8f5e8;
+          font-size: 15px; outline: none; font-family: 'DM Sans', sans-serif;
+          transition: border-color 0.3s, box-shadow 0.3s;
+          appearance: none; cursor: pointer;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234CAF50' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 16px center;
+        }
+        .pay-select:focus {
+          border-color: #4CAF50;
+          box-shadow: 0 0 0 3px rgba(76,175,80,0.15);
+        }
+
+        .amount-input-wrapper {
+          position: relative;
+        }
+        .amount-input-wrapper::before {
+          content: '$';
+          position: absolute;
+          left: 16px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #4CAF50;
+          font-size: 22px;
+          font-weight: 700;
+          font-family: 'JetBrains Mono', monospace;
+          z-index: 1;
+        }
+        .amount-input {
+          padding-left: 36px !important;
+          font-size: 22px !important;
+          font-weight: 700 !important;
+          font-family: 'JetBrains Mono', monospace !important;
+          letter-spacing: 1px;
+        }
+
+        .card-field-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .step-indicator {
+          display: flex;
+          align-items: center;
+          gap: 0;
+          margin-bottom: 40px;
+        }
+        .step-dot {
+          width: 36px; height: 36px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 14px; font-weight: 700;
+          transition: all 0.4s;
+          flex-shrink: 0;
+        }
+        .step-dot.active {
+          background: linear-gradient(135deg, #4CAF50, #2E7D32);
+          color: #fff;
+          box-shadow: 0 0 20px rgba(76,175,80,0.4);
+        }
+        .step-dot.completed {
+          background: #4CAF50;
+          color: #fff;
+        }
+        .step-dot.inactive {
+          background: #0d1a0d;
+          border: 2px solid #1a3a1a;
+          color: #3a5a3a;
+        }
+        .step-line {
+          flex: 1;
+          height: 2px;
+          background: #1a3a1a;
+          transition: background 0.4s;
+        }
+        .step-line.active {
+          background: linear-gradient(90deg, #4CAF50, #2E7D32);
+        }
+
+        .cta-pay {
+          background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+          color: #fff; border: none; padding: 18px 40px; border-radius: 14px;
+          font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+          box-shadow: 0 4px 24px rgba(76,175,80,0.4);
+          transition: transform 0.3s, box-shadow 0.3s;
+          font-family: 'DM Sans', sans-serif;
+          width: 100%;
+          display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .cta-pay:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 40px rgba(76,175,80,0.5);
+        }
+        .cta-pay:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .cta-secondary-pay {
+          background: transparent; color: #4CAF50; border: 2px solid #1a3a1a;
+          padding: 14px 32px; border-radius: 14px; font-size: 15px; font-weight: 600;
+          cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
+          width: 100%; text-align: center;
+        }
+        .cta-secondary-pay:hover {
+          background: rgba(76,175,80,0.08);
+          border-color: #4CAF50;
+        }
+
+        .summary-card {
+          background: linear-gradient(160deg, #0d1f0d 0%, #091409 100%);
+          border: 1px solid #1a3a1a;
+          border-radius: 20px;
+          padding: 32px;
+          position: sticky;
+          top: 96px;
+        }
+
+        .trust-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          background: rgba(76,175,80,0.08);
+          border: 1px solid rgba(76,175,80,0.15);
+          border-radius: 8px;
+          font-size: 12px;
+          color: #7a9a7a;
+          font-weight: 500;
+        }
+
+        .mobile-menu {
+          position: fixed; inset: 0; z-index: 9997;
+          background: rgba(5,14,5,0.98); backdrop-filter: blur(20px);
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
+          animation: fadeIn 0.3s ease;
+        }
+        .mobile-menu a { color: #e8f5e8; font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: 'Playfair Display', serif; }
+        .mobile-menu a:hover { color: #4CAF50; }
+
+        .noise-overlay {
+          position: fixed; inset: 0; pointer-events: none; z-index: 9990; opacity: 0.03;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        @media (max-width: 768px) {
+          .pay-grid { grid-template-columns: 1fr !important; }
+          .pay-grid-reverse { display: flex; flex-direction: column-reverse; }
+          .summary-card { position: static; }
+          .desktop-nav { display: none !important; }
+          .mobile-hamburger { display: flex !important; }
+          .card-field-grid { grid-template-columns: 1fr; }
+          .form-2col { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
+      <div className="noise-overlay" />
+
+      {/* ─── NAVIGATION ─── */}
+      <nav className="nav-blur" style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 9996,
+        background: scrollY > 50 ? "rgba(5,14,5,0.92)" : "rgba(5,14,5,0.8)",
+        borderBottom: "1px solid rgba(76,175,80,0.15)",
+        transition: "all 0.4s", padding: "0 24px",
+      }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/jhps-nav-logo.svg" alt="JHPS Florida" style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
+          </Link>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 28 }} className="desktop-nav">
+            <Link href="/" style={{ color: "#8aba8a", fontSize: 14, fontWeight: 500, textDecoration: "none", transition: "color 0.3s" }}
+              onMouseOver={(e) => { e.currentTarget.style.color = "#4CAF50"; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = "#8aba8a"; }}>
+              ← Back to Home
+            </Link>
+            <Link href="/account" style={{
+              color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
+              padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
+              transition: "all 0.3s",
+            }}
+              onMouseOver={(e) => { e.currentTarget.style.background = "rgba(76,175,80,0.1)"; e.currentTarget.style.borderColor = "#4CAF50"; }}
+              onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#2a5a2a"; }}>
+              My Account
+            </Link>
+            <a href="tel:4076869817" style={{
+              background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+              padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 700,
+              textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6,
+            }}>
+              📞 Call Us
+            </a>
+          </div>
+
+          <button onClick={() => setMenuOpen(!menuOpen)} style={{
+            display: "none", background: "none", border: "none", cursor: "pointer",
+            flexDirection: "column", gap: 5, padding: 8,
+          }} className="mobile-hamburger">
+            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(45deg) translateY(7px)" : "none" }} />
+            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", opacity: menuOpen ? 0 : 1 }} />
+            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(-45deg) translateY(-7px)" : "none" }} />
+          </button>
+        </div>
+      </nav>
+
+      {menuOpen && (
+        <div className="mobile-menu">
+          <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: "#4CAF50", fontSize: 32, cursor: "pointer" }}>✕</button>
+          <Link href="/" onClick={() => setMenuOpen(false)}>Home</Link>
+          <Link href="/account" onClick={() => setMenuOpen(false)}>My Account</Link>
+          <a href="tel:4076869817" style={{ color: "#4CAF50" }}>📞 407-686-9817</a>
+        </div>
+      )}
+
+      {/* ─── MAIN CONTENT ─── */}
+      <main style={{ minHeight: "100vh", paddingTop: 72, background: "linear-gradient(170deg, #050e05 0%, #081808 40%, #050e05 100%)" }}>
+        {/* Background accents */}
+        <div style={{
+          position: "fixed", top: "20%", right: "-10%", width: 600, height: 600,
+          borderRadius: "50%", background: "radial-gradient(circle, rgba(76,175,80,0.04) 0%, transparent 70%)",
+          pointerEvents: "none", zIndex: 0,
+        }} />
+        <div style={{
+          position: "fixed", bottom: "10%", left: "-10%", width: 500, height: 500,
+          borderRadius: "50%", background: "radial-gradient(circle, rgba(46,125,50,0.03) 0%, transparent 70%)",
+          pointerEvents: "none", zIndex: 0,
+        }} />
+
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
+          {/* Page Header */}
+          <FadeIn delay={0.05}>
+            <div style={{ textAlign: "center", marginBottom: 48 }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px",
+                background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
+                borderRadius: 40, marginBottom: 20,
+              }}>
+                <span style={{ fontSize: 16 }}>💳</span>
+                <span style={{ fontSize: 13, color: "#4CAF50", fontWeight: 600, letterSpacing: 1 }}>SECURE PAYMENT</span>
+              </div>
+              <h1 style={{
+                fontFamily: "'Playfair Display', serif", fontSize: 42, fontWeight: 800,
+                color: "#e8f5e8", lineHeight: 1.15, marginBottom: 12,
+              }}>
+                Make a{" "}
+                <span style={{
+                  background: "linear-gradient(135deg, #4CAF50, #81C784, #4CAF50)",
+                  backgroundSize: "200% 200%", animation: "gradientShift 4s ease infinite",
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                }}>Payment</span>
+              </h1>
+              <p style={{ color: "#7a9a7a", fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
+                Pay for services quickly and securely. Have an account?{" "}
+                <Link href="/account" style={{ color: "#4CAF50", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                  Sign in for faster checkout
+                </Link>
+              </p>
+            </div>
+          </FadeIn>
+
+          {/* Step Indicator */}
+          <FadeIn delay={0.1}>
+            <div style={{ maxWidth: 400, margin: "0 auto 40px" }}>
+              <div className="step-indicator">
+                <div className={`step-dot ${step === "form" ? "active" : step === "payment" || step === "confirm" ? "completed" : "inactive"}`}>
+                  {step === "payment" || step === "confirm" ? "✓" : "1"}
+                </div>
+                <div className={`step-line ${step === "payment" || step === "confirm" ? "active" : ""}`} />
+                <div className={`step-dot ${step === "payment" ? "active" : step === "confirm" ? "completed" : "inactive"}`}>
+                  {step === "confirm" ? "✓" : "2"}
+                </div>
+                <div className={`step-line ${step === "confirm" ? "active" : ""}`} />
+                <div className={`step-dot ${step === "confirm" ? "active" : "inactive"}`}>3</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#5a8a5a", letterSpacing: 1, fontWeight: 600 }}>
+                <span style={{ color: step === "form" ? "#4CAF50" : "#5a8a5a" }}>DETAILS</span>
+                <span style={{ color: step === "payment" ? "#4CAF50" : "#5a8a5a" }}>PAYMENT</span>
+                <span style={{ color: step === "confirm" ? "#4CAF50" : "#5a8a5a" }}>DONE</span>
+              </div>
+            </div>
+          </FadeIn>
+
+          {/* ─── CONFIRMATION STATE ─── */}
+          {step === "confirm" && (
+            <FadeIn delay={0.1}>
+              <div style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
+                <div style={{
+                  background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                  border: "1px solid #1a3a1a", borderRadius: 24, padding: "60px 40px",
+                }}>
+                  <div style={{
+                    width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+                    background: "linear-gradient(135deg, rgba(76,175,80,0.2), rgba(46,125,50,0.1))",
+                    border: "2px solid #4CAF50",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 36, animation: "checkmark 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }}>✓</div>
+                  <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 700, marginBottom: 12 }}>
+                    Almost There!
+                  </h2>
+                  <p style={{ color: "#8aba8a", fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
+                    Online payment processing is coming soon. To complete your payment of{" "}
+                    <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${formData.amount || "0.00"}</strong>, please contact us directly:
+                  </p>
+                  <div style={{ margin: "32px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+                    <a href="tel:4076869817" style={{
+                      background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                      padding: "16px 32px", borderRadius: 14, fontSize: 17, fontWeight: 700,
+                      textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                      boxShadow: "0 4px 24px rgba(76,175,80,0.4)",
+                    }}>
+                      📞 Call 407-686-9817
+                    </a>
+                    <a href="sms:4076869817" style={{
+                      background: "transparent", color: "#4CAF50", border: "2px solid #2a5a2a",
+                      padding: "14px 32px", borderRadius: 14, fontSize: 15, fontWeight: 600,
+                      textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      transition: "all 0.3s",
+                    }}>
+                      💬 Text Us
+                    </a>
+                  </div>
+                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, marginTop: 24 }}>
+                    <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 16 }}>Your information has been saved. Reference details:</p>
+                    <div style={{
+                      background: "#080f08", borderRadius: 12, padding: "16px 20px",
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#6a9a6a",
+                      textAlign: "left", lineHeight: 1.8,
+                    }}>
+                      <div><span style={{ color: "#3a5a3a" }}>Name:</span> {formData.name}</div>
+                      <div><span style={{ color: "#3a5a3a" }}>Phone:</span> {formData.phone}</div>
+                      <div><span style={{ color: "#3a5a3a" }}>Service:</span> {formData.service || "General"}</div>
+                      <div><span style={{ color: "#3a5a3a" }}>Amount:</span> <span style={{ color: "#4CAF50" }}>${formData.amount}</span></div>
+                      {formData.invoiceNumber && <div><span style={{ color: "#3a5a3a" }}>Invoice #:</span> {formData.invoiceNumber}</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => { setStep("form"); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "", cardNumber: "", cardExpiry: "", cardCvc: "", cardName: "" }); }}
+                    style={{ marginTop: 24, background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                    Make another payment
+                  </button>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* ─── FORM + SUMMARY GRID ─── */}
+          {step !== "confirm" && (
+            <div className="pay-grid pay-grid-reverse" style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 32, alignItems: "start" }}>
+              {/* Left: Form */}
+              <FadeIn delay={0.15}>
+                <div>
+                  {/* ─── Step 1: Details ─── */}
+                  {step === "form" && (
+                    <div style={{
+                      background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
+                      border: "1px solid #1a3a1a", borderRadius: 20, padding: "36px 32px",
+                    }}>
+                      <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700, marginBottom: 28 }}>
+                        Your Information
+                      </h2>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                        {/* Name + Phone row */}
+                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                          <div>
+                            <label style={labelStyle}>Full Name *</label>
+                            <input className="pay-input" placeholder="John Smith" value={formData.name}
+                              onChange={(e) => updateField("name", e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Phone Number *</label>
+                            <input className="pay-input" placeholder="(407) 555-0123" type="tel" value={formData.phone}
+                              onChange={(e) => updateField("phone", e.target.value)} />
+                          </div>
+                        </div>
+
+                        {/* Email */}
+                        <div>
+                          <label style={labelStyle}>Email</label>
+                          <input className="pay-input" placeholder="john@example.com" type="email" value={formData.email}
+                            onChange={(e) => updateField("email", e.target.value)} />
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                          <label style={labelStyle}>Property Address</label>
+                          <input className="pay-input" placeholder="123 Main Street" value={formData.address}
+                            onChange={(e) => updateField("address", e.target.value)} />
+                        </div>
+
+                        {/* City + Zip row */}
+                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                          <div>
+                            <label style={labelStyle}>City</label>
+                            <input className="pay-input" placeholder="Deltona" value={formData.city}
+                              onChange={(e) => updateField("city", e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Zip Code</label>
+                            <input className="pay-input" placeholder="32725" value={formData.zip}
+                              onChange={(e) => updateField("zip", e.target.value)} />
+                          </div>
+                        </div>
+
+                        {/* Service */}
+                        <div>
+                          <label style={labelStyle}>Service Type</label>
+                          <select className="pay-select" value={formData.service}
+                            onChange={(e) => updateField("service", e.target.value)}>
+                            <option value="">Select a service</option>
+                            <option value="Lawn Care">Lawn Care</option>
+                            <option value="Pressure Washing">Pressure Washing / Soft Wash</option>
+                            <option value="Junk Removal">Junk Removal</option>
+                            <option value="Land Clearing">Land Clearing</option>
+                            <option value="Property Cleanup">Property Cleanups</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        {/* Job Description */}
+                        <div>
+                          <label style={labelStyle}>Job Description</label>
+                          <textarea className="pay-input" placeholder="Describe the work being paid for..." rows={3}
+                            value={formData.jobDescription}
+                            onChange={(e) => updateField("jobDescription", e.target.value)}
+                            style={{ resize: "vertical" }} />
+                        </div>
+
+                        {/* Invoice + Amount row */}
+                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                          <div>
+                            <label style={labelStyle}>Invoice # (optional)</label>
+                            <input className="pay-input" placeholder="INV-001" value={formData.invoiceNumber}
+                              onChange={(e) => updateField("invoiceNumber", e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Payment Amount *</label>
+                            <div className="amount-input-wrapper">
+                              <input className="pay-input amount-input" placeholder="0.00" value={formData.amount}
+                                onChange={(e) => updateField("amount", formatAmount(e.target.value))}
+                                inputMode="decimal" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Continue button */}
+                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => setStep("payment")}
+                          style={{ marginTop: 8 }}>
+                          Continue to Payment →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── Step 2: Payment ─── */}
+                  {step === "payment" && (
+                    <div style={{
+                      background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
+                      border: "1px solid #1a3a1a", borderRadius: 20, padding: "36px 32px",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
+                          Payment Details
+                        </h2>
+                        <button onClick={() => setStep("form")} style={{
+                          background: "none", border: "none", color: "#5a8a5a", fontSize: 14,
+                          cursor: "pointer", fontFamily: "inherit",
+                        }}>← Edit Info</button>
+                      </div>
+
+                      {/* Card form area — this will be replaced by Square Web Payments SDK */}
+                      <div style={{
+                        border: "1px dashed #2a4a2a", borderRadius: 16, padding: "32px 24px",
+                        background: "rgba(76,175,80,0.02)", marginBottom: 24,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                          <span style={{ fontSize: 20 }}>💳</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "#8aba8a" }}>Card Information</span>
+                          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                            {["VISA", "MC", "AMEX"].map(brand => (
+                              <span key={brand} style={{
+                                padding: "2px 8px", background: "#0d1a0d", border: "1px solid #1a3a1a",
+                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: "#5a8a5a",
+                                fontFamily: "'JetBrains Mono', monospace",
+                              }}>{brand}</span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                          <div>
+                            <label style={labelStyle}>Name on Card</label>
+                            <input className="pay-input" placeholder="JOHN SMITH" value={formData.cardName}
+                              onChange={(e) => updateField("cardName", e.target.value.toUpperCase())}
+                              style={{ textTransform: "uppercase", letterSpacing: 1 }} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Card Number</label>
+                            <input className="pay-input pay-input-mono" placeholder="4242 4242 4242 4242"
+                              value={formData.cardNumber}
+                              onChange={(e) => updateField("cardNumber", formatCardNumber(e.target.value))}
+                              inputMode="numeric" maxLength={19} />
+                          </div>
+                          <div className="card-field-grid">
+                            <div>
+                              <label style={labelStyle}>Expiry Date</label>
+                              <input className="pay-input pay-input-mono" placeholder="MM/YY"
+                                value={formData.cardExpiry}
+                                onChange={(e) => updateField("cardExpiry", formatExpiry(e.target.value))}
+                                inputMode="numeric" maxLength={5} />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>CVC</label>
+                              <input className="pay-input pay-input-mono" placeholder="123"
+                                value={formData.cardCvc}
+                                onChange={(e) => updateField("cardCvc", e.target.value.replace(/\D/g, "").slice(0, 4))}
+                                inputMode="numeric" maxLength={4} type="password" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Square SDK notice */}
+                        <div style={{
+                          marginTop: 20, padding: "12px 16px", background: "rgba(76,175,80,0.06)",
+                          borderRadius: 10, border: "1px solid rgba(76,175,80,0.1)",
+                          fontSize: 12, color: "#5a8a5a", lineHeight: 1.6,
+                        }}>
+                          🔒 Payments will be processed securely through Square. Your card details are never stored on our servers.
+                        </div>
+                      </div>
+
+                      <button className="cta-pay" onClick={handlePayment}>
+                        <span style={{ fontSize: 18 }}>🔒</span>
+                        Pay ${formData.amount || "0.00"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </FadeIn>
+
+              {/* Right: Summary Card */}
+              <FadeIn delay={0.25} direction="left">
+                <div className="summary-card">
+                  <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: "#e8f5e8", fontWeight: 700, marginBottom: 24 }}>
+                    Payment Summary
+                  </h3>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                    {[
+                      ["Customer", formData.name || "—"],
+                      ["Phone", formData.phone || "—"],
+                      ["Service", formData.service || "—"],
+                      ["Invoice", formData.invoiceNumber || "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                        <span style={{ color: "#5a8a5a" }}>{label}</span>
+                        <span style={{ color: "#c8e0c8", fontWeight: 500, textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 24 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>Total</span>
+                      <span style={{
+                        fontSize: 32, fontWeight: 800, color: "#4CAF50",
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}>
+                        ${formData.amount || "0.00"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Trust signals */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div className="trust-badge">🔒 Secure payment</div>
+                    <div className="trust-badge">🛡️ Reliable & Insured</div>
+                    <div className="trust-badge">✓ Free estimates available</div>
+                  </div>
+
+                  {/* Account CTA */}
+                  <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #1a3a1a" }}>
+                    <p style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 12, lineHeight: 1.6 }}>
+                      Want to track payments, view history & manage subscriptions?
+                    </p>
+                    <Link href="/account" className="cta-secondary-pay" style={{
+                      display: "block", textDecoration: "none",
+                    }}>
+                      Create an Account →
+                    </Link>
+                  </div>
+
+                  {/* Help */}
+                  <div style={{ marginTop: 20, textAlign: "center" }}>
+                    <p style={{ fontSize: 12, color: "#3a5a3a" }}>
+                      Need help? <a href="tel:4076869817" style={{ color: "#4CAF50", textDecoration: "none" }}>407-686-9817</a>
+                    </p>
+                  </div>
+                </div>
+              </FadeIn>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ─── FOOTER ─── */}
+      <footer style={{ background: "#030a03", borderTop: "1px solid #1a3a1a", padding: "40px 24px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <Link href="/" style={{ textDecoration: "none" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/jhps-nav-logo.svg" alt="JHPS" style={{ maxWidth: 160, height: "auto", maxHeight: 36, opacity: 0.7 }} />
+            </Link>
+          </div>
+          <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+            <a href="tel:4076869817" style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>📞 407-686-9817</a>
+            <a href="mailto:Info@jhpsfl.com" style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>✉️ Email</a>
+            <Link href="/account" style={{ color: "#5a8a5a", fontSize: 13, textDecoration: "none" }}>My Account</Link>
+          </div>
+          <div style={{ color: "#2a4a2a", fontSize: 12, width: "100%", textAlign: "center", marginTop: 16 }}>
+            © 2025 Jenkins Home & Property Solutions. All rights reserved.
+          </div>
+        </div>
+      </footer>
+    </>
+  );
+}
