@@ -177,6 +177,8 @@ export default function PaymentPage() {
   const [showErrors, setShowErrors] = useState(false);
   const nameRef = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLDivElement>(null);
+  const emailRef = useRef<HTMLDivElement>(null);
+  const addressRef = useRef<HTMLDivElement>(null);
   const amountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -204,17 +206,25 @@ export default function PaymentPage() {
   };
 
   const handleContinue = () => {
-    const valid = !!(formData.name && formData.phone && formData.amount && parseFloat(formData.amount) > 0);
+    const valid = !!(
+      formData.name && formData.phone && formData.email &&
+      formData.address && formData.amount && parseFloat(formData.amount) > 0
+    );
     if (!valid) {
       setShowErrors(true);
-      // Scroll to first missing required field
-      const firstError = !formData.name ? nameRef : !formData.phone ? phoneRef : amountRef;
+      // Scroll to first missing required field in top-to-bottom order
+      const firstError =
+        !formData.name ? nameRef :
+        !formData.phone ? phoneRef :
+        !formData.email ? emailRef :
+        !formData.address ? addressRef :
+        amountRef;
       firstError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Re-trigger shake animation by toggling class (force reflow)
+      // Re-trigger shake animation (force reflow)
       const inputs = firstError.current?.querySelectorAll(".pay-input, .amount-input-wrapper");
       inputs?.forEach(el => {
         (el as HTMLElement).style.animation = "none";
-        (el as HTMLElement).offsetHeight; // reflow
+        (el as HTMLElement).offsetHeight;
         (el as HTMLElement).style.animation = "";
       });
       return;
@@ -701,17 +711,19 @@ export default function PaymentPage() {
                         </div>
 
                         {/* Email */}
-                        <div>
-                          <label style={labelStyle}>Email</label>
+                        <div ref={emailRef} className={showErrors && !formData.email ? "field-invalid" : ""}>
+                          <label style={labelStyle}>Email *</label>
                           <input className="pay-input" placeholder="john@example.com" type="email" value={formData.email}
                             onChange={(e) => updateField("email", e.target.value)} />
+                          {showErrors && !formData.email && <span className="field-error-msg">Email is required</span>}
                         </div>
 
                         {/* Address */}
-                        <div>
-                          <label style={labelStyle}>Property Address</label>
+                        <div ref={addressRef} className={showErrors && !formData.address ? "field-invalid" : ""}>
+                          <label style={labelStyle}>Property Address *</label>
                           <input className="pay-input" placeholder="123 Main Street" value={formData.address}
                             onChange={(e) => updateField("address", e.target.value)} />
+                          {showErrors && !formData.address && <span className="field-error-msg">Address is required</span>}
                         </div>
 
                         {/* City + Zip row */}
