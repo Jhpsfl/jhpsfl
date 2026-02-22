@@ -129,6 +129,9 @@ export default function PaymentPage() {
         }
         cardInstance = await squarePaymentsRef.current.card();
         if (cancelled) { cardInstance.destroy().catch(console.error); return; }
+        // Small delay to ensure the keyed div is fully painted before Square injects its iframe
+        await new Promise(r => setTimeout(r, 150));
+        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
         await cardInstance.attach("#square-card-container");
         if (cancelled) { cardInstance.destroy().catch(console.error); return; }
         setSquareCard(cardInstance);
@@ -207,6 +210,9 @@ export default function PaymentPage() {
 
       if (data.success) {
         setPaymentId(data.paymentId || null);
+        // Clear the cached payments object so the next payment attempt
+        // gets a completely fresh Square session (avoids blank card on retry)
+        squarePaymentsRef.current = null;
         setStep("confirm");
       } else {
         setPaymentError(data.error || "Payment failed. Please try again or call us directly.");
