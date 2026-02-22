@@ -83,7 +83,7 @@ export default function RootLayout({
               "description": "Central Florida's trusted partner for lawn care, pressure washing, junk removal, land clearing, and property cleanups.",
               "url": "https://jhpsfl.com",
               "telephone": "+14076869817",
-              "email": "FRLawnCareFL@gmail.com",
+              "email": "Info@jhpsfl.com",
               "logo": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
               "image": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
               "priceRange": "$$",
