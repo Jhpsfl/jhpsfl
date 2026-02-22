@@ -2,43 +2,307 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  SignIn,
+  SignUp,
+  SignedIn,
+  SignedOut,
+  UserButton,
+  useUser,
+  useAuth,
+} from "@clerk/nextjs";
 
-export default function AccountPage() {
-  const [scrollY, setScrollY] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+// ─── Types ───
+interface Customer {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+interface JobSite {
+  id: string;
+  address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  notes: string | null;
+}
+interface Job {
+  id: string;
+  service_type: string;
+  status: string;
+  scheduled_date: string | null;
+  completed_date: string | null;
+  amount: number | null;
+}
+interface Payment {
+  id: string;
+  amount: number;
+  status: string;
+  paid_at: string | null;
+  payment_method: string | null;
+  square_receipt_url: string | null;
+}
+interface Subscription {
+  id: string;
+  plan_name: string;
+  service_type: string;
+  frequency: string;
+  amount: number;
+  status: string;
+  next_billing_date: string | null;
+}
+interface DashboardData {
+  customer: Customer | null;
+  jobSites: JobSite[];
+  jobs: Job[];
+  payments: Payment[];
+  subscriptions: Subscription[];
+}
+
+const clerkAppearance = {
+  variables: {
+    colorPrimary: "#4CAF50",
+    colorBackground: "#0d1f0d",
+    colorText: "#e8f5e8",
+    colorInputBackground: "#0d1a0d",
+    colorInputText: "#e8f5e8",
+    borderRadius: "12px",
+  },
+  elements: {
+    card: {
+      background: "linear-gradient(160deg, #0d1f0d, #091409)",
+      border: "1px solid #1a3a1a",
+      borderRadius: "20px",
+      boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+    },
+    headerTitle: { color: "#e8f5e8", fontFamily: "'Playfair Display', serif" },
+    headerSubtitle: { color: "#7a9a7a" },
+    formButtonPrimary: {
+      background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+      boxShadow: "0 4px 20px rgba(76,175,80,0.4)",
+    },
+    footerActionLink: { color: "#4CAF50" },
+    formFieldInput: {
+      background: "#0d1a0d",
+      borderColor: "#1a3a1a",
+      color: "#e8f5e8",
+    },
+    socialButtonsIconButton: { borderColor: "#1a3a1a" },
+    dividerLine: { background: "#1a3a1a" },
+    dividerText: { color: "#5a8a5a" },
+  },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, { bg: string; text: string }> = {
+    scheduled: { bg: "rgba(33,150,243,0.15)", text: "#42a5f5" },
+    in_progress: { bg: "rgba(255,167,38,0.15)", text: "#ffa726" },
+    completed: { bg: "rgba(76,175,80,0.15)", text: "#66bb6a" },
+    cancelled: { bg: "rgba(239,83,80,0.1)", text: "#ef5350" },
+    active: { bg: "rgba(76,175,80,0.15)", text: "#66bb6a" },
+    pending: { bg: "rgba(255,167,38,0.15)", text: "#ffa726" },
+    failed: { bg: "rgba(239,83,80,0.1)", text: "#ef5350" },
+    paused: { bg: "rgba(255,167,38,0.15)", text: "#ffa726" },
+  };
+  const c = colors[status] || { bg: "rgba(255,255,255,0.08)", text: "#aaa" };
+  return (
+    <span style={{
+      padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+      letterSpacing: 0.8, textTransform: "uppercase",
+      background: c.bg, color: c.text,
+    }}>
+      {status.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+function DashboardView() {
+  const { userId } = useAuth();
+  const { user } = useUser();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handler = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
+    if (!userId) return;
+    fetch(`/api/customer/dashboard?clerk_user_id=${userId}`)
+      .then((r) => r.json())
+      .then((d) => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [userId]);
 
-  const handleSubmit = () => {
-    // Phase future: Connect to Clerk/Supabase auth
-    // For now, show coming soon message
-  };
+  const displayName = data?.customer?.name || user?.fullName || "Customer";
 
-  const inputStyle = {
-    width: "100%", padding: "14px 16px", background: "#0d1a0d",
-    border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
-    fontSize: 15, outline: "none", fontFamily: "'DM Sans', sans-serif",
-    transition: "border-color 0.3s, box-shadow 0.3s",
-  };
+  if (loading) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 0", color: "#5a8a5a" }}>
+        <div style={{ fontSize: 32, marginBottom: 12, animation: "pulse 2s infinite" }}>🌿</div>
+        <p>Loading your dashboard...</p>
+      </div>
+    );
+  }
 
-  const labelStyle = {
-    fontSize: 12, fontWeight: 600 as const, color: "#7a9a7a", letterSpacing: 1.5,
-    textTransform: "uppercase" as const, marginBottom: 6, display: "block" as const,
-  };
+  return (
+    <div style={{ animation: "slideUp 0.5s ease" }}>
+      {/* Welcome header */}
+      <div style={{
+        background: "linear-gradient(160deg, #0d1f0d, #091409)",
+        border: "1px solid #1a3a1a", borderRadius: 20,
+        padding: "28px 32px", marginBottom: 24,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", gap: 16,
+      }}>
+        <div>
+          <p style={{ fontSize: 13, color: "#5a8a5a", fontWeight: 600, letterSpacing: 1, marginBottom: 6 }}>WELCOME BACK</p>
+          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 700, marginBottom: 4 }}>
+            {displayName}
+          </h2>
+          <p style={{ color: "#5a8a5a", fontSize: 14 }}>{user?.emailAddresses[0]?.emailAddress}</p>
+        </div>
+        <UserButton appearance={{ elements: { avatarBox: { width: 52, height: 52 } } }} />
+      </div>
+
+      {/* Subscriptions */}
+      {data?.subscriptions && data.subscriptions.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>ACTIVE PLANS</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {data.subscriptions.map((sub) => (
+              <div key={sub.id} style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderRadius: 16, padding: "20px 24px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+              }}>
+                <div>
+                  <p style={{ color: "#e8f5e8", fontWeight: 700, marginBottom: 4 }}>{sub.plan_name}</p>
+                  <p style={{ color: "#5a8a5a", fontSize: 13 }}>{sub.service_type} · {sub.frequency}</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ color: "#4CAF50", fontWeight: 700, fontSize: 18 }}>${sub.amount}/mo</p>
+                  <StatusBadge status={sub.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Job Sites */}
+      {data?.jobSites && data.jobSites.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>YOUR PROPERTIES</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.jobSites.map((site) => (
+              <div key={site.id} style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px",
+              }}>
+                <p style={{ color: "#e8f5e8", fontWeight: 600 }}>{site.address}</p>
+                <p style={{ color: "#5a8a5a", fontSize: 13 }}>{[site.city, site.state, site.zip].filter(Boolean).join(", ")}</p>
+                {site.notes && <p style={{ color: "#4a7a4a", fontSize: 12, marginTop: 4 }}>{site.notes}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Jobs */}
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>RECENT JOBS</h3>
+        {data?.jobs && data.jobs.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.jobs.map((job) => (
+              <div key={job.id} style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+              }}>
+                <div>
+                  <p style={{ color: "#e8f5e8", fontWeight: 600, marginBottom: 4 }}>{job.service_type}</p>
+                  <p style={{ color: "#5a8a5a", fontSize: 12 }}>
+                    {job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : "Date TBD"}
+                  </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {job.amount && <span style={{ color: "#4CAF50", fontWeight: 700 }}>${job.amount}</span>}
+                  <StatusBadge status={job.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 14, padding: "24px",
+            textAlign: "center", color: "#3a5a3a",
+          }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>📋</p>
+            <p style={{ fontSize: 14 }}>No jobs yet. We&apos;ll list your service visits here.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Payment History */}
+      <div style={{ marginBottom: 32 }}>
+        <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>PAYMENT HISTORY</h3>
+        {data?.payments && data.payments.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.payments.map((pmt) => (
+              <div key={pmt.id} style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+              }}>
+                <div>
+                  <p style={{ color: "#e8f5e8", fontWeight: 700, fontSize: 18 }}>${pmt.amount}</p>
+                  <p style={{ color: "#5a8a5a", fontSize: 12 }}>
+                    {pmt.paid_at ? new Date(pmt.paid_at).toLocaleDateString() : "Pending"}{pmt.payment_method ? ` · ${pmt.payment_method}` : ""}
+                  </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <StatusBadge status={pmt.status} />
+                  {pmt.square_receipt_url && (
+                    <a href={pmt.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600 }}>Receipt ↗</a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 14, padding: "24px",
+            textAlign: "center", color: "#3a5a3a",
+          }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>💰</p>
+            <p style={{ fontSize: 14 }}>No payments recorded yet.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Pay CTA */}
+      <div style={{ textAlign: "center" }}>
+        <Link href="/pay" style={{
+          background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+          padding: "16px 40px", borderRadius: 14, fontSize: 16, fontWeight: 700,
+          textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
+          boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+        }}>
+          💳 Make a Payment
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function AccountPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@400;600;700;800&display=swap');
 
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
@@ -47,22 +311,12 @@ export default function AccountPage() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
         @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
         .nav-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 
-        .acct-input {
-          width: 100%; padding: 14px 16px; background: #0d1a0d;
-          border: 1px solid #1a3a1a; border-radius: 12px; color: #e8f5e8;
-          font-size: 15px; outline: none; font-family: 'DM Sans', sans-serif;
-          transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .acct-input:focus { border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76,175,80,0.15); }
-        .acct-input::placeholder { color: #3a5a3a; }
-
         .tab-btn {
-          flex: 1; padding: 14px 20px; border: none; font-size: 15px; font-weight: 600;
+          flex: 1; padding: 12px 20px; border: none; font-size: 15px; font-weight: 600;
           cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.3s;
           border-radius: 10px; background: transparent; color: #5a8a5a;
         }
@@ -71,16 +325,6 @@ export default function AccountPage() {
           color: #4CAF50;
           box-shadow: inset 0 0 0 1px rgba(76,175,80,0.3);
         }
-
-        .feature-card {
-          background: linear-gradient(160deg, #0d1f0d, #091409);
-          border: 1px solid #1a3a1a;
-          border-radius: 16px;
-          padding: 24px;
-          text-align: center;
-          transition: transform 0.3s;
-        }
-        .feature-card:hover { transform: translateY(-4px); }
 
         .mobile-menu {
           position: fixed; inset: 0; z-index: 9997;
@@ -95,10 +339,13 @@ export default function AccountPage() {
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
 
+        /* Clerk component overrides */
+        .cl-rootBox { width: 100%; }
+        .cl-card { background: transparent !important; box-shadow: none !important; border: none !important; }
+
         @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
           .mobile-hamburger { display: flex !important; }
-          .features-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -120,10 +367,15 @@ export default function AccountPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 28 }} className="desktop-nav">
             <Link href="/" style={{ color: "#8aba8a", fontSize: 14, fontWeight: 500, textDecoration: "none" }}>← Home</Link>
             <Link href="/pay" style={{ color: "#8aba8a", fontSize: 14, fontWeight: 500, textDecoration: "none" }}>Make Payment</Link>
-            <a href="tel:4076869817" style={{
-              background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-              padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: "none",
-            }}>📞 Call Us</a>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/account" />
+            </SignedIn>
+            <SignedOut>
+              <a href="tel:4076869817" style={{
+                background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: "none",
+              }}>📞 Call Us</a>
+            </SignedOut>
           </div>
 
           <button onClick={() => setMenuOpen(!menuOpen)} style={{
@@ -148,13 +400,13 @@ export default function AccountPage() {
 
       {/* ─── MAIN ─── */}
       <main style={{ minHeight: "100vh", paddingTop: 72, background: "linear-gradient(170deg, #050e05 0%, #081808 40%, #050e05 100%)" }}>
-        {/* Background */}
         <div style={{ position: "fixed", top: "15%", right: "-10%", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(76,175,80,0.04), transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "fixed", bottom: "10%", left: "-10%", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(46,125,50,0.03), transparent 70%)", pointerEvents: "none" }} />
 
-        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
+        <div style={{ maxWidth: 680, margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
+
           {/* Header */}
-          <div style={{ textAlign: "center", marginBottom: 48, animation: "slideUp 0.6s ease" }}>
+          <div style={{ textAlign: "center", marginBottom: 40, animation: "slideUp 0.6s ease" }}>
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px",
               background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
@@ -164,7 +416,7 @@ export default function AccountPage() {
               <span style={{ fontSize: 13, color: "#4CAF50", fontWeight: 600, letterSpacing: 1 }}>CUSTOMER PORTAL</span>
             </div>
             <h1 style={{
-              fontFamily: "'Playfair Display', serif", fontSize: 42, fontWeight: 800,
+              fontFamily: "'Playfair Display', serif", fontSize: 40, fontWeight: 800,
               color: "#e8f5e8", lineHeight: 1.15, marginBottom: 12,
             }}>
               Your{" "}
@@ -174,127 +426,54 @@ export default function AccountPage() {
                 WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
               }}>Account</span>
             </h1>
-            <p style={{ color: "#7a9a7a", fontSize: 16, maxWidth: 480, margin: "0 auto" }}>
-              Manage your services, view payment history, and track your property maintenance.
-            </p>
           </div>
 
-          {/* Login/Signup Card */}
-          <div style={{ maxWidth: 460, margin: "0 auto 64px", animation: "slideUp 0.7s ease 0.1s both" }}>
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 24, padding: "36px 32px",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-            }}>
+          {/* ─── SIGNED OUT: Show Clerk Auth ─── */}
+          <SignedOut>
+            <div style={{ animation: "slideUp 0.7s ease 0.1s both" }}>
               {/* Tabs */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 28, background: "#080f08", borderRadius: 12, padding: 4 }}>
+              <div style={{
+                display: "flex", gap: 8, marginBottom: 0,
+                background: "#080f08", borderRadius: "16px 16px 0 0",
+                padding: 6, border: "1px solid #1a3a1a", borderBottom: "none",
+              }}>
                 <button className={`tab-btn ${activeTab === "login" ? "active" : ""}`} onClick={() => setActiveTab("login")}>Sign In</button>
                 <button className={`tab-btn ${activeTab === "signup" ? "active" : ""}`} onClick={() => setActiveTab("signup")}>Create Account</button>
               </div>
 
-              {/* Coming Soon Badge */}
               <div style={{
-                padding: "16px 20px", background: "rgba(76,175,80,0.06)",
-                border: "1px solid rgba(76,175,80,0.15)", borderRadius: 12, marginBottom: 24,
-                display: "flex", alignItems: "center", gap: 12,
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderTop: "none",
+                borderRadius: "0 0 20px 20px",
+                padding: "8px 0 0",
               }}>
-                <div style={{
-                  width: 10, height: 10, borderRadius: "50%", background: "#4CAF50",
-                  animation: "pulse 2s infinite", flexShrink: 0,
-                }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#4CAF50", marginBottom: 2 }}>Coming Soon</div>
-                  <div style={{ fontSize: 12, color: "#5a8a5a", lineHeight: 1.5 }}>
-                    Customer accounts are being built. You can{" "}
-                    <Link href="/pay" style={{ color: "#4CAF50", textDecoration: "underline", textUnderlineOffset: 2 }}>make a payment</Link>{" "}
-                    right now, or call us at{" "}
-                    <a href="tel:4076869817" style={{ color: "#4CAF50", textDecoration: "none" }}>407-686-9817</a>.
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Fields (visual, non-functional) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, opacity: 0.5, pointerEvents: "none" }}>
-                {activeTab === "signup" && (
-                  <>
-                    <div>
-                      <label style={labelStyle}>Full Name</label>
-                      <input className="acct-input" placeholder="John Smith" value={name} readOnly />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Phone</label>
-                      <input className="acct-input" placeholder="(407) 555-0123" value={phone} readOnly />
-                    </div>
-                  </>
+                {activeTab === "login" ? (
+                  <SignIn
+                    appearance={clerkAppearance}
+                    routing="hash"
+                    signUpUrl="/account"
+                  />
+                ) : (
+                  <SignUp
+                    appearance={clerkAppearance}
+                    routing="hash"
+                    signInUrl="/account"
+                  />
                 )}
-                <div>
-                  <label style={labelStyle}>Email Address</label>
-                  <input className="acct-input" placeholder="john@example.com" type="email" value={email} readOnly />
-                </div>
-                <div>
-                  <label style={labelStyle}>Password</label>
-                  <input className="acct-input" placeholder="••••••••" type="password" value={password} readOnly />
-                </div>
-
-                <button style={{
-                  background: "linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%)",
-                  color: "#fff", border: "none", padding: "16px", borderRadius: 12,
-                  fontSize: 16, fontWeight: 700, cursor: "not-allowed", width: "100%",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}>
-                  {activeTab === "login" ? "Sign In" : "Create Account"}
-                </button>
               </div>
+
+              <p style={{ textAlign: "center", color: "#3a5a3a", fontSize: 13, marginTop: 24 }}>
+                Need help?{" "}
+                <a href="tel:4076869817" style={{ color: "#4CAF50", textDecoration: "none", fontWeight: 600 }}>Call us at 407-686-9817</a>
+              </p>
             </div>
-          </div>
+          </SignedOut>
 
-          {/* What You'll Get Section */}
-          <div style={{ textAlign: "center", marginBottom: 40, animation: "slideUp 0.8s ease 0.2s both" }}>
-            <div style={{ fontSize: 13, letterSpacing: 3, color: "#4CAF50", marginBottom: 12, fontWeight: 600 }}>WHAT&apos;S COMING</div>
-            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8", fontWeight: 700, marginBottom: 12 }}>
-              Your Property Dashboard
-            </h2>
-            <p style={{ color: "#7a9a7a", fontSize: 15, maxWidth: 500, margin: "0 auto" }}>
-              Everything you need to manage your property services in one place.
-            </p>
-          </div>
+          {/* ─── SIGNED IN: Dashboard ─── */}
+          <SignedIn>
+            <DashboardView />
+          </SignedIn>
 
-          <div className="features-grid" style={{
-            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 60,
-            animation: "slideUp 0.9s ease 0.3s both",
-          }}>
-            {[
-              { icon: "📋", title: "Job History", desc: "View all past and upcoming service visits with details and photos." },
-              { icon: "💰", title: "Payment History", desc: "Track every payment, download receipts, and manage billing." },
-              { icon: "🔄", title: "Subscription Plans", desc: "Manage recurring services with easy plan changes and scheduling." },
-              { icon: "🏠", title: "Property Profiles", desc: "Save multiple job sites with notes, photos, and service preferences." },
-              { icon: "📊", title: "Monthly Statements", desc: "Detailed monthly breakdowns of all services and charges." },
-              { icon: "💬", title: "Direct Messaging", desc: "Communicate with your service crew directly through the portal." },
-            ].map((feature, i) => (
-              <div key={i} className="feature-card">
-                <div style={{ fontSize: 32, marginBottom: 12 }}>{feature.icon}</div>
-                <h4 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: "#e8f5e8", fontWeight: 700, marginBottom: 8 }}>{feature.title}</h4>
-                <p style={{ color: "#6a9a6a", fontSize: 13, lineHeight: 1.6 }}>{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <div style={{ textAlign: "center", animation: "slideUp 1s ease 0.4s both" }}>
-            <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 16 }}>In the meantime, reach us directly:</p>
-            <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-              <a href="tel:4076869817" style={{
-                background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                padding: "14px 32px", borderRadius: 14, fontSize: 16, fontWeight: 700,
-                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
-              }}>📞 407-686-9817</a>
-              <Link href="/pay" style={{
-                background: "transparent", color: "#4CAF50", border: "2px solid #2a5a2a",
-                padding: "12px 28px", borderRadius: 14, fontSize: 16, fontWeight: 600,
-                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
-              }}>💳 Make a Payment</Link>
-            </div>
-          </div>
         </div>
       </main>
 

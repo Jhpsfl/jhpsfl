@@ -4,6 +4,7 @@ import "./globals.css";
 import { SanityLive } from "@/sanity/lib/live";
 import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
+import { ClerkProvider } from '@clerk/nextjs';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -66,6 +67,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    <ClerkProvider>
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
@@ -129,5 +131,6 @@ export default function RootLayout({
         <Analytics />
       </body>
     </html>
+    </ClerkProvider>
   );
 }
