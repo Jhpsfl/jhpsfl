@@ -108,7 +108,7 @@ export default function RootLayout({
                 ]
               },
               "sameAs": [
-                // TODO: add Facebook URL for First Responders Lawn Care & Maintenance (DBA of JHPS)
+                "https://www.facebook.com/profile.php?id=100063685565128",
                 // TODO: add Google Business Profile URL once verified
               ],
               "openingHoursSpecification": [
