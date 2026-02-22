@@ -2,7 +2,7 @@ import { SquareClient, SquareEnvironment } from "square";
 import { NextResponse } from "next/server";
 
 const squareClient = new SquareClient({
-  token: process.env.SQUARE_ACCESS_TOKEN!,
+  token: process.env.SQUARE_ACCESS_TOKEN?.trim()!,
   environment: SquareEnvironment.Sandbox,
 });
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
         amount: BigInt(amountInCents),
         currency: "USD",
       },
-      locationId: process.env.SQUARE_LOCATION_ID,
+      locationId: process.env.SQUARE_LOCATION_ID?.trim(),
       note: paymentNote.slice(0, 500),
       buyerEmailAddress: customerEmail || undefined,
     });
