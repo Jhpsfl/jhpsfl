@@ -3,6 +3,23 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 
+// Square Web Payments SDK type shim
+declare global {
+  interface Window {
+    Square?: {
+      payments: (appId: string, locationId: string) => Promise<SquarePayments>;
+    };
+  }
+}
+interface SquarePayments {
+  card: (options?: object) => Promise<SquareCard>;
+}
+interface SquareCard {
+  attach: (selector: string) => Promise<void>;
+  tokenize: () => Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>;
+  destroy: () => Promise<void>;
+}
+
 // ─── Animation Hook ───
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -49,10 +66,6 @@ interface FormData {
   jobDescription: string;
   invoiceNumber: string;
   amount: string;
-  cardNumber: string;
-  cardExpiry: string;
-  cardCvc: string;
-  cardName: string;
 }
 
 export default function PaymentPage() {
@@ -62,14 +75,68 @@ export default function PaymentPage() {
   const [formData, setFormData] = useState<FormData>({
     name: "", email: "", phone: "", address: "", city: "", zip: "",
     service: "", jobDescription: "", invoiceNumber: "", amount: "",
-    cardNumber: "", cardExpiry: "", cardCvc: "", cardName: "",
   });
+  const [squareSdkLoaded, setSquareSdkLoaded] = useState(false);
+  const [squareCard, setSquareCard] = useState<SquareCard | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const squarePaymentsRef = useRef<SquarePayments | null>(null);
 
   useEffect(() => {
     const handler = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
+
+  // Load Square Web Payments SDK script
+  useEffect(() => {
+    const existing = document.querySelector('script[src*="squarecdn"]');
+    if (existing) { setSquareSdkLoaded(true); return; }
+    const script = document.createElement("script");
+    script.src = "https://sandbox.web.squarecdn.com/v1/square.js";
+    script.async = true;
+    script.onload = () => setSquareSdkLoaded(true);
+    script.onerror = () => console.error("Failed to load Square SDK");
+    document.head.appendChild(script);
+  }, []);
+
+  // Initialize Square card element when on payment step
+  useEffect(() => {
+    if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
+    let cardInstance: SquareCard | null = null;
+
+    const initCard = async () => {
+      try {
+        const payments = await window.Square!.payments(
+          process.env.NEXT_PUBLIC_SQUARE_APP_ID!,
+          process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
+        );
+        squarePaymentsRef.current = payments;
+        cardInstance = await payments.card({
+          style: {
+            ".input-container": { borderColor: "#1a3a1a", borderRadius: "12px" },
+            ".input-container.is-focus": { borderColor: "#4CAF50" },
+            ".input-container.is-error": { borderColor: "#f44336" },
+            input: { color: "#e8f5e8", backgroundColor: "#0d1a0d", fontFamily: "DM Sans, sans-serif" },
+            "::placeholder": { color: "#3a5a3a" },
+          },
+        });
+        await cardInstance.attach("#square-card-container");
+        setSquareCard(cardInstance);
+      } catch (err) {
+        console.error("Square card init error:", err);
+        setPaymentError("Failed to load payment form. Please refresh or call us directly.");
+      }
+    };
+
+    initCard();
+
+    return () => {
+      if (cardInstance) cardInstance.destroy().catch(console.error);
+      setSquareCard(null);
+    };
+  }, [step, squareSdkLoaded]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -78,19 +145,6 @@ export default function PaymentPage() {
 
   const updateField = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  // Format card number with spaces
-  const formatCardNumber = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 16);
-    return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-  };
-
-  // Format expiry as MM/YY
-  const formatExpiry = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 4);
-    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return digits;
   };
 
   // Format amount
@@ -104,20 +158,51 @@ export default function PaymentPage() {
 
   const canProceedToPayment = formData.name && formData.phone && formData.amount && parseFloat(formData.amount) > 0;
 
-  const handlePayment = () => {
-    // Phase 1: Show confirmation with fallback CTA
-    // Phase 2: This is where Square Web Payments SDK will process the card
-    setStep("confirm");
-  };
+  const handlePayment = async () => {
+    if (!squareCard || isProcessing) return;
+    setIsProcessing(true);
+    setPaymentError(null);
 
-  const inputStyle: CSSProperties = {
-    width: "100%", padding: "14px 16px", background: "#0d1a0d",
-    border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
-    fontSize: 15, outline: "none", fontFamily: "'DM Sans', sans-serif",
-    transition: "border-color 0.3s, box-shadow 0.3s",
-  };
+    try {
+      const result = await squareCard.tokenize();
 
-  const inputFocusStyle = "focus-within:border-[#4CAF50] focus-within:shadow-[0_0_0_3px_rgba(76,175,80,0.15)]";
+      if (result.status !== "OK") {
+        const msg = result.errors?.map((e) => e.message).join(", ") || "Card verification failed. Please check your details.";
+        setPaymentError(msg);
+        setIsProcessing(false);
+        return;
+      }
+
+      const response = await fetch("/api/payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: result.token,
+          amount: formData.amount,
+          customerName: formData.name,
+          customerPhone: formData.phone,
+          customerEmail: formData.email,
+          service: formData.service,
+          invoiceNumber: formData.invoiceNumber,
+          note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
+            .filter(Boolean).join(" — "),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPaymentId(data.paymentId || null);
+        setStep("confirm");
+      } else {
+        setPaymentError(data.error || "Payment failed. Please try again or call us directly.");
+      }
+    } catch {
+      setPaymentError("An unexpected error occurred. Please try again or call us directly.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const labelStyle: CSSProperties = {
     fontSize: 12, fontWeight: 600, color: "#7a9a7a", letterSpacing: 1.5,
@@ -463,32 +548,15 @@ export default function PaymentPage() {
                     fontSize: 36, animation: "checkmark 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
                   }}>✓</div>
                   <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 700, marginBottom: 12 }}>
-                    Almost There!
+                    Payment Received!
                   </h2>
                   <p style={{ color: "#8aba8a", fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
-                    Online payment processing is coming soon. To complete your payment of{" "}
-                    <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${formData.amount || "0.00"}</strong>, please contact us directly:
+                    Thank you, <strong style={{ color: "#e8f5e8" }}>{formData.name}</strong>. Your payment of{" "}
+                    <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${formData.amount}</strong>{" "}
+                    has been processed successfully.
                   </p>
-                  <div style={{ margin: "32px 0", display: "flex", flexDirection: "column", gap: 12 }}>
-                    <a href="tel:4076869817" style={{
-                      background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                      padding: "16px 32px", borderRadius: 14, fontSize: 17, fontWeight: 700,
-                      textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                      boxShadow: "0 4px 24px rgba(76,175,80,0.4)",
-                    }}>
-                      📞 Call 407-686-9817
-                    </a>
-                    <a href="sms:4076869817" style={{
-                      background: "transparent", color: "#4CAF50", border: "2px solid #2a5a2a",
-                      padding: "14px 32px", borderRadius: 14, fontSize: 15, fontWeight: 600,
-                      textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      transition: "all 0.3s",
-                    }}>
-                      💬 Text Us
-                    </a>
-                  </div>
-                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, marginTop: 24 }}>
-                    <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 16 }}>Your information has been saved. Reference details:</p>
+                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, marginTop: 24, marginBottom: 24 }}>
+                    <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 16 }}>Payment confirmation:</p>
                     <div style={{
                       background: "#080f08", borderRadius: 12, padding: "16px 20px",
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#6a9a6a",
@@ -499,12 +567,25 @@ export default function PaymentPage() {
                       <div><span style={{ color: "#3a5a3a" }}>Service:</span> {formData.service || "General"}</div>
                       <div><span style={{ color: "#3a5a3a" }}>Amount:</span> <span style={{ color: "#4CAF50" }}>${formData.amount}</span></div>
                       {formData.invoiceNumber && <div><span style={{ color: "#3a5a3a" }}>Invoice #:</span> {formData.invoiceNumber}</div>}
+                      {paymentId && <div><span style={{ color: "#3a5a3a" }}>Transaction ID:</span> <span style={{ fontSize: 11 }}>{paymentId}</span></div>}
                     </div>
                   </div>
-                  <button onClick={() => { setStep("form"); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "", cardNumber: "", cardExpiry: "", cardCvc: "", cardName: "" }); }}
-                    style={{ marginTop: 24, background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
-                    Make another payment
-                  </button>
+                  <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 20 }}>
+                    Questions? We&apos;re here to help.
+                  </p>
+                  <a href="tel:4076869817" style={{
+                    background: "transparent", color: "#4CAF50", border: "2px solid #2a5a2a",
+                    padding: "14px 32px", borderRadius: 14, fontSize: 15, fontWeight: 600,
+                    textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  }}>
+                    📞 407-686-9817
+                  </a>
+                  <div style={{ marginTop: 24 }}>
+                    <button onClick={() => { setStep("form"); setPaymentId(null); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
+                      style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                      Make another payment
+                    </button>
+                  </div>
                 </div>
               </div>
             </FadeIn>
@@ -635,12 +716,12 @@ export default function PaymentPage() {
                         }}>← Edit Info</button>
                       </div>
 
-                      {/* Card form area — this will be replaced by Square Web Payments SDK */}
+                      {/* Square Web Payments SDK card element */}
                       <div style={{
-                        border: "1px dashed #2a4a2a", borderRadius: 16, padding: "32px 24px",
-                        background: "rgba(76,175,80,0.02)", marginBottom: 24,
+                        border: "1px solid #1a3a1a", borderRadius: 16, padding: "24px",
+                        background: "#0a160a", marginBottom: 24,
                       }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
                           <span style={{ fontSize: 20 }}>💳</span>
                           <span style={{ fontSize: 14, fontWeight: 600, color: "#8aba8a" }}>Card Information</span>
                           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -654,51 +735,40 @@ export default function PaymentPage() {
                           </div>
                         </div>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                          <div>
-                            <label style={labelStyle}>Name on Card</label>
-                            <input className="pay-input" placeholder="JOHN SMITH" value={formData.cardName}
-                              onChange={(e) => updateField("cardName", e.target.value.toUpperCase())}
-                              style={{ textTransform: "uppercase", letterSpacing: 1 }} />
-                          </div>
-                          <div>
-                            <label style={labelStyle}>Card Number</label>
-                            <input className="pay-input pay-input-mono" placeholder="4242 4242 4242 4242"
-                              value={formData.cardNumber}
-                              onChange={(e) => updateField("cardNumber", formatCardNumber(e.target.value))}
-                              inputMode="numeric" maxLength={19} />
-                          </div>
-                          <div className="card-field-grid">
-                            <div>
-                              <label style={labelStyle}>Expiry Date</label>
-                              <input className="pay-input pay-input-mono" placeholder="MM/YY"
-                                value={formData.cardExpiry}
-                                onChange={(e) => updateField("cardExpiry", formatExpiry(e.target.value))}
-                                inputMode="numeric" maxLength={5} />
+                        {/* Square renders its secure card iframe here */}
+                        <div id="square-card-container" style={{ minHeight: 89 }}>
+                          {!squareSdkLoaded && (
+                            <div style={{ color: "#3a5a3a", fontSize: 13, padding: "24px 0", textAlign: "center" }}>
+                              Loading secure payment form…
                             </div>
-                            <div>
-                              <label style={labelStyle}>CVC</label>
-                              <input className="pay-input pay-input-mono" placeholder="123"
-                                value={formData.cardCvc}
-                                onChange={(e) => updateField("cardCvc", e.target.value.replace(/\D/g, "").slice(0, 4))}
-                                inputMode="numeric" maxLength={4} type="password" />
-                            </div>
-                          </div>
+                          )}
                         </div>
 
-                        {/* Square SDK notice */}
+                        {paymentError && (
+                          <div style={{
+                            marginTop: 14, padding: "12px 16px", background: "rgba(244,67,54,0.08)",
+                            borderRadius: 10, border: "1px solid rgba(244,67,54,0.2)",
+                            fontSize: 13, color: "#ef9a9a", lineHeight: 1.5,
+                          }}>
+                            ⚠️ {paymentError}
+                          </div>
+                        )}
+
                         <div style={{
-                          marginTop: 20, padding: "12px 16px", background: "rgba(76,175,80,0.06)",
-                          borderRadius: 10, border: "1px solid rgba(76,175,80,0.1)",
-                          fontSize: 12, color: "#5a8a5a", lineHeight: 1.6,
+                          marginTop: 16, padding: "10px 14px", background: "rgba(76,175,80,0.05)",
+                          borderRadius: 8, border: "1px solid rgba(76,175,80,0.1)",
+                          fontSize: 11, color: "#4a7a4a", lineHeight: 1.6,
                         }}>
-                          🔒 Payments will be processed securely through Square. Your card details are never stored on our servers.
+                          🔒 Secured by Square. Your card details are encrypted and never stored on our servers.
                         </div>
                       </div>
 
-                      <button className="cta-pay" onClick={handlePayment}>
-                        <span style={{ fontSize: 18 }}>🔒</span>
-                        Pay ${formData.amount || "0.00"}
+                      <button className="cta-pay" onClick={handlePayment} disabled={!squareCard || isProcessing}>
+                        {isProcessing ? (
+                          <><span style={{ fontSize: 16, animation: "pulse 1s infinite" }}>⏳</span> Processing…</>
+                        ) : (
+                          <><span style={{ fontSize: 18 }}>🔒</span> Pay ${formData.amount || "0.00"}</>
+                        )}
                       </button>
                     </div>
                   )}
