@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { sanityFetch } from "@/sanity/lib/live";
+import { client } from "@/sanity/lib/client";
 import JHPSWebsite from "./components/JHPSWebsite";
 import {
   SITE_SETTINGS_QUERY,
@@ -10,16 +10,11 @@ import {
 } from "@/sanity/queries";
 
 export default async function Home() {
-  const [
-    { data: settings },
-    { data: homePage },
-    { data: services },
-    { data: gallery },
-  ] = await Promise.all([
-    sanityFetch({ query: SITE_SETTINGS_QUERY }),
-    sanityFetch({ query: HOME_PAGE_QUERY }),
-    sanityFetch({ query: SERVICES_QUERY }),
-    sanityFetch({ query: GALLERY_QUERY }),
+  const [settings, homePage, services, gallery] = await Promise.all([
+    client.fetch(SITE_SETTINGS_QUERY),
+    client.fetch(HOME_PAGE_QUERY),
+    client.fetch(SERVICES_QUERY),
+    client.fetch(GALLERY_QUERY),
   ]);
 
   return (
