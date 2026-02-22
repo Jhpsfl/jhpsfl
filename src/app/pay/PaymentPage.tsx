@@ -105,8 +105,8 @@ export default function PaymentPage() {
   useEffect(() => {
     if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
 
-    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID;
-    const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID;
+    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID?.trim();
+    const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID?.trim();
 
     if (!appId || !locationId) {
       setPaymentError("Payment configuration missing. Please call us to complete payment.");
