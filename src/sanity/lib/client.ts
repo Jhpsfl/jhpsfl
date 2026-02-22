@@ -7,4 +7,5 @@ export const client = createClient({
   dataset,
   apiVersion,
   useCdn: false, // Must be false for SanityLive / live content updates to work
+  token: process.env.SANITY_API_READ_TOKEN, // Required for private datasets (staging)
 })
