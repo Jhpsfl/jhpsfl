@@ -735,7 +735,7 @@ export default function PaymentPage() {
                         </div>
 
                         {/* Continue button */}
-                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setSquareCard(null); setStep("payment"); }}
+                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setSquareCard(null); setStep("payment"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                           style={{ marginTop: 8 }}>
                           Continue to Payment →
                         </button>
@@ -753,7 +753,7 @@ export default function PaymentPage() {
                         <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
                           Payment Details
                         </h2>
-                        <button onClick={() => setStep("form")} style={{
+                        <button onClick={() => { setStep("form"); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
                           background: "none", border: "none", color: "#5a8a5a", fontSize: 14,
                           cursor: "pointer", fontFamily: "inherit",
                         }}>← Edit Info</button>
