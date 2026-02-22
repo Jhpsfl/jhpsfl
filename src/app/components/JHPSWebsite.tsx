@@ -642,18 +642,8 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
             ) : (
-              <>
-                <div style={{
-                  width: 42, height: 42, borderRadius: 12,
-                  background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 18, fontWeight: 800, color: "#fff",
-                }}>J</div>
-                <div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 18, color: "#e8f5e8", lineHeight: 1.1 }}>{shortName}</div>
-                  <div style={{ fontSize: 9, letterSpacing: 2.5, color: "#5a8a5a", fontWeight: 600 }}>FLORIDA</div>
-                </div>
-              </>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
             )}
           </div>
 
@@ -1130,17 +1120,8 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
                 ) : (
-                  <>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: 14,
-                      background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 20, fontWeight: 800, color: "#fff",
-                    }}>J</div>
-                    <div>
-                      <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 20, color: "#e8f5e8" }}>{companyName}</div>
-                    </div>
-                  </>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 220, height: "auto", maxHeight: 48 }} />
                 )}
               </div>
               <p style={{ color: "#6a9a6a", fontSize: 14, lineHeight: 1.8, maxWidth: 400, marginBottom: 20 }}>
