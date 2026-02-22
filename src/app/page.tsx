@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { sanityFetch } from "@/sanity/lib/live";
 import JHPSWebsite from "./components/JHPSWebsite";
 import {
