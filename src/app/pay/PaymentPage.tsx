@@ -20,6 +20,80 @@ interface SquareCard {
   destroy: () => Promise<void>;
 }
 
+// ─── Square Card Section ───
+// Isolated component so React's mount/unmount mirrors Square SDK lifecycle.
+// Each time the user enters the payment step a fresh instance mounts,
+// Square is fully re-initialized, and on unmount the card is destroyed.
+function SquareCardSection({
+  onReady, onError,
+}: {
+  onReady: (card: SquareCard) => void;
+  onError: (msg: string) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    let card: SquareCard | null = null;
+
+    const init = async () => {
+      try {
+        // Load SDK script if not already present
+        if (!window.Square) {
+          await new Promise<void>((resolve, reject) => {
+            const existing = document.querySelector('script[src*="squarecdn"]');
+            if (existing) { resolve(); return; }
+            const s = document.createElement("script");
+            s.src = "https://sandbox.web.squarecdn.com/v1/square.js";
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error("Square SDK failed to load"));
+            document.head.appendChild(s);
+          });
+        }
+        if (cancelled) return;
+
+        const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID?.trim();
+        const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID?.trim();
+        if (!appId || !locationId) throw new Error("Payment configuration missing");
+
+        const payments = window.Square!.payments(appId, locationId);
+        card = await payments.card();
+        if (cancelled) { card.destroy().catch(() => {}); return; }
+
+        await card.attach("#sq-card-container");
+        if (cancelled) { card.destroy().catch(() => {}); return; }
+
+        setLoading(false);
+        onReady(card);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Square init error:", msg);
+        setLoading(false);
+        onError(msg);
+      }
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+      if (card) card.destroy().catch(() => {});
+    };
+  }, []); // empty — runs once on mount, cleans up on unmount
+
+  return (
+    <>
+      {loading && (
+        <div style={{ color: "#4a7a4a", fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+          Loading secure payment form…
+        </div>
+      )}
+      <div id="sq-card-container" style={{ minHeight: loading ? 0 : 89 }} />
+    </>
+  );
+}
+
 // ─── Animation Hook ───
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -76,84 +150,16 @@ export default function PaymentPage() {
     name: "", email: "", phone: "", address: "", city: "", zip: "",
     service: "", jobDescription: "", invoiceNumber: "", amount: "",
   });
-  const [squareSdkLoaded, setSquareSdkLoaded] = useState(false);
   const [squareCard, setSquareCard] = useState<SquareCard | null>(null);
-  const [cardLoading, setCardLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
-  const [cardKey, setCardKey] = useState(0); // incremented each visit → forces fresh DOM node
-  const squarePaymentsRef = useRef<SquarePayments | null>(null); // cached — Square.payments() must only be called once
 
   useEffect(() => {
     const handler = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
-
-  // Load Square Web Payments SDK script
-  useEffect(() => {
-    const existing = document.querySelector('script[src*="squarecdn"]');
-    if (existing) { setSquareSdkLoaded(true); return; }
-    const script = document.createElement("script");
-    script.src = "https://sandbox.web.squarecdn.com/v1/square.js";
-    script.async = true;
-    script.onload = () => setSquareSdkLoaded(true);
-    script.onerror = () => console.error("Failed to load Square SDK");
-    document.head.appendChild(script);
-  }, []);
-
-  // Initialize Square card element when on payment step.
-  // cardKey increments each visit → forces a fresh DOM node via key prop on the container.
-  // squarePaymentsRef is cached — Square.payments() must only ever be called once per page load.
-  useEffect(() => {
-    if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
-
-    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID?.trim();
-    const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID?.trim();
-
-    if (!appId || !locationId) {
-      setPaymentError("Payment configuration missing. Please call us to complete payment.");
-      return;
-    }
-
-    let cancelled = false;
-    let cardInstance: SquareCard | null = null;
-
-    const initCard = async () => {
-      setCardLoading(true);
-      try {
-        // Reuse cached payments object — calling Square.payments() more than once causes conflicts
-        if (!squarePaymentsRef.current) {
-          squarePaymentsRef.current = window.Square!.payments(appId, locationId);
-        }
-        cardInstance = await squarePaymentsRef.current.card();
-        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
-        // Small delay to ensure the keyed div is fully painted before Square injects its iframe
-        await new Promise(r => setTimeout(r, 150));
-        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
-        await cardInstance.attach("#square-card-container");
-        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
-        setSquareCard(cardInstance);
-      } catch (err) {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("Square card init error:", msg);
-        setPaymentError(`Card form error: ${msg}. Please call us at 407-686-9817.`);
-      } finally {
-        if (!cancelled) setCardLoading(false);
-      }
-    };
-
-    initCard();
-
-    return () => {
-      cancelled = true;
-      setCardLoading(false);
-      setSquareCard(null);
-      if (cardInstance) cardInstance.destroy().catch(console.error);
-    };
-  }, [step, squareSdkLoaded, cardKey]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -210,9 +216,6 @@ export default function PaymentPage() {
 
       if (data.success) {
         setPaymentId(data.paymentId || null);
-        // Clear the cached payments object so the next payment attempt
-        // gets a completely fresh Square session (avoids blank card on retry)
-        squarePaymentsRef.current = null;
         setStep("confirm");
       } else {
         setPaymentError(data.error || "Payment failed. Please try again or call us directly.");
@@ -712,7 +715,7 @@ export default function PaymentPage() {
                         </div>
 
                         {/* Continue button */}
-                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setCardKey(k => k + 1); setStep("payment"); }}
+                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setSquareCard(null); setStep("payment"); }}
                           style={{ marginTop: 8 }}>
                           Continue to Payment →
                         </button>
@@ -736,7 +739,7 @@ export default function PaymentPage() {
                         }}>← Edit Info</button>
                       </div>
 
-                      {/* Square Web Payments SDK card element */}
+                      {/* Square card — SquareCardSection mounts fresh on each visit */}
                       <div style={{
                         border: "1px solid #1a3a1a", borderRadius: 16, padding: "24px",
                         background: "#0a160a", marginBottom: 24,
@@ -755,29 +758,14 @@ export default function PaymentPage() {
                           </div>
                         </div>
 
-                        {/* Loading indicator — shown while Square initializes its iframe */}
-                        {(cardLoading || (!squareSdkLoaded && !paymentError)) && (
-                          <div style={{ color: "#4a7a4a", fontSize: 13, padding: "24px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                            <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
-                            Loading secure payment form…
-                          </div>
-                        )}
-
-                        {/* Square renders its secure card iframe here. key=cardKey forces a fresh DOM node each visit. */}
-                        <div key={cardKey} id="square-card-container" style={{ minHeight: cardLoading ? 0 : 89 }} />
-
-                        {paymentError && (
-                          <div style={{ marginTop: 12 }}>
-                            <button onClick={() => { setPaymentError(null); setCardKey(k => k + 1); }}
-                              style={{ background: "rgba(76,175,80,0.1)", border: "1px solid #2a5a2a", color: "#4CAF50", padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>
-                              ↺ Retry loading card form
-                            </button>
-                          </div>
-                        )}
+                        <SquareCardSection
+                          onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
+                          onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at 407-686-9817.`)}
+                        />
 
                         {paymentError && (
                           <div style={{
-                            padding: "12px 16px", background: "rgba(244,67,54,0.08)",
+                            marginTop: 12, padding: "12px 16px", background: "rgba(244,67,54,0.08)",
                             borderRadius: 10, border: "1px solid rgba(244,67,54,0.2)",
                             fontSize: 13, color: "#ef9a9a", lineHeight: 1.5,
                           }}>
