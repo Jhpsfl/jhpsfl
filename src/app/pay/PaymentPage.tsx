@@ -57,7 +57,27 @@ function SquareCardSection({
         if (!appId || !locationId) throw new Error("Payment configuration missing");
 
         const payments = window.Square!.payments(appId, locationId);
-        card = await payments.card();
+        card = await payments.card({
+          style: {
+            ".input-container": {
+              borderColor: "#1a3a1a",
+              borderRadius: "12px",
+            },
+            ".input-container.is-focus": {
+              borderColor: "#4CAF50",
+            },
+            ".input-container.is-error": {
+              borderColor: "#ef5350",
+            },
+            "input": {
+              backgroundColor: "#0d1a0d",
+              color: "#e8f5e8",
+            },
+            "input::placeholder": {
+              color: "#3a5a3a",
+            },
+          },
+        });
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
         await card.attach("#sq-card-container");
