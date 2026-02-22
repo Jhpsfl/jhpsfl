@@ -81,6 +81,7 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [cardKey, setCardKey] = useState(0); // incremented each time we enter payment step → forces fresh DOM node
   const squarePaymentsRef = useRef<SquarePayments | null>(null);
 
   useEffect(() => {
@@ -101,7 +102,8 @@ export default function PaymentPage() {
     document.head.appendChild(script);
   }, []);
 
-  // Initialize Square card element when on payment step
+  // Initialize Square card element when on payment step.
+  // cardKey increments each visit → forces a fresh DOM node via key prop on the container.
   useEffect(() => {
     if (step !== "payment" || !squareSdkLoaded || !window.Square) return;
 
@@ -113,6 +115,7 @@ export default function PaymentPage() {
       return;
     }
 
+    let cancelled = false;
     let cardInstance: SquareCard | null = null;
 
     const initCard = async () => {
@@ -120,9 +123,12 @@ export default function PaymentPage() {
         const payments = window.Square!.payments(appId, locationId);
         squarePaymentsRef.current = payments;
         cardInstance = await payments.card();
+        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
         await cardInstance.attach("#square-card-container");
+        if (cancelled) { cardInstance.destroy().catch(console.error); return; }
         setSquareCard(cardInstance);
       } catch (err) {
+        if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
         console.error("Square card init error:", msg);
         setPaymentError(`Payment form error: ${msg}. Please call us at 407-686-9817.`);
@@ -132,10 +138,11 @@ export default function PaymentPage() {
     initCard();
 
     return () => {
-      if (cardInstance) cardInstance.destroy().catch(console.error);
+      cancelled = true;
       setSquareCard(null);
+      if (cardInstance) cardInstance.destroy().catch(console.error);
     };
-  }, [step, squareSdkLoaded]);
+  }, [step, squareSdkLoaded, cardKey]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -691,7 +698,7 @@ export default function PaymentPage() {
                         </div>
 
                         {/* Continue button */}
-                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => setStep("payment")}
+                        <button className="cta-pay" disabled={!canProceedToPayment} onClick={() => { setPaymentError(null); setCardKey(k => k + 1); setStep("payment"); }}
                           style={{ marginTop: 8 }}>
                           Continue to Payment →
                         </button>
@@ -734,8 +741,8 @@ export default function PaymentPage() {
                           </div>
                         </div>
 
-                        {/* Square renders its secure card iframe here */}
-                        <div id="square-card-container" style={{ minHeight: 89 }}>
+                        {/* Square renders its secure card iframe here. key=cardKey forces a fresh DOM node each visit. */}
+                        <div key={cardKey} id="square-card-container" style={{ minHeight: 89 }}>
                           {!squareSdkLoaded && (
                             <div style={{ color: "#3a5a3a", fontSize: 13, padding: "24px 0", textAlign: "center" }}>
                               Loading secure payment form…
