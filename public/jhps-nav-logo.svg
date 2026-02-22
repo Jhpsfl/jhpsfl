@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 80" width="480" height="80">
+  <!-- Shield icon (compact) -->
+  <!-- Outer hex -->
+  <polygon points="40,4 72,22 72,58 40,76 8,58 8,22" fill="#1a2e1a" stroke="#3d6b3d" stroke-width="2.5"/>
+  <!-- Inner -->
+  <polygon points="40,10 66,26 66,54 40,70 14,54 14,26" fill="#243424" stroke="#3d6b3d" stroke-width="1.5"/>
+  <!-- Roof -->
+  <polygon points="40,16 60,32 20,32" fill="none" stroke="#3d6b3d" stroke-width="2.2" stroke-linejoin="round"/>
+  <!-- Window grid -->
+  <rect x="35" y="19" width="4" height="4" fill="#f5f0e8" rx="0.5"/>
+  <rect x="41" y="19" width="4" height="4" fill="#f5f0e8" rx="0.5"/>
+  <rect x="35" y="25" width="4" height="4" fill="#f5f0e8" rx="0.5"/>
+  <rect x="41" y="25" width="4" height="4" fill="#f5f0e8" rx="0.5"/>
+  <!-- JHPS text in icon -->
+  <text x="40" y="56" 
+        font-family="'Arial Black', Impact, sans-serif" 
+        font-size="19" 
+        font-weight="900"
+        fill="#f5f0e8" 
+        text-anchor="middle"
+        letter-spacing="1">JHPS</text>
+  <!-- Bottom chevron -->
+  <polygon points="32,63 40,71 48,63" fill="#3d6b3d"/>
+
+  <!-- Wordmark -->
+  <text x="90" y="42" 
+        font-family="'Arial Black', Impact, sans-serif" 
+        font-size="30" 
+        font-weight="900"
+        fill="#f5f0e8"
+        letter-spacing="3">JENKINS</text>
+  
+  <!-- Subtitle -->
+  <text x="91" y="60" 
+        font-family="Arial, sans-serif" 
+        font-size="10.5" 
+        font-weight="700"
+        fill="#3d6b3d"
+        letter-spacing="2.5">HOME AND PROPERTY SOLUTIONS</text>
+  
+  <!-- Red underline accent -->
+  <line x1="91" y1="65" x2="390" y2="65" stroke="#c0392b" stroke-width="1.5"/>
+</svg>

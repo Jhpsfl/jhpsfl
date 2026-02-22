@@ -44,6 +44,14 @@ export const metadata: Metadata = {
     title: "Jenkins Home & Property Solutions | Central Florida",
     description: "Lawn care, pressure washing, junk removal & more. Serving Deltona, Orlando & Central Florida. Free estimates!",
   },
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/favicon-180.png', sizes: '180x180' }],
+  },
   robots: {
     index: true,
     follow: true,
