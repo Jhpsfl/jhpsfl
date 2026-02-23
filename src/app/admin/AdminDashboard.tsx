@@ -734,13 +734,13 @@ export default function AdminDashboard() {
           z-index: 99;
         }
 
-        /* ── Medium desktop: windowed MacBook, 1000–1350px viewport ── */
-        @media (max-width: 1350px) {
-          .admin-content-inner { padding: 24px 20px 56px; }
-          .stats-grid-admin { grid-template-columns: repeat(3, 1fr) !important; }
+        /* ── Windowed desktop: ~1150px and below, sidebar still visible ── */
+        @media (max-width: 1150px) {
+          .admin-content-inner { padding: 22px 18px 56px; }
           .admin-content-inner h1 { font-size: 22px !important; }
-          .admin-content-inner table th { padding: 11px 12px !important; }
-          .admin-content-inner table td { padding: 11px 12px !important; font-size: 13px !important; }
+          .admin-content-inner table th { padding: 10px 10px !important; }
+          .admin-content-inner table td { padding: 10px 10px !important; font-size: 13px !important; }
+          .stats-grid-admin > div { padding: 18px 14px !important; }
         }
 
         /* ── Tablet / collapsed sidebar ── */
