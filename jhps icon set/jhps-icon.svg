@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Outer hexagon/shield -->
+  <polygon points="100,8 178,52 178,148 100,192 22,148 22,52" fill="#1a2e1a" stroke="#3d6b3d" stroke-width="5"/>
+  
+  <!-- Inner shield shape (darker inset) -->
+  <polygon points="100,20 166,58 166,142 100,180 34,142 34,58" fill="#243424" stroke="#3d6b3d" stroke-width="2.5"/>
+  
+  <!-- Roof/house peak -->
+  <polygon points="100,36 148,72 52,72" fill="none" stroke="#3d6b3d" stroke-width="4" stroke-linejoin="round"/>
+  
+  <!-- Window/grid above JHPS -->
+  <rect x="88" y="44" width="7" height="7" fill="#f5f0e8" rx="1"/>
+  <rect x="97" y="44" width="7" height="7" fill="#f5f0e8" rx="1"/>
+  <rect x="88" y="53" width="7" height="7" fill="#f5f0e8" rx="1"/>
+  <rect x="97" y="53" width="7" height="7" fill="#f5f0e8" rx="1"/>
+  
+  <!-- JHPS text -->
+  <text x="100" y="130" 
+        font-family="'Arial Black', 'Impact', sans-serif" 
+        font-size="52" 
+        font-weight="900"
+        fill="#f5f0e8" 
+        text-anchor="middle"
+        letter-spacing="2">JHPS</text>
+  
+  <!-- Bottom arrow/chevron pointing down -->
+  <polygon points="80,152 100,172 120,152" fill="#3d6b3d"/>
+</svg>

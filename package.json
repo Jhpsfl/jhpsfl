@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.995.0",
+    "@aws-sdk/s3-request-presigner": "^3.995.0",
     "@clerk/nextjs": "^6.38.1",
     "@sanity/color-input": "^3.1.2",
     "@sanity/image-url": "^1.2.0",

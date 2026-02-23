@@ -9,6 +9,7 @@ import {
   useUser,
   useAuth,
 } from "@clerk/nextjs";
+import AdminVideoLeads from "./AdminVideoLeads";
 
 // ─── Types ───
 interface Customer {
@@ -109,7 +110,7 @@ interface CustomerDetail {
   invoices: Invoice[];
 }
 
-type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail";
+type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads";
 
 // ─── Helpers ───
 function formatDate(d: string | null) {
@@ -844,11 +845,11 @@ export default function AdminDashboard() {
                   <NavItem icon="🔧" label="Jobs" active={activeTab === "jobs"} onClick={() => switchTab("jobs")} />
                   <NavItem icon="💰" label="Payments" active={activeTab === "payments"} onClick={() => switchTab("payments")} />
                   <NavItem icon="🔄" label="Subscriptions" active={activeTab === "subscriptions"} onClick={() => switchTab("subscriptions")} />
+                  <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} />
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
 
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
-                  <NavItem icon="📹" label="Video Quotes" active={false} onClick={() => showToast("Video quotes coming in Phase 5", "error")} />
                   <NavItem icon="📄" label="Invoices" active={false} onClick={() => showToast("Invoice management coming soon", "error")} />
                   <NavItem icon="📈" label="Analytics" active={false} onClick={() => showToast("Analytics coming soon", "error")} />
                 </nav>
@@ -1182,6 +1183,11 @@ export default function AdminDashboard() {
                           ))}
                         </DataTable>
                       </>
+                    )}
+
+                    {/* ─── VIDEO LEADS TAB ─── */}
+                    {activeTab === "video_leads" && userId && (
+                      <AdminVideoLeads userId={userId} />
                     )}
                   </div>
                 )}
