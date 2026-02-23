@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 
 // ─── Types ───
-type Step = "contact" | "property" | "service" | "media" | "review" | "submitted";
+type Step = "contact" | "property" | "service" | "media" | "review" | "uploading" | "submitted";
 
 interface FormData {
   name: string;
@@ -27,6 +27,15 @@ interface MediaFile {
   preview: string;
   context: string;
   type: "video" | "photo";
+  compressed?: boolean;
+}
+
+interface UploadProgress {
+  total: number;
+  completed: number;
+  current: string;
+  percent: number;
+  failed: string[];
 }
 
 // ─── Service modifier configs ───
@@ -62,51 +71,133 @@ const SERVICE_MODIFIERS: Record<string, { label: string; key: string; options?: 
   ],
 };
 
-// ─── Shot list generators ───
+// ─── Shot list generator ───
 function getShotList(service: string, modifiers: Record<string, unknown>): { id: string; label: string; hint: string }[] {
   const shots: { id: string; label: string; hint: string }[] = [
-    { id: "front_wide", label: "Front yard — wide shot", hint: "Stand at the sidewalk or street and slowly pan across the full front of the property." },
+    { id: "front_wide", label: "Front yard — wide shot", hint: "Stand at the sidewalk and slowly pan across the full front of the property." },
   ];
 
   if (service === "Lawn Care") {
-    const areas = modifiers.areas as string || "";
+    const areas = (modifiers.areas as string) || "";
     if (areas.includes("back")) {
       shots.push({ id: "back_wide", label: "Backyard — wide shot", hint: "Pan slowly across the full backyard from one corner." });
     }
-    const palms = modifiers.palm_trees as string || "";
-    if (palms && !palms.includes("None")) {
-      shots.push({ id: "palm_height", label: "Palm trees — height reference", hint: "Photo the tallest palm with your house or car visible for height comparison." });
+    if ((modifiers.palm_trees as string) && !(modifiers.palm_trees as string).includes("None")) {
+      shots.push({ id: "palm_height", label: "Palm trees — height reference", hint: "Photo the tallest palm with your house or car visible for scale." });
     }
-    const gate = modifiers.narrow_gate as string || "";
-    if (gate.includes("Yes")) {
-      shots.push({ id: "gate_width", label: "Gate opening", hint: "Place your foot next to the gate opening for scale reference." });
+    if ((modifiers.narrow_gate as string)?.includes("Yes")) {
+      shots.push({ id: "gate_width", label: "Gate opening", hint: "Place your foot next to the gate opening for scale." });
     }
-    const hedges = modifiers.hedges as string || "";
-    if (hedges && !hedges.includes("None")) {
-      shots.push({ id: "hedges", label: "Hedges / bushes", hint: "Show the hedges from a few feet away so we can see the height and density." });
+    if ((modifiers.hedges as string) && !(modifiers.hedges as string).includes("None")) {
+      shots.push({ id: "hedges", label: "Hedges / bushes", hint: "Show the hedges from a few feet away so we can see height and density." });
     }
-    const condition = modifiers.grass_condition as string || "";
-    if (condition.includes("overgrown") || condition.includes("knee")) {
-      shots.push({ id: "condition", label: "Worst area close-up", hint: "Film or photo the most overgrown section so we can assess the work needed." });
+    if ((modifiers.grass_condition as string)?.includes("overgrown") || (modifiers.grass_condition as string)?.includes("knee")) {
+      shots.push({ id: "condition", label: "Worst area close-up", hint: "Film or photo the most overgrown section." });
     }
   } else if (service === "Pressure Washing") {
-    shots.push({ id: "surface_main", label: "Main surface to wash", hint: "Show the full area — stand back to capture the size." });
-    shots.push({ id: "stain_closeup", label: "Stain / buildup close-up", hint: "Get close to show the type of staining or buildup." });
+    shots.push({ id: "surface_main", label: "Main surface to wash", hint: "Stand back to capture the full area." });
+    shots.push({ id: "stain_closeup", label: "Stain close-up", hint: "Get close to show the type of staining." });
   } else if (service === "Junk Removal") {
     shots.push({ id: "junk_overview", label: "All items overview", hint: "Show everything that needs to go in one wide shot." });
-    shots.push({ id: "junk_access", label: "Access path", hint: "Show how we'd get to and remove the items — driveway, hallway, stairs, etc." });
+    shots.push({ id: "junk_access", label: "Access path", hint: "Show how we'd get to and remove the items." });
   } else if (service === "Land Clearing") {
-    shots.push({ id: "clearing_area", label: "Area to clear — overview", hint: "Show the full area from the highest or widest vantage point." });
-    shots.push({ id: "vegetation_closeup", label: "Vegetation close-up", hint: "Get closer to show the type of brush, tree sizes, and density." });
+    shots.push({ id: "clearing_area", label: "Area to clear", hint: "Show the full area from the widest vantage point." });
+    shots.push({ id: "vegetation_closeup", label: "Vegetation close-up", hint: "Show brush sizes and density up close." });
   } else if (service === "Property Cleanup") {
-    shots.push({ id: "cleanup_overview", label: "Full property overview", hint: "Slow pan showing the overall state of the property." });
-    shots.push({ id: "problem_areas", label: "Worst areas", hint: "Film the areas that need the most attention." });
+    shots.push({ id: "cleanup_overview", label: "Property overview", hint: "Slow pan showing the overall state." });
+    shots.push({ id: "problem_areas", label: "Worst areas", hint: "Film the areas needing the most attention." });
   }
 
-  // Always add an optional general shot
   shots.push({ id: "additional", label: "Anything else (optional)", hint: "Any other angles or areas you want us to see." });
-
   return shots;
+}
+
+// ─── Video compression using MediaRecorder ───
+async function compressVideo(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.src = URL.createObjectURL(file);
+
+    video.onloadedmetadata = () => {
+      // Target: 720p max, 1.5 Mbps bitrate
+      const targetWidth = Math.min(video.videoWidth, 1280);
+      const targetHeight = Math.min(video.videoHeight, 720);
+      const scale = Math.min(targetWidth / video.videoWidth, targetHeight / video.videoHeight, 1);
+      const width = Math.round(video.videoWidth * scale);
+      const height = Math.round(video.videoHeight * scale);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+
+      // Check for MediaRecorder support with desired codec
+      let mimeType = "video/webm;codecs=vp8";
+      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
+        mimeType = "video/webm;codecs=vp9";
+      }
+      if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) {
+        mimeType = "video/mp4;codecs=avc1";
+      }
+
+      const stream = canvas.captureStream(24); // 24 fps
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 1500000, // 1.5 Mbps
+      });
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const ext = mimeType.startsWith("video/mp4") ? "mp4" : "webm";
+        const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
+        const compressedFile = new File(
+          [blob],
+          file.name.replace(/\.[^.]+$/, `.compressed.${ext}`),
+          { type: mimeType.split(";")[0] }
+        );
+        URL.revokeObjectURL(video.src);
+        resolve(compressedFile);
+      };
+
+      recorder.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error("Compression failed"));
+      };
+
+      recorder.start();
+
+      const drawFrame = () => {
+        if (video.ended || video.paused) {
+          recorder.stop();
+          return;
+        }
+        ctx.drawImage(video, 0, 0, width, height);
+        requestAnimationFrame(drawFrame);
+      };
+
+      video.onended = () => recorder.stop();
+      video.play().then(drawFrame).catch(reject);
+
+      // Safety timeout — stop after 3 minutes max
+      setTimeout(() => {
+        if (recorder.state === "recording") {
+          video.pause();
+          recorder.stop();
+        }
+      }, 180000);
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error("Could not load video"));
+    };
+  });
 }
 
 // ─── Phone formatting ───
@@ -117,53 +208,66 @@ function formatPhoneInput(value: string): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-// ─── Component ───
+function fileSizeStr(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ═══════════ COMPONENT ═══════════
 export default function GetQuotePage() {
   const [step, setStep] = useState<Step>("contact");
   const [form, setForm] = useState<FormData>({
     name: "", email: "", phone: "", address: "", city: "Deltona", state: "FL", zip: "",
-    latitude: null, longitude: null,
-    property_type: "residential", service_requested: "",
+    latitude: null, longitude: null, property_type: "residential", service_requested: "",
     modifier_data: {}, customer_notes: "",
   });
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [uploadStage, setUploadStage] = useState("");
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [compressing, setCompressing] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ─── GPS capture ───
+  // ─── GPS ───
   const captureGPS = useCallback(() => {
     if (!navigator.geolocation) return;
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((f) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-        setGpsLoading(false);
-      },
+      (pos) => { setForm((f) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude })); setGpsLoading(false); },
       () => setGpsLoading(false),
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }, []);
 
-  // ─── Validation ───
   const isContactValid = form.name && form.email && form.phone.replace(/\D/g, "").length >= 10 && form.address;
   const isServiceValid = form.service_requested !== "";
 
-  // ─── Media handling ───
-  const addMedia = (files: FileList | null, context: string = "") => {
+  // ─── Media handling with optional video compression ───
+  const addMedia = async (files: FileList | null, context: string = "") => {
     if (!files) return;
-    const newFiles: MediaFile[] = [];
-    Array.from(files).forEach((file) => {
-      if (file.size > 100 * 1024 * 1024) return; // Skip > 100MB
+
+    for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
-      const preview = URL.createObjectURL(file);
-      newFiles.push({ file, preview, context, type: isVideo ? "video" : "photo" });
-    });
-    setMediaFiles((prev) => [...prev, ...newFiles]);
+
+      // Attempt video compression for large videos
+      if (isVideo && file.size > 10 * 1024 * 1024) { // >10MB
+        setCompressing(file.name);
+        try {
+          const compressed = await compressVideo(file);
+          const preview = URL.createObjectURL(compressed);
+          setMediaFiles((prev) => [...prev, { file: compressed, preview, context, type: "video", compressed: true }]);
+        } catch {
+          // Compression failed, use original
+          const preview = URL.createObjectURL(file);
+          setMediaFiles((prev) => [...prev, { file, preview, context, type: "video", compressed: false }]);
+        }
+        setCompressing(null);
+      } else {
+        const preview = URL.createObjectURL(file);
+        setMediaFiles((prev) => [...prev, { file, preview, context, type: isVideo ? "video" : "photo" }]);
+      }
+    }
   };
 
   const removeMedia = (index: number) => {
@@ -173,90 +277,129 @@ export default function GetQuotePage() {
     });
   };
 
-  // ─── Submit (2-stage: create lead first, then upload files one by one) ───
+  // ─── Submit: Direct-to-B2 Upload Flow ───
   const handleSubmit = async () => {
-    setUploading(true);
     setError("");
-    setUploadStage("Submitting your request...");
-    setUploadProgress({ current: 0, total: 0 });
+    setStep("uploading");
+    setUploadProgress({ total: mediaFiles.length, completed: 0, current: "Creating quote request...", percent: 0, failed: [] });
 
     try {
-      // Stage 1: Create the lead record (text fields only — no file size limit risk)
-      const leadFormData = new FormData();
-      leadFormData.set("mode", "lead");
-      leadFormData.set("name", form.name);
-      leadFormData.set("email", form.email);
-      leadFormData.set("phone", form.phone);
-      leadFormData.set("address", form.address);
-      leadFormData.set("city", form.city);
-      leadFormData.set("state", form.state);
-      leadFormData.set("zip", form.zip);
-      if (form.latitude) leadFormData.set("latitude", form.latitude.toString());
-      if (form.longitude) leadFormData.set("longitude", form.longitude.toString());
-      leadFormData.set("property_type", form.property_type);
-      leadFormData.set("service_requested", form.service_requested);
-      leadFormData.set("modifier_data", JSON.stringify(form.modifier_data));
-      leadFormData.set("customer_notes", form.customer_notes);
+      // Step 1: Create the lead record
+      const leadRes = await fetch("/api/leads/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          zip: form.zip,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          property_type: form.property_type,
+          service_requested: form.service_requested,
+          modifier_data: form.modifier_data,
+          customer_notes: form.customer_notes,
+        }),
+      });
 
-      const leadRes = await fetch("/api/leads/submit", { method: "POST", body: leadFormData });
-      let leadData;
-      try {
-        leadData = await leadRes.json();
-      } catch {
-        setError("Server error. Please try again in a moment.");
-        setUploading(false);
+      const leadData = await leadRes.json();
+      if (!leadRes.ok || !leadData.success) {
+        setError(leadData.error || "Failed to create quote request");
+        setStep("review");
         return;
       }
 
-      if (!leadRes.ok || !leadData.success || !leadData.leadId) {
-        setError(leadData?.error || "Failed to submit. Please try again.");
-        setUploading(false);
-        return;
-      }
+      const newLeadId = leadData.leadId;
+      setLeadId(newLeadId);
 
-      const leadId = leadData.leadId;
+      // Step 2: Upload each file directly to B2
+      const failed: string[] = [];
+      for (let i = 0; i < mediaFiles.length; i++) {
+        const media = mediaFiles[i];
+        const filename = media.file.name;
 
-      // Stage 2: Upload each file individually (bypasses body size limits)
-      if (mediaFiles.length > 0) {
-        setUploadProgress({ current: 0, total: mediaFiles.length });
+        setUploadProgress({
+          total: mediaFiles.length,
+          completed: i,
+          current: `Uploading ${filename} (${fileSizeStr(media.file.size)})...`,
+          percent: Math.round((i / mediaFiles.length) * 100),
+          failed,
+        });
 
-        for (let i = 0; i < mediaFiles.length; i++) {
-          const m = mediaFiles[i];
-          setUploadStage(`Uploading ${m.type} ${i + 1} of ${mediaFiles.length}...`);
-          setUploadProgress({ current: i, total: mediaFiles.length });
+        try {
+          // 2a: Get pre-signed URL from our API
+          const urlRes = await fetch("/api/leads/upload-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              leadId: newLeadId,
+              filename,
+              contentType: media.file.type || "application/octet-stream",
+              fileSize: media.file.size,
+            }),
+          });
 
-          try {
-            const fileFormData = new FormData();
-            fileFormData.set("mode", "media");
-            fileFormData.set("lead_id", leadId);
-            fileFormData.set("media_0", m.file);
-            fileFormData.set("context_0", m.context);
-            fileFormData.set("sort_order", i.toString());
-
-            const fileRes = await fetch("/api/leads/submit", { method: "POST", body: fileFormData });
-            if (!fileRes.ok) {
-              const errData = await fileRes.json().catch(() => ({}));
-              console.warn(`File ${i + 1} upload issue:`, errData.error || fileRes.status);
-            }
-          } catch (fileErr) {
-            console.warn(`File ${i + 1} upload error:`, fileErr);
+          const urlData = await urlRes.json();
+          if (!urlRes.ok || !urlData.uploadUrl) {
+            failed.push(filename);
+            continue;
           }
-        }
 
-        setUploadProgress({ current: mediaFiles.length, total: mediaFiles.length });
+          // 2b: Upload directly to B2 via pre-signed URL
+          const uploadRes = await fetch(urlData.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": media.file.type || "application/octet-stream" },
+            body: media.file,
+          });
+
+          if (!uploadRes.ok) {
+            failed.push(filename);
+            continue;
+          }
+
+          // 2c: Register the media in our database
+          await fetch("/api/leads/register-media", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              leadId: newLeadId,
+              storagePath: urlData.storageKey,
+              mediaType: media.type,
+              originalFilename: filename,
+              contentType: media.file.type,
+              fileSizeBytes: media.file.size,
+              captureContext: media.context,
+              sortOrder: i,
+            }),
+          });
+
+        } catch {
+          failed.push(filename);
+        }
       }
 
-      setLeadId(leadId);
-      setStep("submitted");
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    }
+      setUploadProgress({
+        total: mediaFiles.length,
+        completed: mediaFiles.length,
+        current: "Complete!",
+        percent: 100,
+        failed,
+      });
 
-    setUploading(false);
-    setUploadStage("");
+      // Small delay for the progress bar to fill
+      await new Promise((r) => setTimeout(r, 500));
+      setStep("submitted");
+
+    } catch {
+      setError("Connection error. Please check your internet and try again.");
+      setStep("review");
+    }
   };
 
-  // ─── Shot list for current service ───
+  // ─── Shot list ───
   const shotList = form.service_requested ? getShotList(form.service_requested, form.modifier_data) : [];
 
   // ─── Styles ───
@@ -264,9 +407,7 @@ export default function GetQuotePage() {
     width: "100%", padding: "14px 16px", background: "#0d1a0d",
     border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
     fontSize: 16, outline: "none", fontFamily: "'DM Sans', sans-serif",
-    transition: "border-color 0.3s",
   };
-
   const labelStyle: React.CSSProperties = {
     display: "block", fontSize: 12, color: "#5a8a5a", fontWeight: 700,
     letterSpacing: 1.2, textTransform: "uppercase" as const, marginBottom: 8,
@@ -281,262 +422,154 @@ export default function GetQuotePage() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes progressPulse { 0%, 100% { box-shadow: 0 0 0 rgba(76,175,80,0); } 50% { box-shadow: 0 0 20px rgba(76,175,80,0.3); } }
 
-        .quote-container {
-          max-width: 640px; margin: 0 auto; padding: 24px 20px 60px;
-          min-height: 100vh; animation: fadeIn 0.4s ease;
-        }
-        .quote-input:focus { border-color: #4CAF50 !important; }
-        .quote-input::placeholder { color: #3a5a3a; }
+        .qc { max-width: 640px; margin: 0 auto; padding: 24px 20px 60px; min-height: 100vh; animation: fadeIn 0.4s ease; }
+        .qi:focus { border-color: #4CAF50 !important; }
+        .qi::placeholder { color: #3a5a3a; }
 
         .step-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 32px; }
-        .step-dot {
-          width: 10px; height: 10px; border-radius: 50%; transition: all 0.3s;
-        }
-        .step-dot.active { background: #4CAF50; box-shadow: 0 0 10px rgba(76,175,80,0.5); }
-        .step-dot.done { background: #2E7D32; }
-        .step-dot.future { background: #1a3a1a; }
+        .sd { width: 10px; height: 10px; border-radius: 50%; transition: all 0.3s; }
+        .sd.a { background: #4CAF50; box-shadow: 0 0 10px rgba(76,175,80,0.5); }
+        .sd.d { background: #2E7D32; }
+        .sd.f { background: #1a3a1a; }
 
-        .service-card {
-          padding: 16px 20px; border: 1px solid #1a3a1a; border-radius: 14px;
-          cursor: pointer; transition: all 0.3s; background: transparent;
-          text-align: left; width: 100%; font-family: inherit; color: inherit;
-        }
-        .service-card:hover { border-color: #4CAF50; background: rgba(76,175,80,0.04); }
-        .service-card.selected { border-color: #4CAF50; background: rgba(76,175,80,0.1); }
+        .sc { padding: 16px 20px; border: 1px solid #1a3a1a; border-radius: 14px; cursor: pointer; transition: all 0.3s; background: transparent; text-align: left; width: 100%; font-family: inherit; color: inherit; }
+        .sc:hover { border-color: #4CAF50; background: rgba(76,175,80,0.04); }
+        .sc.sel { border-color: #4CAF50; background: rgba(76,175,80,0.1); }
 
-        .modifier-option {
-          padding: 10px 16px; border: 1px solid #1a3a1a; border-radius: 10px;
-          cursor: pointer; transition: all 0.2s; background: transparent;
-          font-family: inherit; color: #c8e0c8; font-size: 14px; text-align: left;
-        }
-        .modifier-option:hover { border-color: #4CAF50; }
-        .modifier-option.selected { border-color: #4CAF50; background: rgba(76,175,80,0.1); color: #4CAF50; }
+        .mo { padding: 10px 16px; border: 1px solid #1a3a1a; border-radius: 10px; cursor: pointer; transition: all 0.2s; background: transparent; font-family: inherit; color: #c8e0c8; font-size: 14px; text-align: left; }
+        .mo:hover { border-color: #4CAF50; }
+        .mo.sel { border-color: #4CAF50; background: rgba(76,175,80,0.1); color: #4CAF50; }
 
-        .upload-zone {
-          border: 2px dashed #1a3a1a; border-radius: 16px; padding: 32px 20px;
-          text-align: center; cursor: pointer; transition: all 0.3s;
-          background: rgba(76,175,80,0.02);
-        }
-        .upload-zone:hover { border-color: #4CAF50; background: rgba(76,175,80,0.05); }
+        .uz { border: 2px dashed #1a3a1a; border-radius: 16px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.3s; background: rgba(76,175,80,0.02); }
+        .uz:hover { border-color: #4CAF50; background: rgba(76,175,80,0.05); }
 
-        .media-thumb {
-          width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 10px;
-          background: #0a160a;
-        }
+        .mt { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 10px; background: #0a160a; }
 
-        .btn-primary {
-          width: 100%; padding: 16px; border-radius: 14px; border: none;
-          background: linear-gradient(135deg, #4CAF50, #2E7D32); color: #fff;
-          font-size: 16px; font-weight: 700; cursor: pointer;
-          font-family: 'DM Sans', sans-serif; transition: all 0.3s;
-          box-shadow: 0 4px 20px rgba(76,175,80,0.3);
-        }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 30px rgba(76,175,80,0.4); }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .bp { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #4CAF50, #2E7D32); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; box-shadow: 0 4px 20px rgba(76,175,80,0.3); transition: all 0.3s; }
+        .bp:hover { transform: translateY(-1px); box-shadow: 0 6px 30px rgba(76,175,80,0.4); }
+        .bp:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-        .btn-secondary {
-          width: 100%; padding: 14px; border-radius: 14px;
-          border: 1px solid #1a3a1a; background: transparent;
-          color: #5a8a5a; font-size: 15px; font-weight: 600; cursor: pointer;
-          font-family: 'DM Sans', sans-serif; transition: all 0.3s;
-        }
-        .btn-secondary:hover { border-color: #4CAF50; color: #4CAF50; }
+        .bs { width: 100%; padding: 14px; border-radius: 14px; border: 1px solid #1a3a1a; background: transparent; color: #5a8a5a; font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.3s; }
+        .bs:hover { border-color: #4CAF50; color: #4CAF50; }
 
-        @media (max-width: 640px) {
-          .quote-container { padding: 16px 16px 48px; }
-        }
-
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .upload-spinner {
-          width: 16px; height: 16px; border-radius: 50%;
-          border: 2px solid rgba(76,175,80,0.25);
-          border-top-color: #4CAF50;
-          animation: spin 0.7s linear infinite;
-          flex-shrink: 0;
-        }
+        @media (max-width: 640px) { .qc { padding: 16px 16px 48px; } }
       `}</style>
 
-      <div className="quote-container">
-        {/* ─── Header ─── */}
+      <div className="qc">
+        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 8, paddingTop: 8 }}>
           <Link href="/" style={{ textDecoration: "none" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/jhps-nav-logo.svg" alt="JHPS" style={{ height: 36, marginBottom: 16 }} />
           </Link>
-          {step !== "submitted" && (
-            <h1 style={{
-              fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8",
-              fontWeight: 800, lineHeight: 1.2, marginBottom: 6,
-            }}>
-              Get a Free Video Quote
-            </h1>
-          )}
-          {step !== "submitted" && (
-            <p style={{ color: "#5a8a5a", fontSize: 15, marginBottom: 24 }}>
-              Show us your property, get a price in hours — no site visit needed.
-            </p>
+          {!["uploading", "submitted"].includes(step) && (
+            <>
+              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}>
+                Get a Free Video Quote
+              </h1>
+              <p style={{ color: "#5a8a5a", fontSize: 15, marginBottom: 24 }}>
+                Show us your property, get a price in hours — no site visit needed.
+              </p>
+            </>
           )}
         </div>
 
-        {/* ─── Step Dots ─── */}
-        {step !== "submitted" && (
+        {/* Step Dots */}
+        {!["uploading", "submitted"].includes(step) && (
           <div className="step-dots">
             {(["contact", "property", "service", "media", "review"] as Step[]).map((s, i) => {
-              const steps: Step[] = ["contact", "property", "service", "media", "review"];
-              const currentIndex = steps.indexOf(step);
-              return (
-                <div key={s} className={`step-dot ${i === currentIndex ? "active" : i < currentIndex ? "done" : "future"}`} />
-              );
+              const idx = (["contact", "property", "service", "media", "review"] as Step[]).indexOf(step);
+              return <div key={s} className={`sd ${i === idx ? "a" : i < idx ? "d" : "f"}`} />;
             })}
           </div>
         )}
 
-        {/* ═══════════ STEP 1: CONTACT INFO ═══════════ */}
+        {/* ═══ STEP 1: CONTACT ═══ */}
         {step === "contact" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700, marginBottom: 4 }}>Your Info</h2>
-
             <div>
               <label style={labelStyle}>Full Name *</label>
-              <input className="quote-input" style={inputStyle} placeholder="John Smith"
-                value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input className="qi" style={inputStyle} placeholder="John Smith" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-
             <div>
               <label style={labelStyle}>Email *</label>
-              <input className="quote-input" style={inputStyle} type="email" placeholder="john@email.com"
-                value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input className="qi" style={inputStyle} type="email" placeholder="john@email.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
-
             <div>
               <label style={labelStyle}>Phone *</label>
-              <input className="quote-input" style={inputStyle} type="tel" placeholder="(407) 555-1234"
-                value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhoneInput(e.target.value) })}
-                inputMode="tel" />
+              <input className="qi" style={inputStyle} type="tel" placeholder="(407) 555-1234" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhoneInput(e.target.value) })} inputMode="tel" />
             </div>
-
             <div>
               <label style={labelStyle}>Property Address *</label>
-              <input className="quote-input" style={inputStyle} placeholder="123 Main St"
-                value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <input className="qi" style={inputStyle} placeholder="123 Main St" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10 }}>
-              <div>
-                <label style={labelStyle}>City</label>
-                <input className="quote-input" style={inputStyle} value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })} />
-              </div>
-              <div>
-                <label style={labelStyle}>State</label>
-                <input className="quote-input" style={inputStyle} value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })} />
-              </div>
-              <div>
-                <label style={labelStyle}>Zip</label>
-                <input className="quote-input" style={inputStyle} placeholder="32725"
-                  value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} inputMode="numeric" />
-              </div>
+              <div><label style={labelStyle}>City</label><input className="qi" style={inputStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+              <div><label style={labelStyle}>State</label><input className="qi" style={inputStyle} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+              <div><label style={labelStyle}>Zip</label><input className="qi" style={inputStyle} placeholder="32725" value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} inputMode="numeric" /></div>
             </div>
-
-            {/* GPS Capture */}
             <button onClick={captureGPS} disabled={gpsLoading} style={{
               padding: "10px 16px", background: "rgba(76,175,80,0.08)", border: "1px solid #1a3a1a",
               borderRadius: 10, color: form.latitude ? "#4CAF50" : "#5a8a5a", fontSize: 13,
-              fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
             }}>
-              {gpsLoading ? (
-                <span style={{ animation: "pulse 1s infinite" }}>📍 Getting location...</span>
-              ) : form.latitude ? (
-                <span>📍 Location captured ✓</span>
-              ) : (
-                <span>📍 Share my location (optional — helps with accuracy)</span>
-              )}
+              {gpsLoading ? "📍 Getting location..." : form.latitude ? "📍 Location captured ✓" : "📍 Share my location (helps accuracy)"}
             </button>
-
-            <button className="btn-primary" disabled={!isContactValid}
-              onClick={() => setStep("property")}>
-              Next →
-            </button>
+            <button className="bp" disabled={!isContactValid} onClick={() => setStep("property")}>Next →</button>
           </div>
         )}
 
-        {/* ═══════════ STEP 2: PROPERTY TYPE ═══════════ */}
+        {/* ═══ STEP 2: PROPERTY TYPE ═══ */}
         {step === "property" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700, marginBottom: 4 }}>Property Type</h2>
-
-            {(["residential", "commercial"] as const).map((type) => (
-              <button key={type} className={`service-card ${form.property_type === type ? "selected" : ""}`}
-                onClick={() => setForm({ ...form, property_type: type })}>
-                <div style={{ fontSize: 24, marginBottom: 4 }}>{type === "residential" ? "🏡" : "🏢"}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#e8f5e8", textTransform: "capitalize" }}>{type}</div>
-                <div style={{ fontSize: 13, color: "#5a8a5a" }}>
-                  {type === "residential" ? "Home, townhouse, or condo" : "Office, retail, HOA, or multi-unit"}
-                </div>
+            <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>Property Type</h2>
+            {(["residential", "commercial"] as const).map((t) => (
+              <button key={t} className={`sc ${form.property_type === t ? "sel" : ""}`} onClick={() => setForm({ ...form, property_type: t })}>
+                <div style={{ fontSize: 24, marginBottom: 4 }}>{t === "residential" ? "🏡" : "🏢"}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#e8f5e8", textTransform: "capitalize" }}>{t}</div>
+                <div style={{ fontSize: 13, color: "#5a8a5a" }}>{t === "residential" ? "Home, townhouse, or condo" : "Office, retail, HOA, or multi-unit"}</div>
               </button>
             ))}
-
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-              <button className="btn-secondary" onClick={() => setStep("contact")}>← Back</button>
-              <button className="btn-primary" onClick={() => setStep("service")}>Next →</button>
+              <button className="bs" onClick={() => setStep("contact")}>← Back</button>
+              <button className="bp" onClick={() => setStep("service")}>Next →</button>
             </div>
           </div>
         )}
 
-        {/* ═══════════ STEP 3: SERVICE & MODIFIERS ═══════════ */}
+        {/* ═══ STEP 3: SERVICE + MODIFIERS ═══ */}
         {step === "service" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700, marginBottom: 4 }}>What do you need?</h2>
-
+            <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>What do you need?</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {["Lawn Care", "Pressure Washing", "Junk Removal", "Land Clearing", "Property Cleanup"].map((svc) => (
-                <button key={svc}
-                  className={`service-card ${form.service_requested === svc ? "selected" : ""}`}
+                <button key={svc} className={`sc ${form.service_requested === svc ? "sel" : ""}`}
                   onClick={() => setForm({ ...form, service_requested: svc, modifier_data: {} })}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: form.service_requested === svc ? "#4CAF50" : "#e8f5e8" }}>
-                    {svc === "Lawn Care" && "🌿 "}
-                    {svc === "Pressure Washing" && "💧 "}
-                    {svc === "Junk Removal" && "🚛 "}
-                    {svc === "Land Clearing" && "🌲 "}
-                    {svc === "Property Cleanup" && "🧹 "}
-                    {svc}
+                    {{"Lawn Care":"🌿","Pressure Washing":"💧","Junk Removal":"🚛","Land Clearing":"🌲","Property Cleanup":"🧹"}[svc]} {svc}
                   </div>
                 </button>
               ))}
             </div>
 
-            {/* Modifiers for selected service */}
             {form.service_requested && SERVICE_MODIFIERS[form.service_requested] && (
-              <div style={{
-                marginTop: 16, padding: "20px", background: "rgba(76,175,80,0.03)",
-                border: "1px solid #1a3a1a", borderRadius: 16,
-              }}>
-                <h3 style={{ fontSize: 15, color: "#4CAF50", fontWeight: 700, marginBottom: 16 }}>
-                  Tell us more about the job
-                </h3>
+              <div style={{ marginTop: 16, padding: 20, background: "rgba(76,175,80,0.03)", border: "1px solid #1a3a1a", borderRadius: 16 }}>
+                <h3 style={{ fontSize: 15, color: "#4CAF50", fontWeight: 700, marginBottom: 16 }}>Tell us more</h3>
                 {SERVICE_MODIFIERS[form.service_requested].map((mod) => {
-                  // Skip palm height if no palms selected
-                  if (mod.key === "palm_height" && (!form.modifier_data.palm_trees || (form.modifier_data.palm_trees as string).includes("None"))) {
-                    return null;
-                  }
-
+                  if (mod.key === "palm_height" && (!(form.modifier_data.palm_trees as string) || (form.modifier_data.palm_trees as string).includes("None"))) return null;
                   return (
                     <div key={mod.key} style={{ marginBottom: 16 }}>
                       <label style={{ ...labelStyle, fontSize: 13, letterSpacing: 0.5 }}>{mod.label}</label>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {(mod.options || mod.tiers?.map((t) => t.label) || []).map((opt) => {
-                          const value = mod.tiers ? mod.tiers.find((t) => t.label === opt)?.value || opt : opt;
-                          const selected = form.modifier_data[mod.key] === (mod.tiers ? value : opt);
+                          const val = mod.tiers ? mod.tiers.find((t) => t.label === opt)?.value || opt : opt;
+                          const sel = form.modifier_data[mod.key] === (mod.tiers ? val : opt);
                           return (
-                            <button key={opt}
-                              className={`modifier-option ${selected ? "selected" : ""}`}
-                              onClick={() => setForm({
-                                ...form,
-                                modifier_data: { ...form.modifier_data, [mod.key]: mod.tiers ? value : opt },
-                              })}>
+                            <button key={opt} className={`mo ${sel ? "sel" : ""}`}
+                              onClick={() => setForm({ ...form, modifier_data: { ...form.modifier_data, [mod.key]: mod.tiers ? val : opt } })}>
                               {opt}
                             </button>
                           );
@@ -549,241 +582,206 @@ export default function GetQuotePage() {
             )}
 
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-              <button className="btn-secondary" onClick={() => setStep("property")}>← Back</button>
-              <button className="btn-primary" disabled={!isServiceValid}
-                onClick={() => setStep("media")}>
-                Next: Add Photos / Video →
-              </button>
+              <button className="bs" onClick={() => setStep("property")}>← Back</button>
+              <button className="bp" disabled={!isServiceValid} onClick={() => setStep("media")}>Next: Add Photos / Video →</button>
             </div>
           </div>
         )}
 
-        {/* ═══════════ STEP 4: MEDIA CAPTURE ═══════════ */}
+        {/* ═══ STEP 4: MEDIA ═══ */}
         {step === "media" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>Show Us Your Property</h2>
             <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 8 }}>
-              Upload photos or short videos. The more we can see, the more accurate your quote.
+              Upload photos or short videos. Videos over 10MB will be automatically compressed.
             </p>
 
-            {/* Shot list prompts */}
+            {compressing && (
+              <div style={{ padding: "12px 16px", background: "rgba(255,167,38,0.1)", border: "1px solid rgba(255,167,38,0.2)", borderRadius: 10, fontSize: 13, color: "#ffa726", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ animation: "pulse 1.5s infinite" }}>⚙️</span> Compressing {compressing}...
+              </div>
+            )}
+
             {shotList.map((shot) => {
-              const hasMedia = mediaFiles.some((m) => m.context === shot.id);
+              const shotMedia = mediaFiles.filter((m) => m.context === shot.id);
+              const hasMedia = shotMedia.length > 0;
               return (
                 <div key={shot.id} style={{
-                  border: `1px solid ${hasMedia ? "#2E7D32" : "#1a3a1a"}`,
-                  borderRadius: 14, padding: "16px", transition: "all 0.3s",
-                  background: hasMedia ? "rgba(76,175,80,0.05)" : "transparent",
+                  border: `1px solid ${hasMedia ? "#2E7D32" : "#1a3a1a"}`, borderRadius: 14,
+                  padding: 16, background: hasMedia ? "rgba(76,175,80,0.05)" : "transparent",
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: hasMedia ? "#4CAF50" : "#e8f5e8" }}>
-                        {hasMedia ? "✓ " : ""}{shot.label}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>{shot.hint}</div>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: hasMedia ? "#4CAF50" : "#e8f5e8" }}>
+                      {hasMedia ? "✓ " : ""}{shot.label}
                     </div>
+                    <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>{shot.hint}</div>
                   </div>
 
-                  {/* Show uploaded media for this shot */}
-                  {mediaFiles.filter((m) => m.context === shot.id).map((m, i) => {
-                    const globalIndex = mediaFiles.indexOf(m);
+                  {shotMedia.map((m) => {
+                    const gi = mediaFiles.indexOf(m);
                     return (
-                      <div key={i} style={{ position: "relative", marginTop: 8 }}>
+                      <div key={gi} style={{ position: "relative", marginTop: 8 }}>
                         {m.type === "photo" ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.preview} alt={shot.label} className="media-thumb" />
+                          <img src={m.preview} alt={shot.label} className="mt" />
                         ) : (
-                          <video src={m.preview} className="media-thumb" controls playsInline style={{ background: "#0a160a" }} />
+                          <video src={m.preview} className="mt" controls playsInline />
                         )}
-                        <button onClick={() => removeMedia(globalIndex)} style={{
+                        {m.compressed && (
+                          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#4CAF50", fontWeight: 700 }}>
+                            COMPRESSED
+                          </div>
+                        )}
+                        <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#5a8a5a" }}>
+                          {fileSizeStr(m.file.size)}
+                        </div>
+                        <button onClick={() => removeMedia(gi)} style={{
                           position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)",
                           border: "none", color: "#ef5350", width: 28, height: 28, borderRadius: 8,
                           cursor: "pointer", fontSize: 14, fontWeight: 700,
                         }}>✕</button>
-                        <div style={{
-                          position: "absolute", bottom: 8, left: 8,
-                          background: "rgba(0,0,0,0.65)", borderRadius: 6,
-                          padding: "2px 8px", fontSize: 10, color: "#c8e0c8",
-                        }}>
-                          {(m.file.size / (1024 * 1024)).toFixed(1)} MB
-                        </div>
                       </div>
                     );
                   })}
 
-                  {/* Upload button for this shot */}
                   <label style={{
                     display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10,
                     padding: "8px 14px", background: "rgba(76,175,80,0.08)", border: "1px solid #1a3a1a",
                     borderRadius: 8, cursor: "pointer", fontSize: 13, color: "#4CAF50", fontWeight: 600,
-                    transition: "all 0.2s",
                   }}>
                     📷 {hasMedia ? "Add More" : "Upload"}
-                    <input type="file" accept="image/*,video/*" capture="environment" multiple
-                      style={{ display: "none" }}
+                    <input type="file" accept="image/*,video/*" capture="environment" multiple style={{ display: "none" }}
                       onChange={(e) => addMedia(e.target.files, shot.id)} />
                   </label>
                 </div>
               );
             })}
 
-            {/* General upload zone */}
-            <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
+            <div className="uz" onClick={() => fileInputRef.current?.click()}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📤</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "#4CAF50" }}>Upload additional files</div>
-              <div style={{ fontSize: 12, color: "#3a5a3a", marginTop: 4 }}>Photos & videos up to 100MB each</div>
-              <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple
-                style={{ display: "none" }}
+              <div style={{ fontSize: 12, color: "#3a5a3a", marginTop: 4 }}>Photos & videos — large files auto-compressed</div>
+              <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple style={{ display: "none" }}
                 onChange={(e) => addMedia(e.target.files, "general")} />
             </div>
 
-            {/* Notes */}
             <div>
               <label style={labelStyle}>Anything else we should know?</label>
-              <textarea className="quote-input" style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
-                placeholder="Special requests, timeline, specific concerns..."
-                value={form.customer_notes}
-                onChange={(e) => setForm({ ...form, customer_notes: e.target.value })} />
+              <textarea className="qi" style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+                placeholder="Special requests, timeline, concerns..."
+                value={form.customer_notes} onChange={(e) => setForm({ ...form, customer_notes: e.target.value })} />
             </div>
 
-            {/* File count summary */}
             {mediaFiles.length > 0 && (
-              <div style={{
-                padding: "10px 16px", background: "rgba(76,175,80,0.08)", borderRadius: 10,
-                fontSize: 13, color: "#4CAF50", fontWeight: 600, textAlign: "center",
-              }}>
-                {mediaFiles.filter((m) => m.type === "photo").length} photo(s) &amp;
-                {" "}{mediaFiles.filter((m) => m.type === "video").length} video(s) ready to upload
+              <div style={{ padding: "10px 16px", background: "rgba(76,175,80,0.08)", borderRadius: 10, fontSize: 13, color: "#4CAF50", fontWeight: 600, textAlign: "center" }}>
+                {mediaFiles.filter((m) => m.type === "photo").length} photo(s) & {mediaFiles.filter((m) => m.type === "video").length} video(s) ·
+                Total: {fileSizeStr(mediaFiles.reduce((s, m) => s + m.file.size, 0))}
               </div>
             )}
 
             <div style={{ display: "flex", gap: 12 }}>
-              <button className="btn-secondary" onClick={() => setStep("service")}>← Back</button>
-              <button className="btn-primary" onClick={() => setStep("review")}>
-                Review & Submit →
-              </button>
+              <button className="bs" onClick={() => setStep("service")}>← Back</button>
+              <button className="bp" onClick={() => setStep("review")}>Review & Submit →</button>
             </div>
           </div>
         )}
 
-        {/* ═══════════ STEP 5: REVIEW ═══════════ */}
+        {/* ═══ STEP 5: REVIEW ═══ */}
         {step === "review" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>Review Your Request</h2>
 
-            {/* Summary cards */}
-            <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
-              <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Contact</div>
-              <div style={{ color: "#e8f5e8", fontSize: 15 }}>{form.name}</div>
-              <div style={{ color: "#5a8a5a", fontSize: 13 }}>{form.email} · {form.phone}</div>
-            </div>
-
-            <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
-              <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Property</div>
-              <div style={{ color: "#e8f5e8", fontSize: 15 }}>{form.address}</div>
-              <div style={{ color: "#5a8a5a", fontSize: 13 }}>{[form.city, form.state, form.zip].filter(Boolean).join(", ")} · {form.property_type}</div>
-              {form.latitude && <div style={{ color: "#3a5a3a", fontSize: 11, marginTop: 4 }}>📍 GPS captured</div>}
-            </div>
-
-            <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
-              <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Service</div>
-              <div style={{ color: "#4CAF50", fontSize: 16, fontWeight: 700 }}>{form.service_requested}</div>
-              {Object.entries(form.modifier_data).length > 0 && (
-                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {Object.entries(form.modifier_data).map(([key, val]) => (
-                    <span key={key} style={{
-                      padding: "3px 10px", background: "rgba(76,175,80,0.1)", borderRadius: 8,
-                      fontSize: 12, color: "#66bb6a",
-                    }}>
-                      {String(val)}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            {[
+              { title: "Contact", lines: [form.name, `${form.email} · ${form.phone}`] },
+              { title: "Property", lines: [form.address, `${[form.city, form.state, form.zip].filter(Boolean).join(", ")} · ${form.property_type}`, form.latitude ? "📍 GPS captured" : ""] },
+              { title: "Service", lines: [form.service_requested] },
+            ].map((card) => (
+              <div key={card.title} style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
+                <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>{card.title}</div>
+                {card.lines.filter(Boolean).map((line, i) => (
+                  <div key={i} style={{ color: i === 0 ? (card.title === "Service" ? "#4CAF50" : "#e8f5e8") : "#5a8a5a", fontSize: i === 0 ? 15 : 13, fontWeight: card.title === "Service" ? 700 : 400 }}>{line}</div>
+                ))}
+                {card.title === "Service" && Object.entries(form.modifier_data).length > 0 && (
+                  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {Object.entries(form.modifier_data).map(([k, v]) => (
+                      <span key={k} style={{ padding: "3px 10px", background: "rgba(76,175,80,0.1)", borderRadius: 8, fontSize: 12, color: "#66bb6a" }}>{String(v)}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
 
             <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
               <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Media</div>
               <div style={{ color: "#e8f5e8", fontSize: 15 }}>
-                {mediaFiles.length === 0
-                  ? "No media uploaded"
-                  : `${mediaFiles.filter((m) => m.type === "photo").length} photos, ${mediaFiles.filter((m) => m.type === "video").length} videos`}
+                {mediaFiles.length === 0 ? "No media uploaded" : `${mediaFiles.filter((m) => m.type === "photo").length} photos, ${mediaFiles.filter((m) => m.type === "video").length} videos`}
               </div>
               {mediaFiles.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8, marginTop: 10 }}>
                   {mediaFiles.map((m, i) => (
-                    <div key={i} style={{ position: "relative" }}>
-                      {m.type === "photo" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={m.preview} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
-                      ) : (
-                        <video src={m.preview} muted playsInline style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, background: "#0a160a" }} />
-                      )}
-                    </div>
+                    <div key={i}>{m.type === "photo" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.preview} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                    ) : (
+                      <div style={{ width: "100%", aspectRatio: "1", background: "#0a160a", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#4CAF50", fontSize: 20 }}>▶</div>
+                    )}</div>
                   ))}
                 </div>
               )}
             </div>
 
-            {form.customer_notes && (
-              <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
-                <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Notes</div>
-                <div style={{ color: "#c8e0c8", fontSize: 14 }}>{form.customer_notes}</div>
-              </div>
-            )}
-
             {error && (
-              <div style={{ padding: "12px 16px", background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 10, color: "#ef5350", fontSize: 14 }}>
-                {error}
-              </div>
+              <div style={{ padding: "12px 16px", background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 10, color: "#ef5350", fontSize: 14 }}>{error}</div>
             )}
 
             <div style={{ display: "flex", gap: 12 }}>
-              <button className="btn-secondary" onClick={() => setStep("media")}>← Back</button>
-              <button className="btn-primary" onClick={handleSubmit} disabled={uploading}>
-                {uploading ? (uploadStage || "Processing...") : "Submit Quote Request"}
-              </button>
+              <button className="bs" onClick={() => setStep("media")}>← Back</button>
+              <button className="bp" onClick={handleSubmit}>Submit Quote Request</button>
             </div>
-
-            {uploading && (
-              <div style={{
-                background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.15)",
-                borderRadius: 12, padding: "14px 18px",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: uploadProgress.total > 0 ? 10 : 0 }}>
-                  <div className="upload-spinner" />
-                  <span style={{ color: "#66bb6a", fontSize: 13, fontWeight: 600 }}>
-                    {uploadStage || "Processing..."}
-                  </span>
-                </div>
-                {uploadProgress.total > 0 && (
-                  <div>
-                    <div style={{ height: 4, background: "#1a3a1a", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{
-                        height: "100%", borderRadius: 4,
-                        background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
-                        width: `${Math.round(((uploadProgress.current + 1) / uploadProgress.total) * 100)}%`,
-                        transition: "width 0.4s ease",
-                      }} />
-                    </div>
-                    <div style={{ fontSize: 11, color: "#5a8a5a", marginTop: 5 }}>
-                      File {Math.min(uploadProgress.current + 1, uploadProgress.total)} of {uploadProgress.total}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* ═══════════ SUBMITTED ═══════════ */}
+        {/* ═══ UPLOADING ═══ */}
+        {step === "uploading" && uploadProgress && (
+          <div style={{ animation: "fadeIn 0.3s ease", textAlign: "center", paddingTop: 60 }}>
+            <div style={{ fontSize: 48, marginBottom: 20 }}>📤</div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 800, marginBottom: 8 }}>
+              Uploading Your Files
+            </h2>
+            <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 32 }}>{uploadProgress.current}</p>
+
+            {/* Progress bar */}
+            <div style={{
+              width: "100%", maxWidth: 400, margin: "0 auto 16px", height: 8,
+              background: "#1a3a1a", borderRadius: 4, overflow: "hidden",
+              animation: "progressPulse 2s infinite",
+            }}>
+              <div style={{
+                height: "100%", background: "linear-gradient(90deg, #4CAF50, #66bb6a)",
+                borderRadius: 4, transition: "width 0.5s ease",
+                width: `${uploadProgress.percent}%`,
+              }} />
+            </div>
+
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "#4CAF50" }}>
+              {uploadProgress.completed} / {uploadProgress.total} files
+            </p>
+
+            {uploadProgress.failed.length > 0 && (
+              <div style={{ marginTop: 16, padding: "10px 16px", background: "rgba(239,83,80,0.08)", borderRadius: 10, fontSize: 12, color: "#ef5350" }}>
+                Failed: {uploadProgress.failed.join(", ")}
+              </div>
+            )}
+
+            <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 24 }}>Please don&apos;t close this page</p>
+          </div>
+        )}
+
+        {/* ═══ SUBMITTED ═══ */}
         {step === "submitted" && (
           <div style={{ animation: "slideUp 0.5s ease", textAlign: "center", paddingTop: 40 }}>
             <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-            <h1 style={{
-              fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8",
-              fontWeight: 800, marginBottom: 12, lineHeight: 1.2,
-            }}>
+            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8", fontWeight: 800, marginBottom: 12, lineHeight: 1.2 }}>
               Quote Request Submitted!
             </h1>
             <p style={{ color: "#5a8a5a", fontSize: 16, maxWidth: 400, margin: "0 auto 24px", lineHeight: 1.6 }}>
@@ -792,29 +790,23 @@ export default function GetQuotePage() {
 
             <div style={{
               background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
-              borderRadius: 14, padding: "20px", maxWidth: 360, margin: "0 auto 24px",
+              borderRadius: 14, padding: 20, maxWidth: 360, margin: "0 auto 24px",
             }}>
               <div style={{ fontSize: 13, color: "#4CAF50", fontWeight: 700, marginBottom: 8 }}>What happens next?</div>
               <div style={{ fontSize: 14, color: "#5a8a5a", lineHeight: 1.8 }}>
-                1. We review your photos &amp; videos<br />
+                1. We review your photos & videos<br />
                 2. We send you a price range<br />
                 3. You accept — we schedule the job
               </div>
             </div>
 
-            {leadId && (
-              <p style={{ fontSize: 12, color: "#2a4a2a", marginBottom: 20 }}>
-                Reference: {leadId.slice(0, 8)}
-              </p>
-            )}
+            {leadId && <p style={{ fontSize: 12, color: "#2a4a2a", marginBottom: 20 }}>Ref: {leadId.slice(0, 8)}</p>}
 
             <Link href="/" style={{
               display: "inline-block", padding: "14px 32px", borderRadius: 12,
               background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
               textDecoration: "none", fontWeight: 700, fontSize: 15,
-            }}>
-              ← Back to Home
-            </Link>
+            }}>← Back to Home</Link>
           </div>
         )}
       </div>
