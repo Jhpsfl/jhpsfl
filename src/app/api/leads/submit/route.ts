@@ -17,6 +17,49 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
+    const mode = (formData.get("mode") as string) || "full"; // "full" | "lead" | "media"
+
+    // ─── MEDIA MODE: upload a single file to an existing lead ───
+    if (mode === "media") {
+      const leadId = formData.get("lead_id") as string;
+      if (!leadId) return NextResponse.json({ error: "lead_id required" }, { status: 400 });
+
+      const file = formData.get("media_0") as File | null;
+      if (!file) return NextResponse.json({ success: true, skipped: true });
+
+      const context = (formData.get("context_0") as string) || null;
+      const sortOrder = parseInt((formData.get("sort_order") as string) || "0");
+      const contentType = file.type || getContentType(file.name);
+
+      if (!isAllowedMediaType(contentType)) {
+        return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
+      }
+
+      const isVideo = contentType.startsWith("video/");
+      const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_PHOTO_SIZE;
+      if (file.size > maxSize) {
+        return NextResponse.json({ error: "File too large" }, { status: 413 });
+      }
+
+      const supabase = createSupabaseAdmin();
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { storagePath, fileSize } = await uploadLeadMedia(leadId, buffer, file.name, contentType);
+
+      await supabase.from("lead_media").insert({
+        lead_id: leadId,
+        media_type: isVideo ? "video" : "photo",
+        storage_path: storagePath,
+        original_filename: file.name,
+        content_type: contentType,
+        file_size_bytes: fileSize,
+        capture_context: context,
+        sort_order: sortOrder,
+      });
+
+      return NextResponse.json({ success: true });
+    }
 
     // ─── Extract contact & property info ───
     const name = formData.get("name") as string;
@@ -94,6 +137,15 @@ export async function POST(request: NextRequest) {
     if (leadError || !lead) {
       console.error("Lead creation error:", leadError);
       return NextResponse.json({ error: "Failed to create lead" }, { status: 500 });
+    }
+
+    // ─── LEAD MODE: return leadId without uploading files ───
+    if (mode === "lead") {
+      return NextResponse.json({
+        success: true,
+        leadId: lead.id,
+        message: "Lead created. Ready for file uploads.",
+      });
     }
 
     // ─── Upload media files to B2 ───

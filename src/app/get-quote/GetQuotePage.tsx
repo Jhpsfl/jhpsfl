@@ -131,6 +131,8 @@ export default function GetQuotePage() {
   const [error, setError] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [uploadStage, setUploadStage] = useState("");
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── GPS capture ───
@@ -171,47 +173,87 @@ export default function GetQuotePage() {
     });
   };
 
-  // ─── Submit ───
+  // ─── Submit (2-stage: create lead first, then upload files one by one) ───
   const handleSubmit = async () => {
     setUploading(true);
     setError("");
+    setUploadStage("Submitting your request...");
+    setUploadProgress({ current: 0, total: 0 });
 
     try {
-      const formDataObj = new FormData();
-      formDataObj.set("name", form.name);
-      formDataObj.set("email", form.email);
-      formDataObj.set("phone", form.phone);
-      formDataObj.set("address", form.address);
-      formDataObj.set("city", form.city);
-      formDataObj.set("state", form.state);
-      formDataObj.set("zip", form.zip);
-      if (form.latitude) formDataObj.set("latitude", form.latitude.toString());
-      if (form.longitude) formDataObj.set("longitude", form.longitude.toString());
-      formDataObj.set("property_type", form.property_type);
-      formDataObj.set("service_requested", form.service_requested);
-      formDataObj.set("modifier_data", JSON.stringify(form.modifier_data));
-      formDataObj.set("customer_notes", form.customer_notes);
+      // Stage 1: Create the lead record (text fields only — no file size limit risk)
+      const leadFormData = new FormData();
+      leadFormData.set("mode", "lead");
+      leadFormData.set("name", form.name);
+      leadFormData.set("email", form.email);
+      leadFormData.set("phone", form.phone);
+      leadFormData.set("address", form.address);
+      leadFormData.set("city", form.city);
+      leadFormData.set("state", form.state);
+      leadFormData.set("zip", form.zip);
+      if (form.latitude) leadFormData.set("latitude", form.latitude.toString());
+      if (form.longitude) leadFormData.set("longitude", form.longitude.toString());
+      leadFormData.set("property_type", form.property_type);
+      leadFormData.set("service_requested", form.service_requested);
+      leadFormData.set("modifier_data", JSON.stringify(form.modifier_data));
+      leadFormData.set("customer_notes", form.customer_notes);
 
-      mediaFiles.forEach((m, i) => {
-        formDataObj.set(`media_${i}`, m.file);
-        formDataObj.set(`context_${i}`, m.context);
-      });
-
-      const res = await fetch("/api/leads/submit", { method: "POST", body: formDataObj });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setError(data.error || "Something went wrong. Please try again.");
+      const leadRes = await fetch("/api/leads/submit", { method: "POST", body: leadFormData });
+      let leadData;
+      try {
+        leadData = await leadRes.json();
+      } catch {
+        setError("Server error. Please try again in a moment.");
         setUploading(false);
         return;
       }
 
-      setLeadId(data.leadId);
+      if (!leadRes.ok || !leadData.success || !leadData.leadId) {
+        setError(leadData?.error || "Failed to submit. Please try again.");
+        setUploading(false);
+        return;
+      }
+
+      const leadId = leadData.leadId;
+
+      // Stage 2: Upload each file individually (bypasses body size limits)
+      if (mediaFiles.length > 0) {
+        setUploadProgress({ current: 0, total: mediaFiles.length });
+
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const m = mediaFiles[i];
+          setUploadStage(`Uploading ${m.type} ${i + 1} of ${mediaFiles.length}...`);
+          setUploadProgress({ current: i, total: mediaFiles.length });
+
+          try {
+            const fileFormData = new FormData();
+            fileFormData.set("mode", "media");
+            fileFormData.set("lead_id", leadId);
+            fileFormData.set("media_0", m.file);
+            fileFormData.set("context_0", m.context);
+            fileFormData.set("sort_order", i.toString());
+
+            const fileRes = await fetch("/api/leads/submit", { method: "POST", body: fileFormData });
+            if (!fileRes.ok) {
+              const errData = await fileRes.json().catch(() => ({}));
+              console.warn(`File ${i + 1} upload issue:`, errData.error || fileRes.status);
+            }
+          } catch (fileErr) {
+            console.warn(`File ${i + 1} upload error:`, fileErr);
+          }
+        }
+
+        setUploadProgress({ current: mediaFiles.length, total: mediaFiles.length });
+      }
+
+      setLeadId(leadId);
       setStep("submitted");
     } catch {
-      setError("Connection error. Please check your internet and try again.");
+      setError("Network error. Please check your connection and try again.");
     }
+
     setUploading(false);
+    setUploadStage("");
   };
 
   // ─── Shot list for current service ───
@@ -303,6 +345,15 @@ export default function GetQuotePage() {
 
         @media (max-width: 640px) {
           .quote-container { padding: 16px 16px 48px; }
+        }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .upload-spinner {
+          width: 16px; height: 16px; border-radius: 50%;
+          border: 2px solid rgba(76,175,80,0.25);
+          border-top-color: #4CAF50;
+          animation: spin 0.7s linear infinite;
+          flex-shrink: 0;
         }
       `}</style>
 
@@ -549,6 +600,13 @@ export default function GetQuotePage() {
                           border: "none", color: "#ef5350", width: 28, height: 28, borderRadius: 8,
                           cursor: "pointer", fontSize: 14, fontWeight: 700,
                         }}>✕</button>
+                        <div style={{
+                          position: "absolute", bottom: 8, left: 8,
+                          background: "rgba(0,0,0,0.65)", borderRadius: 6,
+                          padding: "2px 8px", fontSize: 10, color: "#c8e0c8",
+                        }}>
+                          {(m.file.size / (1024 * 1024)).toFixed(1)} MB
+                        </div>
                       </div>
                     );
                   })}
@@ -659,7 +717,7 @@ export default function GetQuotePage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={m.preview} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
                       ) : (
-                        <div style={{ width: "100%", aspectRatio: "1", background: "#0a160a", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#4CAF50", fontSize: 20 }}>▶</div>
+                        <video src={m.preview} muted playsInline style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, background: "#0a160a" }} />
                       )}
                     </div>
                   ))}
@@ -683,13 +741,36 @@ export default function GetQuotePage() {
             <div style={{ display: "flex", gap: 12 }}>
               <button className="btn-secondary" onClick={() => setStep("media")}>← Back</button>
               <button className="btn-primary" onClick={handleSubmit} disabled={uploading}>
-                {uploading ? "Uploading..." : "Submit Quote Request"}
+                {uploading ? (uploadStage || "Processing...") : "Submit Quote Request"}
               </button>
             </div>
 
             {uploading && (
-              <div style={{ textAlign: "center", color: "#5a8a5a", fontSize: 13 }}>
-                <span style={{ animation: "pulse 1.5s infinite" }}>Uploading your files... This may take a moment for videos.</span>
+              <div style={{
+                background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.15)",
+                borderRadius: 12, padding: "14px 18px",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: uploadProgress.total > 0 ? 10 : 0 }}>
+                  <div className="upload-spinner" />
+                  <span style={{ color: "#66bb6a", fontSize: 13, fontWeight: 600 }}>
+                    {uploadStage || "Processing..."}
+                  </span>
+                </div>
+                {uploadProgress.total > 0 && (
+                  <div>
+                    <div style={{ height: 4, background: "#1a3a1a", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%", borderRadius: 4,
+                        background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
+                        width: `${Math.round(((uploadProgress.current + 1) / uploadProgress.total) * 100)}%`,
+                        transition: "width 0.4s ease",
+                      }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#5a8a5a", marginTop: 5 }}>
+                      File {Math.min(uploadProgress.current + 1, uploadProgress.total)} of {uploadProgress.total}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
