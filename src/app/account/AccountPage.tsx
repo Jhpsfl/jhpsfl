@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  SignIn,
-  SignUp,
   SignedIn,
   SignedOut,
   UserButton,
@@ -297,7 +295,6 @@ function DashboardView() {
 
 export default function AccountPage() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
 
   return (
     <>
@@ -428,38 +425,35 @@ export default function AccountPage() {
             </h1>
           </div>
 
-          {/* ─── SIGNED OUT: Show Clerk Auth ─── */}
+          {/* ─── SIGNED OUT: Buttons to dedicated auth pages ─── */}
           <SignedOut>
             <div style={{ animation: "slideUp 0.7s ease 0.1s both" }}>
-              {/* Tabs */}
-              <div style={{
-                display: "flex", gap: 8, marginBottom: 0,
-                background: "#080f08", borderRadius: "16px 16px 0 0",
-                padding: 6, border: "1px solid #1a3a1a", borderBottom: "none",
-              }}>
-                <button className={`tab-btn ${activeTab === "login" ? "active" : ""}`} onClick={() => setActiveTab("login")}>Sign In</button>
-                <button className={`tab-btn ${activeTab === "signup" ? "active" : ""}`} onClick={() => setActiveTab("signup")}>Create Account</button>
-              </div>
-
               <div style={{
                 background: "linear-gradient(160deg, #0d1f0d, #091409)",
-                border: "1px solid #1a3a1a", borderTop: "none",
-                borderRadius: "0 0 20px 20px",
-                padding: "8px 0 0",
+                border: "1px solid #1a3a1a", borderRadius: 20, padding: "40px 32px",
+                textAlign: "center",
               }}>
-                {activeTab === "login" ? (
-                  <SignIn
-                    appearance={clerkAppearance}
-                    routing="hash"
-                    signUpUrl="/account"
-                  />
-                ) : (
-                  <SignUp
-                    appearance={clerkAppearance}
-                    routing="hash"
-                    signInUrl="/account"
-                  />
-                )}
+                <p style={{ color: "#7a9a7a", fontSize: 15, marginBottom: 32 }}>
+                  Sign in to view your jobs, payments, and service history.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <Link href="/sign-in" style={{
+                    background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                    padding: "16px", borderRadius: 14, fontSize: 16, fontWeight: 700,
+                    textDecoration: "none", display: "block",
+                    boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+                  }}>
+                    Sign In
+                  </Link>
+                  <Link href="/sign-up" style={{
+                    background: "transparent", color: "#4CAF50",
+                    border: "1px solid #2a5a2a",
+                    padding: "15px", borderRadius: 14, fontSize: 16, fontWeight: 600,
+                    textDecoration: "none", display: "block",
+                  }}>
+                    Create Account
+                  </Link>
+                </div>
               </div>
 
               <p style={{ textAlign: "center", color: "#3a5a3a", fontSize: 13, marginTop: 24 }}>
