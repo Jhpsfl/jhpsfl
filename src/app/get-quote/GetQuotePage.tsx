@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 
 // ─── Types ───
-type Step = "contact" | "property" | "service" | "media" | "review" | "uploading" | "submitted";
+type Step = "contact" | "property" | "service" | "media" | "review" | "submitted";
+
+type UploadStatus = "uploading" | "done" | "failed";
 
 interface FormData {
   name: string;
@@ -23,20 +25,128 @@ interface FormData {
 }
 
 interface MediaFile {
+  id: string;
   file: File;
   preview: string;
   context: string;
   type: "video" | "photo";
   compressed?: boolean;
-  tooLarge?: boolean;
+  uploadStatus: UploadStatus;
+  storageKey?: string;
+  abortController: AbortController;
+  sortOrder: number;
 }
 
-interface UploadProgress {
-  total: number;
-  completed: number;
-  current: string;
-  percent: number;
-  failed: string[];
+// ─── File size limits ───
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
+const COMPRESS_THRESHOLD = 200 * 1024 * 1024;
+
+// ─── Video compression ───
+async function compressVideo(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.src = URL.createObjectURL(file);
+
+    video.onloadedmetadata = () => {
+      const targetWidth = Math.min(video.videoWidth, 1280);
+      const targetHeight = Math.min(video.videoHeight, 720);
+      const scale = Math.min(targetWidth / video.videoWidth, targetHeight / video.videoHeight, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const ctx = canvas.getContext("2d")!;
+
+      let mimeType = "video/webm;codecs=vp8";
+      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) mimeType = "video/webm;codecs=vp9";
+      if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) mimeType = "video/mp4;codecs=avc1";
+
+      const stream = canvas.captureStream(24);
+      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2000000 });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        const ext = mimeType.startsWith("video/mp4") ? "mp4" : "webm";
+        const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
+        URL.revokeObjectURL(video.src);
+        resolve(new File([blob], file.name.replace(/\.[^.]+$/, `.${ext}`), { type: mimeType.split(";")[0] }));
+      };
+      recorder.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("Compression failed")); };
+      recorder.start();
+      const drawFrame = () => {
+        if (video.ended || video.paused) { recorder.stop(); return; }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        requestAnimationFrame(drawFrame);
+      };
+      video.onended = () => recorder.stop();
+      video.play().then(drawFrame).catch(reject);
+      setTimeout(() => { if (recorder.state === "recording") { video.pause(); recorder.stop(); } }, 300000);
+    };
+    video.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("Could not load video")); };
+  });
+}
+
+// ─── Background upload (fire-and-forget per file) ───
+async function uploadFile(
+  id: string,
+  file: File,
+  type: "video" | "photo",
+  context: string,
+  leadId: string,
+  sortOrder: number,
+  abortController: AbortController,
+  setMediaFiles: React.Dispatch<React.SetStateAction<MediaFile[]>>
+) {
+  const update = (patch: Partial<MediaFile>) =>
+    setMediaFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  try {
+    const urlRes = await fetch("/api/leads/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        leadId,
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        fileSize: file.size,
+      }),
+    });
+    const urlData = await urlRes.json();
+    if (!urlRes.ok || !urlData.uploadUrl) throw new Error("No upload URL");
+
+    const uploadRes = await fetch(urlData.uploadUrl, {
+      method: "PUT",
+      signal: abortController.signal,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!uploadRes.ok) throw new Error(`B2 ${uploadRes.status}`);
+
+    await fetch("/api/leads/register-media", {
+      method: "POST",
+      signal: abortController.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        leadId,
+        storagePath: urlData.storageKey,
+        mediaType: type,
+        originalFilename: file.name,
+        contentType: file.type,
+        fileSizeBytes: file.size,
+        captureContext: context,
+        sortOrder,
+      }),
+    });
+
+    update({ uploadStatus: "done", storageKey: urlData.storageKey });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") return;
+    console.error(`Upload failed [${file.name}]:`, err);
+    update({ uploadStatus: "failed" });
+  }
 }
 
 // ─── Service modifier configs ───
@@ -72,29 +182,18 @@ const SERVICE_MODIFIERS: Record<string, { label: string; key: string; options?: 
   ],
 };
 
-// ─── Shot list generator ───
+// ─── Shot list ───
 function getShotList(service: string, modifiers: Record<string, unknown>): { id: string; label: string; hint: string }[] {
   const shots: { id: string; label: string; hint: string }[] = [
     { id: "front_wide", label: "Front yard — wide shot", hint: "Stand at the sidewalk and slowly pan across the full front of the property." },
   ];
-
   if (service === "Lawn Care") {
     const areas = (modifiers.areas as string) || "";
-    if (areas.includes("back")) {
-      shots.push({ id: "back_wide", label: "Backyard — wide shot", hint: "Pan slowly across the full backyard from one corner." });
-    }
-    if ((modifiers.palm_trees as string) && !(modifiers.palm_trees as string).includes("None")) {
-      shots.push({ id: "palm_height", label: "Palm trees — height reference", hint: "Photo the tallest palm with your house or car visible for scale." });
-    }
-    if ((modifiers.narrow_gate as string)?.includes("Yes")) {
-      shots.push({ id: "gate_width", label: "Gate opening", hint: "Place your foot next to the gate opening for scale." });
-    }
-    if ((modifiers.hedges as string) && !(modifiers.hedges as string).includes("None")) {
-      shots.push({ id: "hedges", label: "Hedges / bushes", hint: "Show the hedges from a few feet away so we can see height and density." });
-    }
-    if ((modifiers.grass_condition as string)?.includes("overgrown") || (modifiers.grass_condition as string)?.includes("knee")) {
-      shots.push({ id: "condition", label: "Worst area close-up", hint: "Film or photo the most overgrown section." });
-    }
+    if (areas.includes("back")) shots.push({ id: "back_wide", label: "Backyard — wide shot", hint: "Pan slowly across the full backyard from one corner." });
+    if ((modifiers.palm_trees as string) && !(modifiers.palm_trees as string).includes("None")) shots.push({ id: "palm_height", label: "Palm trees — height reference", hint: "Photo the tallest palm with your house or car visible for scale." });
+    if ((modifiers.narrow_gate as string)?.includes("Yes")) shots.push({ id: "gate_width", label: "Gate opening", hint: "Place your foot next to the gate opening for scale." });
+    if ((modifiers.hedges as string) && !(modifiers.hedges as string).includes("None")) shots.push({ id: "hedges", label: "Hedges / bushes", hint: "Show the hedges from a few feet away so we can see height and density." });
+    if ((modifiers.grass_condition as string)?.includes("overgrown") || (modifiers.grass_condition as string)?.includes("knee")) shots.push({ id: "condition", label: "Worst area close-up", hint: "Film or photo the most overgrown section." });
   } else if (service === "Pressure Washing") {
     shots.push({ id: "surface_main", label: "Main surface to wash", hint: "Stand back to capture the full area." });
     shots.push({ id: "stain_closeup", label: "Stain close-up", hint: "Get close to show the type of staining." });
@@ -108,78 +207,17 @@ function getShotList(service: string, modifiers: Record<string, unknown>): { id:
     shots.push({ id: "cleanup_overview", label: "Property overview", hint: "Slow pan showing the overall state." });
     shots.push({ id: "problem_areas", label: "Worst areas", hint: "Film the areas needing the most attention." });
   }
-
   shots.push({ id: "additional", label: "Anything else (optional)", hint: "Any other angles or areas you want us to see." });
   return shots;
 }
 
-// ─── File size limits ───
-const MAX_VIDEO_BYTES = 500 * 1024 * 1024;   // 500MB hard limit
-const MAX_PHOTO_BYTES = 50 * 1024 * 1024;    // 50MB
-const COMPRESS_THRESHOLD = 200 * 1024 * 1024; // compress videos over 200MB
-
-// ─── Video compression using MediaRecorder ───
-async function compressVideo(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.src = URL.createObjectURL(file);
-
-    video.onloadedmetadata = () => {
-      const targetWidth = Math.min(video.videoWidth, 1280);
-      const targetHeight = Math.min(video.videoHeight, 720);
-      const scale = Math.min(targetWidth / video.videoWidth, targetHeight / video.videoHeight, 1);
-      const width = Math.round(video.videoWidth * scale);
-      const height = Math.round(video.videoHeight * scale);
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-
-      let mimeType = "video/webm;codecs=vp8";
-      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) mimeType = "video/webm;codecs=vp9";
-      if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) mimeType = "video/mp4;codecs=avc1";
-
-      const stream = canvas.captureStream(24);
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2000000 });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        const ext = mimeType.startsWith("video/mp4") ? "mp4" : "webm";
-        const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
-        const compressed = new File([blob], file.name.replace(/\.[^.]+$/, `.${ext}`), { type: mimeType.split(";")[0] });
-        URL.revokeObjectURL(video.src);
-        resolve(compressed);
-      };
-      recorder.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("Compression failed")); };
-
-      recorder.start();
-      const drawFrame = () => {
-        if (video.ended || video.paused) { recorder.stop(); return; }
-        ctx.drawImage(video, 0, 0, width, height);
-        requestAnimationFrame(drawFrame);
-      };
-      video.onended = () => recorder.stop();
-      video.play().then(drawFrame).catch(reject);
-
-      // Safety: stop after 5 minutes max
-      setTimeout(() => { if (recorder.state === "recording") { video.pause(); recorder.stop(); } }, 300000);
-    };
-    video.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("Could not load video")); };
-  });
-}
-
-// ─── Phone formatting ───
+// ─── Helpers ───
 function formatPhoneInput(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 10);
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
-
 function fileSizeStr(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -194,12 +232,16 @@ export default function GetQuotePage() {
     modifier_data: {}, customer_notes: "",
   });
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [error, setError] = useState("");
+  const mediaFilesRef = useRef<MediaFile[]>([]);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [gpsLoading, setGpsLoading] = useState(false);
   const [compressing, setCompressing] = useState<string | null>(null);
+  const [isFinishing, setIsFinishing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep ref in sync for use inside async submit handler
+  useEffect(() => { mediaFilesRef.current = mediaFiles; }, [mediaFiles]);
 
   // ─── GPS ───
   const captureGPS = useCallback(() => {
@@ -215,207 +257,147 @@ export default function GetQuotePage() {
   const isContactValid = form.name && form.email && form.phone.replace(/\D/g, "").length >= 10 && form.address;
   const isServiceValid = form.service_requested !== "";
 
-  // ─── Media handling — compress videos over 200MB, add all others immediately ───
+  // ─── Enter media step: create lead immediately ───
+  const enterMediaStep = async () => {
+    setError("");
+    try {
+      const res = await fetch("/api/leads/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name, email: form.email, phone: form.phone,
+          address: form.address, city: form.city, state: form.state, zip: form.zip,
+          latitude: form.latitude, longitude: form.longitude,
+          property_type: form.property_type,
+          service_requested: form.service_requested,
+          modifier_data: form.modifier_data,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Failed to start. Please try again."); return; }
+      setLeadId(data.leadId);
+      setStep("media");
+    } catch {
+      setError("Connection error. Please try again.");
+    }
+  };
+
+  // ─── Go back from media: abort all uploads, reset ───
+  const exitMediaStep = () => {
+    mediaFilesRef.current.forEach((f) => {
+      f.abortController.abort();
+      URL.revokeObjectURL(f.preview);
+    });
+    setMediaFiles([]);
+    setLeadId(null);
+    setStep("service");
+  };
+
+  // ─── Add media — upload starts immediately in background ───
   const addMedia = async (files: FileList | null, context: string = "") => {
-    if (!files) return;
+    if (!files || !leadId) return;
 
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
       const limit = isVideo ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES;
+      if (file.size > limit) continue; // silently skip truly huge files
 
-      if (file.size > limit) {
-        // File is genuinely too large even for compression — skip silently with indicator
-        const preview = URL.createObjectURL(file);
-        setMediaFiles((prev) => [...prev, { file, preview, context, type: isVideo ? "video" : "photo", tooLarge: true }]);
-        continue;
-      }
+      let fileToUpload = file;
+      let compressed = false;
 
       if (isVideo && file.size > COMPRESS_THRESHOLD) {
-        // Large video — compress it down before upload
         setCompressing(file.name);
         try {
-          const compressed = await compressVideo(file);
-          const preview = URL.createObjectURL(compressed);
-          setMediaFiles((prev) => [...prev, { file: compressed, preview, context, type: "video", compressed: true }]);
-        } catch {
-          // Compression failed — add original and let upload handle it
-          const preview = URL.createObjectURL(file);
-          setMediaFiles((prev) => [...prev, { file, preview, context, type: "video", compressed: false }]);
-        }
+          fileToUpload = await compressVideo(file);
+          compressed = true;
+        } catch { /* use original */ }
         setCompressing(null);
-      } else {
-        // Under 200MB — add directly, no compression needed
-        const preview = URL.createObjectURL(file);
-        setMediaFiles((prev) => [...prev, { file, preview, context, type: isVideo ? "video" : "photo" }]);
       }
+
+      const id = crypto.randomUUID();
+      const abortController = new AbortController();
+      const preview = URL.createObjectURL(fileToUpload);
+      const sortOrder = mediaFilesRef.current.length;
+
+      const mf: MediaFile = {
+        id, file: fileToUpload, preview, context,
+        type: isVideo ? "video" : "photo",
+        compressed, uploadStatus: "uploading",
+        abortController, sortOrder,
+      };
+
+      setMediaFiles((prev) => [...prev, mf]);
+
+      // Fire and forget — upload happens while user keeps browsing
+      uploadFile(id, fileToUpload, isVideo ? "video" : "photo", context, leadId, sortOrder, abortController, setMediaFiles);
     }
   };
 
-  const removeMedia = (index: number) => {
+  // ─── Remove media — aborts in-progress upload ───
+  const removeMedia = (id: string) => {
     setMediaFiles((prev) => {
-      URL.revokeObjectURL(prev[index].preview);
-      return prev.filter((_, i) => i !== index);
+      const mf = prev.find((f) => f.id === id);
+      if (mf) { mf.abortController.abort(); URL.revokeObjectURL(mf.preview); }
+      return prev.filter((f) => f.id !== id);
     });
   };
 
-  // ─── Submit: Direct-to-B2 Upload Flow ───
-  const handleSubmit = async () => {
-    setError("");
-    setStep("uploading");
-    setUploadProgress({ total: mediaFiles.length, completed: 0, current: "Creating quote request...", percent: 0, failed: [] });
+  // ─── Retry failed upload ───
+  const retryUpload = (id: string) => {
+    if (!leadId) return;
+    const mf = mediaFilesRef.current.find((f) => f.id === id);
+    if (!mf) return;
+    const newAC = new AbortController();
+    setMediaFiles((prev) => prev.map((f) => f.id === id ? { ...f, uploadStatus: "uploading", abortController: newAC } : f));
+    uploadFile(id, mf.file, mf.type, mf.context, leadId, mf.sortOrder, newAC, setMediaFiles);
+  };
 
-    // Keep screen/CPU awake during upload — prevents Android from killing the tab
+  // ─── Submit: wait for stragglers, then finalize lead ───
+  const handleSubmit = async () => {
+    if (!leadId) return;
+    setError("");
+    setIsFinishing(true);
+
+    // Acquire wake lock to prevent screen sleeping during final uploads
     let wakeLock: WakeLockSentinel | null = null;
     try {
       if ("wakeLock" in navigator) {
-        wakeLock = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
+        wakeLock = await (navigator as Navigator & { wakeLock: { request: (t: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
       }
-    } catch { /* wake lock not supported or denied — continue anyway */ }
+    } catch { /* not supported */ }
+
+    // Wait up to 2 min for any still-uploading files
+    const deadline = Date.now() + 120000;
+    while (Date.now() < deadline) {
+      if (!mediaFilesRef.current.some((f) => f.uploadStatus === "uploading")) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
 
     try {
-      // Step 1: Create the lead record
-      const leadRes = await fetch("/api/leads/submit", {
+      const res = await fetch("/api/leads/finalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          address: form.address,
-          city: form.city,
-          state: form.state,
-          zip: form.zip,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          property_type: form.property_type,
-          service_requested: form.service_requested,
-          modifier_data: form.modifier_data,
-          customer_notes: form.customer_notes,
-        }),
+        body: JSON.stringify({ leadId, customerNotes: form.customer_notes }),
       });
-
-      const leadData = await leadRes.json();
-      if (!leadRes.ok || !leadData.success) {
-        setError(leadData.error || "Failed to create quote request");
-        setStep("review");
+      if (!res.ok) {
+        setError("Failed to submit. Please try again.");
+        setIsFinishing(false);
         return;
       }
-
-      const newLeadId = leadData.leadId;
-      setLeadId(newLeadId);
-
-      // Step 2: Get all pre-signed URLs in parallel
-      setUploadProgress({
-        total: mediaFiles.length, completed: 0,
-        current: `Getting upload slots for ${mediaFiles.length} files...`,
-        percent: 5, failed: [],
-      });
-
-      const urlResults = await Promise.allSettled(
-        mediaFiles.map((media, i) =>
-          fetch("/api/leads/upload-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              leadId: newLeadId,
-              filename: media.file.name,
-              contentType: media.file.type || "application/octet-stream",
-              fileSize: media.file.size,
-            }),
-          }).then((r) => r.json()).then((d) => ({ ...d, index: i }))
-        )
-      );
-
-      // Step 3: Upload all files to B2 in parallel
-      setUploadProgress({
-        total: mediaFiles.length, completed: 0,
-        current: `Uploading ${mediaFiles.length} files...`,
-        percent: 15, failed: [],
-      });
-
-      const failed: string[] = [];
-      type UploadOk = { storageKey: string; index: number };
-
-      const uploadResults = await Promise.allSettled(
-        urlResults.map(async (urlResult, i) => {
-          const media = mediaFiles[i];
-          if (urlResult.status === "rejected" || !urlResult.value?.uploadUrl) {
-            throw new Error("no-url");
-          }
-          const { uploadUrl, storageKey } = urlResult.value;
-          const uploadRes = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": media.file.type || "application/octet-stream" },
-            body: media.file,
-          });
-          if (!uploadRes.ok) throw new Error(`b2-${uploadRes.status}`);
-          return { storageKey, index: i } as UploadOk;
-        })
-      );
-
-      // Collect failures
-      uploadResults.forEach((result, i) => {
-        if (result.status === "rejected") {
-          console.error(`Upload failed for ${mediaFiles[i].file.name}:`, result.reason);
-          failed.push(mediaFiles[i].file.name);
-        }
-      });
-
-      // Step 4: Register all successful uploads in parallel
-      const successful = uploadResults
-        .filter((r): r is PromiseFulfilledResult<UploadOk> => r.status === "fulfilled")
-        .map((r) => r.value);
-
-      setUploadProgress({
-        total: mediaFiles.length,
-        completed: successful.length,
-        current: successful.length > 0 ? "Saving..." : "Done",
-        percent: 85,
-        failed,
-      });
-
-      await Promise.allSettled(
-        successful.map(({ storageKey, index }) => {
-          const media = mediaFiles[index];
-          return fetch("/api/leads/register-media", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              leadId: newLeadId,
-              storagePath: storageKey,
-              mediaType: media.type,
-              originalFilename: media.file.name,
-              contentType: media.file.type,
-              fileSizeBytes: media.file.size,
-              captureContext: media.context,
-              sortOrder: index,
-            }),
-          });
-        })
-      );
-
-      setUploadProgress({
-        total: mediaFiles.length,
-        completed: successful.length,
-        current: "Complete!",
-        percent: 100,
-        failed,
-      });
-
-      // Small delay for the progress bar to fill
-      await new Promise((r) => setTimeout(r, 500));
       setStep("submitted");
-
-    } catch (err) {
-      console.error("Submit error:", err);
-      setError("Connection error. Please check your internet and try again.");
-      setStep("review");
+    } catch {
+      setError("Connection error. Please try again.");
     } finally {
       wakeLock?.release().catch(() => {});
+      setIsFinishing(false);
     }
   };
 
-  // ─── Shot list ───
+  // ─── Upload stats for UI ───
+  const uploadDone = mediaFiles.filter((f) => f.uploadStatus === "done").length;
+  const uploadingCount = mediaFiles.filter((f) => f.uploadStatus === "uploading").length;
+  const failedCount = mediaFiles.filter((f) => f.uploadStatus === "failed").length;
+
   const shotList = form.service_requested ? getShotList(form.service_requested, form.modifier_data) : [];
 
   // ─── Styles ───
@@ -438,7 +420,7 @@ export default function GetQuotePage() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        @keyframes progressPulse { 0%, 100% { box-shadow: 0 0 0 rgba(76,175,80,0); } 50% { box-shadow: 0 0 20px rgba(76,175,80,0.3); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         .qc { max-width: 640px; margin: 0 auto; padding: 24px 20px 60px; min-height: 100vh; animation: fadeIn 0.4s ease; }
         .qi:focus { border-color: #4CAF50 !important; }
@@ -470,6 +452,8 @@ export default function GetQuotePage() {
         .bs { width: 100%; padding: 14px; border-radius: 14px; border: 1px solid #1a3a1a; background: transparent; color: #5a8a5a; font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.3s; }
         .bs:hover { border-color: #4CAF50; color: #4CAF50; }
 
+        .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+
         @media (max-width: 640px) { .qc { padding: 16px 16px 48px; } }
       `}</style>
 
@@ -480,7 +464,7 @@ export default function GetQuotePage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/jhps-nav-logo.svg" alt="JHPS" style={{ height: 36, marginBottom: 16 }} />
           </Link>
-          {!["uploading", "submitted"].includes(step) && (
+          {!["submitted"].includes(step) && (
             <>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}>
                 Get a Free Video Quote
@@ -493,7 +477,7 @@ export default function GetQuotePage() {
         </div>
 
         {/* Step Dots */}
-        {!["uploading", "submitted"].includes(step) && (
+        {!["submitted"].includes(step) && (
           <div className="step-dots">
             {(["contact", "property", "service", "media", "review"] as Step[]).map((s, i) => {
               const idx = (["contact", "property", "service", "media", "review"] as Step[]).indexOf(step);
@@ -597,9 +581,11 @@ export default function GetQuotePage() {
               </div>
             )}
 
+            {error && <div style={{ padding: "12px 16px", background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 10, color: "#ef5350", fontSize: 14 }}>{error}</div>}
+
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
               <button className="bs" onClick={() => setStep("property")}>← Back</button>
-              <button className="bp" disabled={!isServiceValid} onClick={() => setStep("media")}>Next: Add Photos / Video →</button>
+              <button className="bp" disabled={!isServiceValid} onClick={enterMediaStep}>Next: Add Photos / Video →</button>
             </div>
           </div>
         )}
@@ -608,9 +594,18 @@ export default function GetQuotePage() {
         {step === "media" && (
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>Show Us Your Property</h2>
-            <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 8 }}>
-              Upload photos and videos of your property. Large videos are automatically optimized.
+            <p style={{ color: "#5a8a5a", fontSize: 14 }}>
+              Upload photos and videos. Each file starts uploading the moment you add it.
             </p>
+
+            {/* Live upload status bar */}
+            {mediaFiles.length > 0 && (
+              <div style={{ padding: "10px 16px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 10, fontSize: 13, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {uploadDone > 0 && <span style={{ color: "#4CAF50" }}>✓ {uploadDone} uploaded</span>}
+                {uploadingCount > 0 && <span style={{ color: "#ffa726" }}><span className="spinner" style={{ marginRight: 4 }} />  {uploadingCount} uploading...</span>}
+                {failedCount > 0 && <span style={{ color: "#ef5350" }}>✗ {failedCount} failed (tap to retry)</span>}
+              </div>
+            )}
 
             {compressing && (
               <div style={{ padding: "12px 16px", background: "rgba(255,167,38,0.1)", border: "1px solid rgba(255,167,38,0.2)", borderRadius: 10, fontSize: 13, color: "#ffa726", display: "flex", alignItems: "center", gap: 8 }}>
@@ -620,7 +615,7 @@ export default function GetQuotePage() {
 
             {shotList.map((shot) => {
               const shotMedia = mediaFiles.filter((m) => m.context === shot.id);
-              const hasMedia = shotMedia.length > 0;
+              const hasMedia = shotMedia.some((m) => m.uploadStatus === "done");
               return (
                 <div key={shot.id} style={{
                   border: `1px solid ${hasMedia ? "#2E7D32" : "#1a3a1a"}`, borderRadius: 14,
@@ -633,37 +628,43 @@ export default function GetQuotePage() {
                     <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>{shot.hint}</div>
                   </div>
 
-                  {shotMedia.map((m) => {
-                    const gi = mediaFiles.indexOf(m);
-                    return (
-                      <div key={gi} style={{ position: "relative", marginTop: 8 }}>
-                        {m.type === "photo" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.preview} alt={shot.label} className="mt" />
-                        ) : (
-                          <video src={m.preview} className="mt" controls playsInline />
-                        )}
-                        {m.compressed && (
-                          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#4CAF50", fontWeight: 700 }}>
-                            OPTIMIZED
+                  {shotMedia.map((m) => (
+                    <div key={m.id} style={{ position: "relative", marginTop: 8 }}>
+                      {m.type === "photo" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.preview} alt={shot.label} className="mt" />
+                      ) : (
+                        <video src={m.preview} className="mt" controls playsInline />
+                      )}
+
+                      {/* Upload status overlay */}
+                      <div style={{ position: "absolute", top: 8, left: 8 }}>
+                        {m.uploadStatus === "uploading" && (
+                          <div style={{ background: "rgba(0,0,0,0.7)", padding: "3px 8px", borderRadius: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                            <div className="spinner" />
+                            <span style={{ fontSize: 10, color: "#ffa726", fontWeight: 700 }}>UPLOADING</span>
                           </div>
                         )}
-                        {m.tooLarge && (
-                          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(239,83,80,0.85)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#fff", fontWeight: 700 }}>
-                            TOO LARGE
-                          </div>
+                        {m.uploadStatus === "done" && (
+                          <div style={{ background: "rgba(0,0,0,0.7)", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#4CAF50", fontWeight: 700 }}>✓ UPLOADED</div>
                         )}
-                        <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#5a8a5a" }}>
-                          {fileSizeStr(m.file.size)}
-                        </div>
-                        <button onClick={() => removeMedia(gi)} style={{
-                          position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)",
-                          border: "none", color: "#ef5350", width: 28, height: 28, borderRadius: 8,
-                          cursor: "pointer", fontSize: 14, fontWeight: 700,
-                        }}>✕</button>
+                        {m.uploadStatus === "failed" && (
+                          <button onClick={() => retryUpload(m.id)} style={{ background: "rgba(239,83,80,0.85)", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>
+                            ✗ FAILED — tap to retry
+                          </button>
+                        )}
                       </div>
-                    );
-                  })}
+
+                      <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#5a8a5a" }}>
+                        {fileSizeStr(m.file.size)}
+                      </div>
+                      <button onClick={() => removeMedia(m.id)} style={{
+                        position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)",
+                        border: "none", color: "#ef5350", width: 28, height: 28, borderRadius: 8,
+                        cursor: "pointer", fontSize: 14, fontWeight: 700,
+                      }}>✕</button>
+                    </div>
+                  ))}
 
                   <label style={{
                     display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10,
@@ -681,7 +682,7 @@ export default function GetQuotePage() {
             <div className="uz" onClick={() => fileInputRef.current?.click()}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📤</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "#4CAF50" }}>Upload additional files</div>
-              <div style={{ fontSize: 12, color: "#3a5a3a", marginTop: 4 }}>Photos & videos — large files auto-compressed</div>
+              <div style={{ fontSize: 12, color: "#3a5a3a", marginTop: 4 }}>Photos &amp; videos — tap to browse your gallery</div>
               <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple style={{ display: "none" }}
                 onChange={(e) => addMedia(e.target.files, "general")} />
             </div>
@@ -693,16 +694,9 @@ export default function GetQuotePage() {
                 value={form.customer_notes} onChange={(e) => setForm({ ...form, customer_notes: e.target.value })} />
             </div>
 
-            {mediaFiles.length > 0 && (
-              <div style={{ padding: "10px 16px", background: "rgba(76,175,80,0.08)", borderRadius: 10, fontSize: 13, color: "#4CAF50", fontWeight: 600, textAlign: "center" }}>
-                {mediaFiles.filter((m) => m.type === "photo").length} photo(s) & {mediaFiles.filter((m) => m.type === "video").length} video(s) ·
-                Total: {fileSizeStr(mediaFiles.reduce((s, m) => s + m.file.size, 0))}
-              </div>
-            )}
-
             <div style={{ display: "flex", gap: 12 }}>
-              <button className="bs" onClick={() => setStep("service")}>← Back</button>
-              <button className="bp" onClick={() => setStep("review")}>Review & Submit →</button>
+              <button className="bs" onClick={exitMediaStep}>← Back</button>
+              <button className="bp" onClick={() => setStep("review")}>Review &amp; Submit →</button>
             </div>
           </div>
         )}
@@ -732,22 +726,20 @@ export default function GetQuotePage() {
               </div>
             ))}
 
+            {/* Media upload summary */}
             <div style={{ background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
               <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Media</div>
-              <div style={{ color: "#e8f5e8", fontSize: 15 }}>
-                {mediaFiles.length === 0 ? "No media uploaded" : `${mediaFiles.filter((m) => m.type === "photo").length} photos, ${mediaFiles.filter((m) => m.type === "video").length} videos`}
-              </div>
-              {mediaFiles.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8, marginTop: 10 }}>
-                  {mediaFiles.map((m, i) => (
-                    <div key={i}>{m.type === "photo" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.preview} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
-                    ) : (
-                      <div style={{ width: "100%", aspectRatio: "1", background: "#0a160a", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#4CAF50", fontSize: 20 }}>▶</div>
-                    )}</div>
-                  ))}
+              {mediaFiles.length === 0 ? (
+                <div style={{ color: "#5a8a5a", fontSize: 14 }}>No files added</div>
+              ) : (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 14 }}>
+                  {uploadDone > 0 && <span style={{ color: "#4CAF50" }}>✓ {uploadDone} uploaded</span>}
+                  {uploadingCount > 0 && <span style={{ color: "#ffa726" }}>⟳ {uploadingCount} still uploading</span>}
+                  {failedCount > 0 && <span style={{ color: "#ef5350" }}>✗ {failedCount} failed</span>}
                 </div>
+              )}
+              {uploadingCount > 0 && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#5a8a5a" }}>Uploads will finish automatically when you submit.</div>
               )}
             </div>
 
@@ -757,44 +749,14 @@ export default function GetQuotePage() {
 
             <div style={{ display: "flex", gap: 12 }}>
               <button className="bs" onClick={() => setStep("media")}>← Back</button>
-              <button className="bp" onClick={handleSubmit}>Submit Quote Request</button>
+              <button className="bp" disabled={isFinishing} onClick={handleSubmit}>
+                {isFinishing ? (
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                    <div className="spinner" /> {uploadingCount > 0 ? `Finishing ${uploadingCount} upload${uploadingCount > 1 ? "s" : ""}...` : "Submitting..."}
+                  </span>
+                ) : "Submit Quote Request"}
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* ═══ UPLOADING ═══ */}
-        {step === "uploading" && uploadProgress && (
-          <div style={{ animation: "fadeIn 0.3s ease", textAlign: "center", paddingTop: 60 }}>
-            <div style={{ fontSize: 48, marginBottom: 20 }}>📤</div>
-            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 800, marginBottom: 8 }}>
-              Uploading Your Files
-            </h2>
-            <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 32 }}>{uploadProgress.current}</p>
-
-            {/* Progress bar */}
-            <div style={{
-              width: "100%", maxWidth: 400, margin: "0 auto 16px", height: 8,
-              background: "#1a3a1a", borderRadius: 4, overflow: "hidden",
-              animation: "progressPulse 2s infinite",
-            }}>
-              <div style={{
-                height: "100%", background: "linear-gradient(90deg, #4CAF50, #66bb6a)",
-                borderRadius: 4, transition: "width 0.5s ease",
-                width: `${uploadProgress.percent}%`,
-              }} />
-            </div>
-
-            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "#4CAF50" }}>
-              {uploadProgress.completed} / {uploadProgress.total} files
-            </p>
-
-            {uploadProgress.failed.length > 0 && (
-              <div style={{ marginTop: 16, padding: "10px 16px", background: "rgba(239,83,80,0.08)", borderRadius: 10, fontSize: 12, color: "#ef5350" }}>
-                Failed: {uploadProgress.failed.join(", ")}
-              </div>
-            )}
-
-            <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 24 }}>Keep this page open &amp; screen unlocked while uploading</p>
           </div>
         )}
 
@@ -808,26 +770,16 @@ export default function GetQuotePage() {
             <p style={{ color: "#5a8a5a", fontSize: 16, maxWidth: 400, margin: "0 auto 24px", lineHeight: 1.6 }}>
               We&apos;ll review your property and send you a detailed estimate. Most quotes are ready within 2 hours during business hours.
             </p>
-
-            <div style={{
-              background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
-              borderRadius: 14, padding: 20, maxWidth: 360, margin: "0 auto 24px",
-            }}>
+            <div style={{ background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)", borderRadius: 14, padding: 20, maxWidth: 360, margin: "0 auto 24px" }}>
               <div style={{ fontSize: 13, color: "#4CAF50", fontWeight: 700, marginBottom: 8 }}>What happens next?</div>
               <div style={{ fontSize: 14, color: "#5a8a5a", lineHeight: 1.8 }}>
-                1. We review your photos & videos<br />
+                1. We review your photos &amp; videos<br />
                 2. We send you a price range<br />
                 3. You accept — we schedule the job
               </div>
             </div>
-
             {leadId && <p style={{ fontSize: 12, color: "#2a4a2a", marginBottom: 20 }}>Ref: {leadId.slice(0, 8)}</p>}
-
-            <Link href="/" style={{
-              display: "inline-block", padding: "14px 32px", borderRadius: 12,
-              background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-              textDecoration: "none", fontWeight: 700, fontSize: 15,
-            }}>← Back to Home</Link>
+            <Link href="/" style={{ display: "inline-block", padding: "14px 32px", borderRadius: 12, background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff", textDecoration: "none", fontWeight: 700, fontSize: 15 }}>← Back to Home</Link>
           </div>
         )}
       </div>
