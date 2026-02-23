@@ -380,6 +380,78 @@ function JobModal({ onClose, onSave, customers, job }: {
   );
 }
 
+// ─── Add Customer Modal ───
+function CustomerModal({ onClose, onSave }: {
+  onClose: () => void;
+  onSave: (data: Record<string, unknown>) => void;
+}) {
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const isValid = !!(form.name || form.email || form.phone);
+
+  const inputStyle = {
+    width: "100%", padding: "12px 14px", background: "#0d1a0d",
+    border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
+    fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20, backdropFilter: "blur(8px)", animation: "fadeIn 0.2s ease",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "linear-gradient(160deg, #0d1f0d, #091409)",
+        border: "1px solid #1a3a1a", borderRadius: 20, padding: "32px 28px",
+        maxWidth: 460, width: "100%", boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
+        animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#e8f5e8", fontWeight: 700 }}>Add Customer</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer" }}>✕</button>
+        </div>
+        <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 24 }}>
+          Add a customer from your own sources — referrals, calls, door-to-door, etc.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Name</label>
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Full name" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Email</label>
+            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="email@example.com" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Phone</label>
+            <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="(407) 555-0000" inputMode="tel" style={inputStyle} />
+          </div>
+          <button onClick={() => {
+            if (!isValid) return;
+            const data: Record<string, unknown> = {};
+            if (form.name) data.name = form.name;
+            if (form.email) data.email = form.email;
+            if (form.phone) data.phone = form.phone;
+            onSave(data);
+          }} style={{
+            background: isValid ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
+            color: isValid ? "#fff" : "#3a5a3a",
+            border: "none", padding: "14px", borderRadius: 12, fontSize: 15,
+            fontWeight: 700, cursor: isValid ? "pointer" : "not-allowed",
+            fontFamily: "'DM Sans', sans-serif",
+            boxShadow: isValid ? "0 4px 20px rgba(76,175,80,0.35)" : "none", marginTop: 4,
+          }}>
+            Add Customer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sidebar Nav Item ───
 function NavItem({ icon, label, active, onClick, badge }: {
   icon: string; label: string; active: boolean; onClick: () => void; badge?: number;
@@ -431,6 +503,7 @@ export default function AdminDashboard() {
   // Modals
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   // Toasts
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -545,6 +618,29 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteJob = async (jobId: string) => {
+    if (!window.confirm("Delete this job? This cannot be undone.")) return;
+    const res = await adminPost("jobs", "delete", { id: jobId });
+    if (res?.success) {
+      showToast("Job deleted");
+      if (activeTab === "jobs") loadTab("jobs");
+      else if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+    } else {
+      showToast(res?.error || "Failed to delete job", "error");
+    }
+  };
+
+  const handleSaveCustomer = async (data: Record<string, unknown>) => {
+    const res = await adminPost("customers", "create", data);
+    if (res?.success || res?.data) {
+      showToast("Customer added");
+      setShowCustomerModal(false);
+      loadTab("customers");
+    } else {
+      showToast(res?.error || "Failed to add customer", "error");
+    }
+  };
+
   const handleUpdateJobStatus = async (jobId: string, status: string) => {
     const res = await adminPost("jobs", "update", { id: jobId, status, ...(status === "completed" ? { completed_date: new Date().toISOString().split("T")[0] } : {}) });
     if (res?.success || res?.data) {
@@ -574,7 +670,7 @@ export default function AdminDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
-        body { font-family: 'DM Sans', sans-serif; background: #050e05; color: #c8e0c8; overflow-x: hidden; }
+        body { font-family: 'DM Sans', sans-serif; background: #050e05; color: #c8e0c8; overflow-x: hidden; max-width: 100vw; }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
@@ -590,7 +686,8 @@ export default function AdminDashboard() {
           display: flex; flex-direction: column; z-index: 100;
           overflow-y: auto;
         }
-        .admin-main { margin-left: 260px; min-height: 100vh; }
+        .admin-main { margin-left: 260px; min-height: 100vh; overflow-x: hidden; }
+        .admin-content-inner { padding: 32px 32px 60px; }
 
         .search-input {
           width: 100%; padding: 10px 14px 10px 36px; background: #0a160a;
@@ -623,6 +720,8 @@ export default function AdminDashboard() {
           cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
         }
         .quick-action:hover { background: rgba(76,175,80,0.1); color: #4CAF50; border-color: #4CAF50; }
+        .quick-action-danger { color: #ef5350; border-color: rgba(239,83,80,0.2); }
+        .quick-action-danger:hover { background: rgba(239,83,80,0.1) !important; color: #ef5350 !important; border-color: #ef5350 !important; }
 
         .mobile-toggle {
           display: none; position: fixed; top: 16px; left: 16px; z-index: 200;
@@ -639,13 +738,15 @@ export default function AdminDashboard() {
           .admin-layout { grid-template-columns: 1fr; }
           .admin-sidebar { transform: translateX(-100%); transition: transform 0.3s; width: 280px; }
           .admin-sidebar.open { transform: translateX(0); }
-          .admin-main { margin-left: 0; padding-top: 56px; }
+          .admin-main { margin-left: 0; }
+          .admin-content-inner { padding: 72px 16px 60px; }
           .mobile-toggle { display: flex; }
           .mobile-overlay.open { display: block; }
           .stats-grid-admin { grid-template-columns: 1fr 1fr !important; }
         }
         @media (max-width: 600px) {
           .stats-grid-admin { grid-template-columns: 1fr !important; }
+          .admin-content-inner { padding: 64px 10px 60px; }
         }
       `}</style>
 
@@ -737,7 +838,8 @@ export default function AdminDashboard() {
               </aside>
 
               {/* ─── MAIN CONTENT ─── */}
-              <main className="admin-main" style={{ background: "linear-gradient(170deg, #050e05, #081808, #050e05)", padding: "32px 32px 60px" }}>
+              <main className="admin-main" style={{ background: "linear-gradient(170deg, #050e05, #081808, #050e05)" }}>
+                <div className="admin-content-inner">
                 {loading && isAdmin === null ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
                     <div style={{ textAlign: "center", color: "#3a5a3a" }}>
@@ -824,9 +926,14 @@ export default function AdminDashboard() {
                     {activeTab === "customers" && (
                       <>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
-                          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
-                            Customers
-                          </h1>
+                          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
+                              Customers
+                            </h1>
+                            <button className="action-btn action-btn-primary" onClick={() => setShowCustomerModal(true)}>
+                              + Add Customer
+                            </button>
+                          </div>
                           <div style={{ position: "relative" }}>
                             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3a5a3a", fontSize: 14 }}>🔍</span>
                             <input className="search-input" placeholder="Search customers..."
@@ -918,6 +1025,7 @@ export default function AdminDashboard() {
                                     {j.status === "in_progress" && (
                                       <button className="quick-action" onClick={() => handleUpdateJobStatus(j.id, "completed")}>Complete</button>
                                     )}
+                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteJob(j.id)}>Delete</button>
                                   </div>
                                 </Td>
                               </TableRow>
@@ -1050,6 +1158,7 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+                </div>
               </main>
             </div>
 
@@ -1060,6 +1169,13 @@ export default function AdminDashboard() {
                 onSave={handleSaveJob}
                 customers={customers}
                 job={editingJob}
+              />
+            )}
+            {/* ─── CUSTOMER MODAL ─── */}
+            {showCustomerModal && (
+              <CustomerModal
+                onClose={() => setShowCustomerModal(false)}
+                onSave={handleSaveCustomer}
               />
             )}
           </>

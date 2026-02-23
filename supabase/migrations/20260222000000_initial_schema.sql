@@ -10,7 +10,7 @@
 -- Linked to Clerk auth via clerk_user_id
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
-  clerk_user_id text unique not null,
+  clerk_user_id text unique,
   email text,
   name text,
   phone text,

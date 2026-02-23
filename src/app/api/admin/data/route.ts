@@ -285,6 +285,15 @@ export async function POST(request: NextRequest) {
       }
 
       case "customers": {
+        if (action === "create") {
+          const { name, email, phone } = payload;
+          if (!name && !email && !phone) return NextResponse.json({ error: "At least one of name, email, or phone is required" }, { status: 400 });
+          const { data, error } = await supabase.from("customers").insert({
+            name: name || null, email: email || null, phone: phone || null,
+          }).select().single();
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true, data });
+        }
         if (action === "update") {
           const { id, ...updates } = payload;
           if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
