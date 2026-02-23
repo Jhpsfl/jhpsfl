@@ -112,93 +112,9 @@ function getShotList(service: string, modifiers: Record<string, unknown>): { id:
   return shots;
 }
 
-// ─── Video compression using MediaRecorder ───
-async function compressVideo(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.src = URL.createObjectURL(file);
-
-    video.onloadedmetadata = () => {
-      // Target: 720p max, 1.5 Mbps bitrate
-      const targetWidth = Math.min(video.videoWidth, 1280);
-      const targetHeight = Math.min(video.videoHeight, 720);
-      const scale = Math.min(targetWidth / video.videoWidth, targetHeight / video.videoHeight, 1);
-      const width = Math.round(video.videoWidth * scale);
-      const height = Math.round(video.videoHeight * scale);
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-
-      // Check for MediaRecorder support with desired codec
-      let mimeType = "video/webm;codecs=vp8";
-      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
-        mimeType = "video/webm;codecs=vp9";
-      }
-      if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) {
-        mimeType = "video/mp4;codecs=avc1";
-      }
-
-      const stream = canvas.captureStream(24); // 24 fps
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 1500000, // 1.5 Mbps
-      });
-
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const ext = mimeType.startsWith("video/mp4") ? "mp4" : "webm";
-        const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
-        const compressedFile = new File(
-          [blob],
-          file.name.replace(/\.[^.]+$/, `.compressed.${ext}`),
-          { type: mimeType.split(";")[0] }
-        );
-        URL.revokeObjectURL(video.src);
-        resolve(compressedFile);
-      };
-
-      recorder.onerror = () => {
-        URL.revokeObjectURL(video.src);
-        reject(new Error("Compression failed"));
-      };
-
-      recorder.start();
-
-      const drawFrame = () => {
-        if (video.ended || video.paused) {
-          recorder.stop();
-          return;
-        }
-        ctx.drawImage(video, 0, 0, width, height);
-        requestAnimationFrame(drawFrame);
-      };
-
-      video.onended = () => recorder.stop();
-      video.play().then(drawFrame).catch(reject);
-
-      // Safety timeout — stop after 3 minutes max
-      setTimeout(() => {
-        if (recorder.state === "recording") {
-          video.pause();
-          recorder.stop();
-        }
-      }, 180000);
-    };
-
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      reject(new Error("Could not load video"));
-    };
-  });
-}
+// File size limits (must match b2Storage.ts)
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500MB
+const MAX_PHOTO_BYTES = 50 * 1024 * 1024;  // 50MB
 
 // ─── Phone formatting ───
 function formatPhoneInput(value: string): string {
@@ -226,7 +142,7 @@ export default function GetQuotePage() {
   const [error, setError] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [compressing, setCompressing] = useState<string | null>(null);
+  const [sizeError, setSizeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── GPS ───
@@ -243,30 +159,28 @@ export default function GetQuotePage() {
   const isContactValid = form.name && form.email && form.phone.replace(/\D/g, "").length >= 10 && form.address;
   const isServiceValid = form.service_requested !== "";
 
-  // ─── Media handling with optional video compression ───
-  const addMedia = async (files: FileList | null, context: string = "") => {
+  // ─── Media handling — no browser compression (unreliable on mobile) ───
+  const addMedia = (files: FileList | null, context: string = "") => {
     if (!files) return;
+    setSizeError(null);
+    const tooBig: string[] = [];
 
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
+      const limit = isVideo ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES;
 
-      // Attempt video compression for large videos
-      if (isVideo && file.size > 10 * 1024 * 1024) { // >10MB
-        setCompressing(file.name);
-        try {
-          const compressed = await compressVideo(file);
-          const preview = URL.createObjectURL(compressed);
-          setMediaFiles((prev) => [...prev, { file: compressed, preview, context, type: "video", compressed: true }]);
-        } catch {
-          // Compression failed, use original
-          const preview = URL.createObjectURL(file);
-          setMediaFiles((prev) => [...prev, { file, preview, context, type: "video", compressed: false }]);
-        }
-        setCompressing(null);
-      } else {
-        const preview = URL.createObjectURL(file);
-        setMediaFiles((prev) => [...prev, { file, preview, context, type: isVideo ? "video" : "photo" }]);
+      if (file.size > limit) {
+        const mb = Math.round(limit / (1024 * 1024));
+        tooBig.push(`${file.name} (max ${mb}MB for ${isVideo ? "videos" : "photos"})`);
+        continue;
       }
+
+      const preview = URL.createObjectURL(file);
+      setMediaFiles((prev) => [...prev, { file, preview, context, type: isVideo ? "video" : "photo" }]);
+    }
+
+    if (tooBig.length > 0) {
+      setSizeError(`File too large — ${tooBig.join(", ")}. Trim videos to under 2 minutes if needed.`);
     }
   };
 
@@ -282,6 +196,14 @@ export default function GetQuotePage() {
     setError("");
     setStep("uploading");
     setUploadProgress({ total: mediaFiles.length, completed: 0, current: "Creating quote request...", percent: 0, failed: [] });
+
+    // Keep screen/CPU awake during upload — prevents Android from killing the tab
+    let wakeLock: WakeLockSentinel | null = null;
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
+      }
+    } catch { /* wake lock not supported or denied — continue anyway */ }
 
     try {
       // Step 1: Create the lead record
@@ -376,7 +298,8 @@ export default function GetQuotePage() {
             }),
           });
 
-        } catch {
+        } catch (uploadErr) {
+          console.error(`Upload failed for ${filename}:`, uploadErr);
           failed.push(filename);
         }
       }
@@ -393,9 +316,12 @@ export default function GetQuotePage() {
       await new Promise((r) => setTimeout(r, 500));
       setStep("submitted");
 
-    } catch {
+    } catch (err) {
+      console.error("Submit error:", err);
       setError("Connection error. Please check your internet and try again.");
       setStep("review");
+    } finally {
+      wakeLock?.release().catch(() => {});
     }
   };
 
@@ -593,12 +519,12 @@ export default function GetQuotePage() {
           <div style={{ animation: "slideUp 0.4s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <h2 style={{ fontSize: 18, color: "#e8f5e8", fontWeight: 700 }}>Show Us Your Property</h2>
             <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 8 }}>
-              Upload photos or short videos. Videos over 10MB will be automatically compressed.
+              Upload photos or short videos. Keep videos under 2 minutes for best results.
             </p>
 
-            {compressing && (
-              <div style={{ padding: "12px 16px", background: "rgba(255,167,38,0.1)", border: "1px solid rgba(255,167,38,0.2)", borderRadius: 10, fontSize: 13, color: "#ffa726", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ animation: "pulse 1.5s infinite" }}>⚙️</span> Compressing {compressing}...
+            {sizeError && (
+              <div style={{ padding: "12px 16px", background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 10, fontSize: 13, color: "#ef5350" }}>
+                {sizeError}
               </div>
             )}
 
@@ -626,11 +552,6 @@ export default function GetQuotePage() {
                           <img src={m.preview} alt={shot.label} className="mt" />
                         ) : (
                           <video src={m.preview} className="mt" controls playsInline />
-                        )}
-                        {m.compressed && (
-                          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#4CAF50", fontWeight: 700 }}>
-                            COMPRESSED
-                          </div>
                         )}
                         <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: 6, fontSize: 10, color: "#5a8a5a" }}>
                           {fileSizeStr(m.file.size)}
@@ -773,7 +694,7 @@ export default function GetQuotePage() {
               </div>
             )}
 
-            <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 24 }}>Please don&apos;t close this page</p>
+            <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 24 }}>Keep this page open &amp; screen unlocked while uploading</p>
           </div>
         )}
 

@@ -22,6 +22,8 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.B2_APP_KEY!,
   },
   forcePathStyle: true,
+  // Prevents AWS SDK v3 from adding x-amz-checksum-crc32 params that B2 doesn't support
+  requestChecksumCalculation: "WHEN_REQUIRED",
 });
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME || "Jhpsfl";
@@ -97,5 +99,5 @@ export function isAllowedMediaType(contentType: string): boolean {
 }
 
 // ─── Max file sizes ───
-export const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB (B2 limit per single upload is 5GB)
-export const MAX_PHOTO_SIZE = 25 * 1024 * 1024;  // 25MB
+export const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
+export const MAX_PHOTO_SIZE = 50 * 1024 * 1024;  // 50MB (covers large HEIC photos from modern phones)
