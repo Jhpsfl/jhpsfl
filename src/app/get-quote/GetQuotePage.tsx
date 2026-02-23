@@ -304,76 +304,99 @@ export default function GetQuotePage() {
       const newLeadId = leadData.leadId;
       setLeadId(newLeadId);
 
-      // Step 2: Upload each file directly to B2
-      const failed: string[] = [];
-      for (let i = 0; i < mediaFiles.length; i++) {
-        const media = mediaFiles[i];
-        const filename = media.file.name;
+      // Step 2: Get all pre-signed URLs in parallel
+      setUploadProgress({
+        total: mediaFiles.length, completed: 0,
+        current: `Getting upload slots for ${mediaFiles.length} files...`,
+        percent: 5, failed: [],
+      });
 
-        setUploadProgress({
-          total: mediaFiles.length,
-          completed: i,
-          current: `Uploading ${filename} (${fileSizeStr(media.file.size)})...`,
-          percent: Math.round((i / mediaFiles.length) * 100),
-          failed,
-        });
-
-        try {
-          // 2a: Get pre-signed URL from our API
-          const urlRes = await fetch("/api/leads/upload-url", {
+      const urlResults = await Promise.allSettled(
+        mediaFiles.map((media, i) =>
+          fetch("/api/leads/upload-url", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               leadId: newLeadId,
-              filename,
+              filename: media.file.name,
               contentType: media.file.type || "application/octet-stream",
               fileSize: media.file.size,
             }),
-          });
+          }).then((r) => r.json()).then((d) => ({ ...d, index: i }))
+        )
+      );
 
-          const urlData = await urlRes.json();
-          if (!urlRes.ok || !urlData.uploadUrl) {
-            failed.push(filename);
-            continue;
+      // Step 3: Upload all files to B2 in parallel
+      setUploadProgress({
+        total: mediaFiles.length, completed: 0,
+        current: `Uploading ${mediaFiles.length} files...`,
+        percent: 15, failed: [],
+      });
+
+      const failed: string[] = [];
+      type UploadOk = { storageKey: string; index: number };
+
+      const uploadResults = await Promise.allSettled(
+        urlResults.map(async (urlResult, i) => {
+          const media = mediaFiles[i];
+          if (urlResult.status === "rejected" || !urlResult.value?.uploadUrl) {
+            throw new Error("no-url");
           }
-
-          // 2b: Upload directly to B2 via pre-signed URL
-          const uploadRes = await fetch(urlData.uploadUrl, {
+          const { uploadUrl, storageKey } = urlResult.value;
+          const uploadRes = await fetch(uploadUrl, {
             method: "PUT",
             headers: { "Content-Type": media.file.type || "application/octet-stream" },
             body: media.file,
           });
+          if (!uploadRes.ok) throw new Error(`b2-${uploadRes.status}`);
+          return { storageKey, index: i } as UploadOk;
+        })
+      );
 
-          if (!uploadRes.ok) {
-            failed.push(filename);
-            continue;
-          }
+      // Collect failures
+      uploadResults.forEach((result, i) => {
+        if (result.status === "rejected") {
+          console.error(`Upload failed for ${mediaFiles[i].file.name}:`, result.reason);
+          failed.push(mediaFiles[i].file.name);
+        }
+      });
 
-          // 2c: Register the media in our database
-          await fetch("/api/leads/register-media", {
+      // Step 4: Register all successful uploads in parallel
+      const successful = uploadResults
+        .filter((r): r is PromiseFulfilledResult<UploadOk> => r.status === "fulfilled")
+        .map((r) => r.value);
+
+      setUploadProgress({
+        total: mediaFiles.length,
+        completed: successful.length,
+        current: successful.length > 0 ? "Saving..." : "Done",
+        percent: 85,
+        failed,
+      });
+
+      await Promise.allSettled(
+        successful.map(({ storageKey, index }) => {
+          const media = mediaFiles[index];
+          return fetch("/api/leads/register-media", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               leadId: newLeadId,
-              storagePath: urlData.storageKey,
+              storagePath: storageKey,
               mediaType: media.type,
-              originalFilename: filename,
+              originalFilename: media.file.name,
               contentType: media.file.type,
               fileSizeBytes: media.file.size,
               captureContext: media.context,
-              sortOrder: i,
+              sortOrder: index,
             }),
           });
-
-        } catch (uploadErr) {
-          console.error(`Upload failed for ${filename}:`, uploadErr);
-          failed.push(filename);
-        }
-      }
+        })
+      );
 
       setUploadProgress({
         total: mediaFiles.length,
-        completed: mediaFiles.length,
+        completed: successful.length,
         current: "Complete!",
         percent: 100,
         failed,
