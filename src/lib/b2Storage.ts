@@ -100,4 +100,4 @@ export function isAllowedMediaType(contentType: string): boolean {
 
 // ─── Max file sizes ───
 export const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
-export const MAX_PHOTO_SIZE = 50 * 1024 * 1024;  // 50MB (covers large HEIC photos from modern phones)
+export const MAX_PHOTO_SIZE = 50 * 1024 * 1024;  // 50MB
