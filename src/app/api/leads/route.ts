@@ -186,12 +186,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, data });
       }
 
-      // ─── Send quote (update quote + lead status) ───
+      // ─── Send quote (update quote + lead status + email customer) ───
       case "send_quote": {
         const { quote_id, lead_id } = payload;
         if (!quote_id || !lead_id) {
           return NextResponse.json({ error: "quote_id and lead_id required" }, { status: 400 });
         }
+
+        // Fetch quote + lead details for the email
+        const [quoteRes, leadRes] = await Promise.all([
+          supabase.from("lead_quotes").select("*").eq("id", quote_id).single(),
+          supabase.from("video_leads").select("name, email, address, city, state, zip, service_requested").eq("id", lead_id).single(),
+        ]);
+
+        if (quoteRes.error || !quoteRes.data) {
+          return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+        }
+        if (leadRes.error || !leadRes.data) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        const quote = quoteRes.data;
+        const lead = leadRes.data;
 
         // Update quote status
         await supabase
@@ -205,9 +221,45 @@ export async function POST(request: NextRequest) {
           .update({ status: "quoted" })
           .eq("id", lead_id);
 
-        // TODO: Phase 5c - Send email/SMS notification to customer
+        // Build service address string
+        const addressParts = [lead.address, lead.city, lead.state, lead.zip].filter(Boolean);
+        const serviceAddress = addressParts.join(", ");
 
-        return NextResponse.json({ success: true, message: "Quote sent" });
+        // Send email via Resend
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : "http://localhost:3000";
+
+        try {
+          const emailRes = await fetch(`${baseUrl}/api/leads/send-quote-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              customer_name: lead.name,
+              customer_email: lead.email,
+              service_address: serviceAddress,
+              service_requested: lead.service_requested,
+              line_items: quote.line_items,
+              total_low: quote.total_low,
+              total_high: quote.total_high,
+              notes_to_customer: quote.notes_to_customer,
+              valid_until: quote.valid_until,
+              quote_id: quote.id,
+            }),
+          });
+
+          if (!emailRes.ok) {
+            const emailErr = await emailRes.json().catch(() => ({}));
+            console.error("Email send failed:", emailErr);
+            // Don't fail the whole action — DB is already updated
+            return NextResponse.json({ success: true, message: "Quote sent (email failed)", emailError: emailErr });
+          }
+        } catch (emailErr) {
+          console.error("Email send error:", emailErr);
+          return NextResponse.json({ success: true, message: "Quote sent (email failed)", emailError: String(emailErr) });
+        }
+
+        return NextResponse.json({ success: true, message: "Quote sent and email delivered" });
       }
 
       // ─── Convert accepted lead to job ───

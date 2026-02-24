@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── Types ───
 interface VideoLead {
@@ -113,6 +113,8 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
   const [leadDetail, setLeadDetail] = useState<{ lead: VideoLead; media: LeadMedia[]; quotes: LeadQuote[] } | null>(null);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showQuoteBuilder, setShowQuoteBuilder] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<LeadQuote | null>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ message: msg, type });
@@ -141,6 +143,8 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
       const data = await res.json();
       setLeadDetail(data);
       setSelectedLead(leadId);
+      setShowQuoteBuilder(false);
+      setEditingQuote(null);
     }
   }, [userId]);
 
@@ -251,6 +255,28 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
       } catch {
         showToast("Failed to delete media: Network error", "error");
       }
+    }
+  };
+
+  // ─── Send an existing draft quote ───
+  const sendExistingQuote = async (quoteId: string, leadId: string) => {
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clerk_user_id: userId,
+        action: "send_quote",
+        payload: { quote_id: quoteId, lead_id: leadId },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const msg = data.message || "Quote sent!";
+      showToast(msg.includes("email failed") ? `${msg} — check Resend logs` : "Quote sent! Customer email delivered.");
+      fetchLeads();
+      fetchLeadDetail(leadId);
+    } else {
+      showToast("Failed to send quote", "error");
     }
   };
 
@@ -415,32 +441,95 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           )}
         </div>
 
-        {/* Quotes */}
-        {leadDetail.quotes.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>
-              📋 Quotes
+        {/* Quotes section */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+              📋 Quotes ({leadDetail.quotes.length})
             </div>
-            {leadDetail.quotes.map((q) => (
-              <div key={q.id} style={{
-                background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14,
-                padding: "16px 20px", marginBottom: 8,
+            {!showQuoteBuilder && (
+              <button onClick={() => { setEditingQuote(null); setShowQuoteBuilder(true); }} style={{
+                padding: "6px 14px", borderRadius: 10, border: "none",
+                background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
+                + Create Quote
+              </button>
+            )}
+          </div>
+
+          {/* Existing quotes */}
+          {leadDetail.quotes.map((q) => (
+            <div key={q.id} style={{
+              background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 14,
+              padding: "16px 20px", marginBottom: 8,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: "#4CAF50" }}>
-                      ${q.total_low.toFixed(2)} — ${q.total_high.toFixed(2)}
+                      ${q.total_low.toFixed(0)} — ${q.total_high.toFixed(0)}
                     </span>
                     <StatusBadge status={q.status} />
                   </div>
-                  <div style={{ fontSize: 12, color: "#3a5a3a" }}>{formatDate(q.created_at)}</div>
+                  {q.notes_to_customer && (
+                    <div style={{ marginTop: 6, fontSize: 13, color: "#5a8a5a" }}>{q.notes_to_customer}</div>
+                  )}
+                  {q.sent_at && (
+                    <div style={{ marginTop: 4, fontSize: 11, color: "#3a5a3a" }}>Sent {formatDate(q.sent_at)}</div>
+                  )}
                 </div>
-                {q.notes_to_customer && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: "#5a8a5a" }}>{q.notes_to_customer}</div>
-                )}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "#3a5a3a" }}>{formatDate(q.created_at)}</span>
+                  {q.status === "draft" && !showQuoteBuilder && (
+                    <>
+                      <button onClick={() => { setEditingQuote(q); setShowQuoteBuilder(true); }} style={{
+                        padding: "5px 12px", borderRadius: 8, border: "1px solid #2E7D32",
+                        background: "transparent", color: "#4CAF50", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      }}>Edit</button>
+                      <button onClick={() => sendExistingQuote(q.id, leadDetail.lead.id)} style={{
+                        padding: "5px 12px", borderRadius: 8, border: "none",
+                        background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                        fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      }}>📧 Send</button>
+                    </>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
+
+              {/* Line items preview */}
+              {q.line_items && q.line_items.length > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1a3a1a" }}>
+                  {q.line_items.map((li, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", marginBottom: 2 }}>
+                      <span>{li.service}{li.description ? ` — ${li.description}` : ""} × {li.quantity}</span>
+                      <span style={{ color: "#e8f5e8", fontWeight: 600 }}>${(li.unit_price * li.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {leadDetail.quotes.length === 0 && !showQuoteBuilder && (
+            <div style={{ padding: "24px", textAlign: "center", color: "#3a5a3a", border: "1px dashed #1a3a1a", borderRadius: 14, fontSize: 13 }}>
+              No quotes yet — click <strong style={{ color: "#4CAF50" }}>+ Create Quote</strong> to build one
+            </div>
+          )}
+        </div>
+
+        {/* Quote Builder (inline) */}
+        {showQuoteBuilder && (
+          <QuoteBuilder
+            leadId={leadDetail.lead.id}
+            userId={userId}
+            existingQuote={editingQuote || undefined}
+            onSaved={() => {
+              showToast(editingQuote ? "Quote saved!" : "Quote saved as draft");
+              fetchLeadDetail(leadDetail.lead.id);
+            }}
+            onClose={() => { setShowQuoteBuilder(false); setEditingQuote(null); }}
+          />
         )}
 
         {/* Danger Zone */}
@@ -571,6 +660,269 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Quote Builder ───
+interface LineItemRow {
+  service: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
+const emptyRow = (): LineItemRow => ({ service: "", description: "", quantity: 1, unit_price: 0 });
+
+function QuoteBuilder({
+  leadId,
+  userId,
+  existingQuote,
+  onSaved,
+  onClose,
+}: {
+  leadId: string;
+  userId: string;
+  existingQuote?: LeadQuote;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<LineItemRow[]>(
+    existingQuote?.line_items?.length
+      ? existingQuote.line_items.map((li) => ({
+          service: li.service,
+          description: li.description || "",
+          quantity: li.quantity,
+          unit_price: li.unit_price,
+        }))
+      : [emptyRow()]
+  );
+  const [totalLow, setTotalLow] = useState(existingQuote?.total_low?.toString() || "");
+  const [totalHigh, setTotalHigh] = useState(existingQuote?.total_high?.toString() || "");
+  const [notes, setNotes] = useState(existingQuote?.notes_to_customer || "");
+  const [internalNotes, setInternalNotes] = useState(existingQuote?.internal_notes || "");
+  const [validUntil, setValidUntil] = useState(
+    existingQuote?.valid_until ? existingQuote.valid_until.split("T")[0] : ""
+  );
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to form on mount
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const subtotal = rows.reduce((sum, r) => sum + r.unit_price * (r.quantity || 1), 0);
+
+  const updateRow = (i: number, field: keyof LineItemRow, val: string | number) => {
+    setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  };
+
+  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+  const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
+
+  const buildPayload = () => ({
+    clerk_user_id: userId,
+    action: "create_quote",
+    payload: {
+      lead_id: leadId,
+      line_items: rows.filter((r) => r.service.trim()),
+      total_low: parseFloat(totalLow) || 0,
+      total_high: parseFloat(totalHigh) || 0,
+      notes_to_customer: notes.trim() || null,
+      internal_notes: internalNotes.trim() || null,
+      valid_until: validUntil || null,
+    },
+  });
+
+  const saveDraft = async () => {
+    if (!rows.some((r) => r.service.trim())) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (res.ok) { onSaved(); onClose(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendQuote = async () => {
+    if (!rows.some((r) => r.service.trim())) return;
+    setSending(true);
+    try {
+      // Create the quote first
+      const createRes = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!createRes.ok) { setSending(false); return; }
+      const { data: newQuote } = await createRes.json();
+
+      // Then send it
+      const sendRes = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clerk_user_id: userId,
+          action: "send_quote",
+          payload: { quote_id: newQuote.id, lead_id: leadId },
+        }),
+      });
+      if (sendRes.ok) { onSaved(); onClose(); }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 8,
+    color: "#e8f5e8", fontSize: 13, padding: "7px 10px", outline: "none",
+    fontFamily: "inherit", width: "100%", boxSizing: "border-box",
+  };
+
+  return (
+    <div ref={formRef} style={{
+      background: "linear-gradient(160deg, #0a1f0a, #061206)",
+      border: "1px solid rgba(76,175,80,0.35)", borderRadius: 16,
+      padding: "20px 24px", marginBottom: 20, animation: "fadeIn 0.25s ease",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <div style={{ fontSize: 12, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          {existingQuote ? "✏️ Edit Quote" : "📝 New Quote"}
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
+      </div>
+
+      {/* Line items table */}
+      <div style={{ marginBottom: 16, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+          <thead>
+            <tr>
+              {["Service", "Description", "Qty", "Unit Price", "Line Total", ""].map((h) => (
+                <th key={h} style={{ textAlign: "left", fontSize: 11, color: "#4CAF50", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", padding: "4px 6px", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>
+                <td style={{ padding: "4px 6px 4px 0", width: "25%" }}>
+                  <input value={row.service} onChange={(e) => updateRow(i, "service", e.target.value)}
+                    placeholder="Service name" style={inputStyle} />
+                </td>
+                <td style={{ padding: "4px 6px", width: "30%" }}>
+                  <input value={row.description} onChange={(e) => updateRow(i, "description", e.target.value)}
+                    placeholder="Optional detail" style={inputStyle} />
+                </td>
+                <td style={{ padding: "4px 6px", width: "8%" }}>
+                  <input type="number" min="1" value={row.quantity} onChange={(e) => updateRow(i, "quantity", parseInt(e.target.value) || 1)}
+                    style={{ ...inputStyle, textAlign: "center" }} />
+                </td>
+                <td style={{ padding: "4px 6px", width: "16%" }}>
+                  <input type="number" min="0" step="0.01" value={row.unit_price || ""} onChange={(e) => updateRow(i, "unit_price", parseFloat(e.target.value) || 0)}
+                    placeholder="0.00" style={{ ...inputStyle, textAlign: "right" }} />
+                </td>
+                <td style={{ padding: "4px 6px", width: "14%", color: "#e8f5e8", fontSize: 13, fontWeight: 600, textAlign: "right", whiteSpace: "nowrap" }}>
+                  ${(row.unit_price * (row.quantity || 1)).toFixed(2)}
+                </td>
+                <td style={{ padding: "4px 0 4px 6px", width: "7%" }}>
+                  {rows.length > 1 && (
+                    <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: "#ef5350", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <button onClick={addRow} style={{
+          marginTop: 8, padding: "5px 14px", background: "transparent",
+          border: "1px dashed #1a3a1a", borderRadius: 8, color: "#5a8a5a",
+          fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+        }}>+ Add line item</button>
+      </div>
+
+      {/* Subtotal indicator */}
+      <div style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 16, textAlign: "right" }}>
+        Subtotal: <span style={{ color: "#e8f5e8", fontWeight: 700 }}>${subtotal.toFixed(2)}</span>
+      </div>
+
+      {/* Price range */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>
+            Total Low ($)
+          </label>
+          <input type="number" min="0" step="1" value={totalLow} onChange={(e) => setTotalLow(e.target.value)}
+            placeholder="e.g. 350" style={inputStyle} />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>
+            Total High ($)
+          </label>
+          <input type="number" min="0" step="1" value={totalHigh} onChange={(e) => setTotalHigh(e.target.value)}
+            placeholder="e.g. 450" style={inputStyle} />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>
+          Notes to Customer <span style={{ color: "#3a5a3a", fontWeight: 400 }}>(appears in email)</span>
+        </label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="Any details, conditions, or context you want the customer to see..."
+          rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: "block", fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>
+          Internal Notes <span style={{ color: "#3a5a3a", fontWeight: 400 }}>(admin only — never emailed)</span>
+        </label>
+        <textarea value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)}
+          placeholder="Notes for the team only..."
+          rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>
+          Valid Until
+        </label>
+        <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
+          style={{ ...inputStyle, width: "auto", minWidth: 180 }} />
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button onClick={saveDraft} disabled={saving || sending} style={{
+          padding: "10px 22px", borderRadius: 10, border: "1px solid #2E7D32",
+          background: "transparent", color: "#4CAF50", fontSize: 13, fontWeight: 700,
+          cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1, fontFamily: "inherit",
+        }}>
+          {saving ? "Saving..." : "💾 Save Draft"}
+        </button>
+
+        <button onClick={sendQuote} disabled={saving || sending} style={{
+          padding: "10px 22px", borderRadius: 10, border: "none",
+          background: saving || sending ? "#1a3a1a" : "linear-gradient(135deg, #4CAF50, #2E7D32)",
+          color: "#fff", fontSize: 13, fontWeight: 700,
+          cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.6 : 1, fontFamily: "inherit",
+          boxShadow: "0 2px 12px rgba(76,175,80,0.3)",
+        }}>
+          {sending ? "Sending email..." : "📧 Send to Customer"}
+        </button>
+
+        <button onClick={onClose} style={{
+          padding: "10px 22px", borderRadius: 10, border: "1px solid #1a3a1a",
+          background: "transparent", color: "#5a8a5a", fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+        }}>Cancel</button>
+      </div>
     </div>
   );
 }
