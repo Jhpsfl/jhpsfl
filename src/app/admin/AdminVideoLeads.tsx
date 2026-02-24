@@ -532,34 +532,6 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           />
         )}
 
-        {/* Danger Zone */}
-        <div style={{
-          marginTop: 32, padding: "20px 24px", background: "rgba(239,83,80,0.05)",
-          border: "1px solid rgba(239,83,80,0.2)", borderRadius: 16,
-        }}>
-          <div style={{ fontSize: 12, color: "#ef5350", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>
-            ⚠️ Danger Zone
-          </div>
-          <div style={{ color: "#c8e0c8", fontSize: 14, marginBottom: 16 }}>
-            Permanently delete this lead and all associated media files. This action cannot be undone.
-          </div>
-          <button onClick={() => {
-            if (window.confirm("⚠️ WARNING: This will permanently delete:\n\n• All media files (videos/photos)\n• All quotes\n• The lead record\n\nThis action cannot be undone. Type 'DELETE' to confirm:")) {
-              const userInput = prompt("Type 'DELETE' to confirm permanent deletion:");
-              if (userInput === "DELETE") {
-                deleteLead(leadDetail.lead.id);
-              } else {
-                showToast("Deletion cancelled", "error");
-              }
-            }
-          }} style={{
-            padding: "10px 20px", borderRadius: 10, border: "1px solid #ef5350",
-            background: "transparent", color: "#ef5350", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            🗑️ Delete Entire Lead
-          </button>
-        </div>
       </div>
     );
   }
