@@ -948,7 +948,7 @@ export default function AdminDashboard() {
                               onClick={action}
                               style={{
                                 display: "flex", alignItems: "center", gap: 5,
-                                padding: "6px 14px", borderRadius: 20, border: "none",
+                                padding: "6px 14px", borderRadius: 20,
                                 background: primary
                                   ? "linear-gradient(135deg, #4CAF50, #2E7D32)"
                                   : "rgba(76,175,80,0.08)",
