@@ -166,38 +166,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Stat Card ───
-function StatCard({ icon, label, value, accent = false, onClick }: {
-  icon: string; label: string; value: string | number; accent?: boolean; onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: accent
-          ? "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))"
-          : "linear-gradient(160deg, #0d1f0d, #091409)",
-        border: accent ? "1px solid rgba(76,175,80,0.3)" : "1px solid #1a3a1a",
-        borderRadius: 16, padding: "24px 20px",
-        transition: "transform 0.3s, box-shadow 0.3s",
-        cursor: onClick ? "pointer" : "default",
-        position: "relative",
-      }}
-      onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.2)"; }}
-      onMouseOut={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
-    >
-      {onClick && (
-        <div style={{ position: "absolute", top: 12, right: 14, fontSize: 11, color: "#2a4a2a" }}>→</div>
-      )}
-      <div style={{ fontSize: 24, marginBottom: 8 }}>{icon}</div>
-      <div style={{
-        fontSize: 28, fontWeight: 800, color: accent ? "#4CAF50" : "#e8f5e8",
-        fontFamily: "'JetBrains Mono', monospace", marginBottom: 4,
-      }}>{value}</div>
-      <div style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
-    </div>
-  );
-}
 
 // ─── Data Table ───
 function DataTable({ headers, children, emptyMessage = "No data yet" }: {
@@ -801,12 +769,48 @@ export default function AdminDashboard() {
           padding: 6px 10px !important;
         }
 
-        /* Reduce all font sizes for high density */
-        .admin-content-inner h1 { font-size: 20px !important; }
-        .admin-content-inner h3 { font-size: 14px !important; }
-        .admin-content-inner p, .admin-content-inner td { font-size: 12px !important; }
-        .action-btn { font-size: 12px !important; }
-        .quick-action { font-size: 10px !important; }
+        /* High-density mobile styles */
+        .admin-content-inner h1 { font-size: 18px !important; }
+        .admin-content-inner h2 { font-size: 16px !important; }
+        .admin-content-inner h3 { font-size: 12px !important; }
+        .admin-content-inner p, .admin-content-inner td { font-size: 11px !important; }
+        .action-btn { font-size: 11px !important; padding: 6px 10px !important; }
+        .quick-action { font-size: 9px !important; padding: 4px 6px !important; }
+        
+        /* Compact tables for high density */
+        .admin-content-inner table th { 
+            padding: 6px 4px !important; 
+            font-size: 9px !important; 
+        }
+        .admin-content-inner table td { 
+            padding: 6px 4px !important; 
+            font-size: 10px !important; 
+        }
+        
+        /* High-density navigation */
+        .navigation-grid { 
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 4px !important;
+        }
+        
+        /* Compact form elements */
+        input, select, textarea {
+            font-size: 14px !important;
+            padding: 8px 10px !important;
+            min-height: 40px !important;
+        }
+        
+        /* Mobile bottom nav adjustments */
+        @media (max-width: 900px) {
+            .mobile-bottom-nav button {
+                min-height: 56px !important;
+                padding: 4px 2px !important;
+                font-size: 10px !important;
+            }
+            .mobile-bottom-nav span:first-child {
+                font-size: 18px !important;
+            }
+        }
         
         /* ── Mobile sidebar touch improvements ── */
         .admin-sidebar {
@@ -1040,48 +1044,49 @@ export default function AdminDashboard() {
                           <p style={{ color: "#5a8a5a", fontSize: 12 }}>Here&apos;s what&apos;s happening with your business.</p>
                         </div>
 
-                        {/* Stats Ticker */}
+                        {/* High-density Stats Ticker */}
                         <div style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
-                          padding: "8px 12px", background: "#0a160a", border: "1px solid #1a3a1a",
-                          borderRadius: 8, marginBottom: 8, fontSize: 11, color: "#5a8a5a",
-                          fontWeight: 600, letterSpacing: 0.5,
+                          padding: "6px 10px", background: "#0a160a", border: "1px solid #1a3a1a",
+                          borderRadius: 6, marginBottom: 8, fontSize: 10, color: "#5a8a5a",
+                          fontWeight: 600, letterSpacing: 0.3,
                         }}>
-                          <div style={{ display: "flex", gap: 16 }}>
-                            <span>Customers: {overview?.totalCustomers || 0}</span>
-                            <span>Jobs: {overview?.activeJobs || 0}</span>
-                            <span>Completed: {overview?.completedJobs || 0}</span>
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <span>👥 {overview?.totalCustomers || 0}</span>
+                            <span>🔧 {overview?.activeJobs || 0}</span>
+                            <span>✅ {overview?.completedJobs || 0}</span>
+                            <span>🔄 {overview?.activeSubscriptions || 0}</span>
                           </div>
-                          <div style={{ color: "#4CAF50", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
-                            Revenue (30d): {formatCurrency(overview?.recentRevenue || 0)}
+                          <div style={{ color: "#4CAF50", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
+                            💰 {formatCurrency(overview?.recentRevenue || 0)}
                           </div>
                         </div>
 
-                        {/* Slim New Job Button */}
+                        {/* Ultra-slim New Job Button */}
                         <button 
                           onClick={() => { setEditingJob(null); setShowJobModal(true); }}
                           style={{
-                            width: "100%", padding: "8px 12px", marginBottom: 16,
+                            width: "100%", padding: "6px 10px", marginBottom: 12,
                             background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
-                            border: "none", borderRadius: 8, color: "#fff",
-                            fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            border: "none", borderRadius: 6, color: "#fff",
+                            fontSize: 11, fontWeight: 700, cursor: "pointer",
                             fontFamily: "'DM Sans', sans-serif",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                           }}
                         >
-                          <span style={{ fontSize: 14 }}>+</span> New Job
+                          <span style={{ fontSize: 12 }}>+</span> New Job
                         </button>
 
-                        {/* Navigation Grid */}
+                        {/* High-density Navigation Grid */}
                         <div style={{
-                          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
-                          marginBottom: 20,
+                          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6,
+                          marginBottom: 16,
                         }}>
                           {[
                             { icon: "✉️", label: "Messages", tab: "messages" },
-                            { icon: "📹", label: "Video Quotes", tab: "video_leads" },
+                            { icon: "📹", label: "Video", tab: "video_leads" },
                             { icon: "💰", label: "Payments", tab: "payments" },
-                            { icon: "🔄", label: "Subscriptions", tab: "subscriptions" },
+                            { icon: "🔄", label: "Subs", tab: "subscriptions" },
                             { icon: "🔧", label: "Jobs", tab: "jobs" },
                             { icon: "👥", label: "Customers", tab: "customers" },
                           ].map((item) => (
@@ -1090,10 +1095,10 @@ export default function AdminDashboard() {
                               onClick={() => switchTab(item.tab as Tab)}
                               style={{
                                 display: "flex", flexDirection: "column", alignItems: "center",
-                                padding: "12px 8px", background: "linear-gradient(160deg, #0d1f0d, #091409)",
-                                border: "1px solid #1a3a1a", borderRadius: 12, color: "#c8e0c8",
-                                fontSize: 11, fontWeight: 600, cursor: "pointer",
-                                transition: "all 0.2s", minHeight: 70,
+                                padding: "8px 4px", background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                                border: "1px solid #1a3a1a", borderRadius: 8, color: "#c8e0c8",
+                                fontSize: 10, fontWeight: 600, cursor: "pointer",
+                                transition: "all 0.2s", minHeight: 60,
                               }}
                               onMouseOver={(e) => {
                                 e.currentTarget.style.background = "linear-gradient(160deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))";
@@ -1104,25 +1109,25 @@ export default function AdminDashboard() {
                                 e.currentTarget.style.borderColor = "#1a3a1a";
                               }}
                             >
-                              <span style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</span>
-                              <span>{item.label}</span>
+                              <span style={{ fontSize: 16, marginBottom: 4 }}>{item.icon}</span>
+                              <span style={{ fontSize: 9 }}>{item.label}</span>
                             </button>
                           ))}
                         </div>
 
                         {/* ── Recent customers ── */}
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                            <h3 style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
-                            <button className="quick-action" onClick={() => switchTab("customers")}>View all →</button>
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
+                            <button className="quick-action" onClick={() => switchTab("customers")} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
                           </div>
                           <DataTable headers={["Name", "Email", "Phone", "Joined"]} emptyMessage="No customers yet. Share your site to get signups!">
                             {customers.slice(0, 5).map((c) => (
                               <TableRow key={c.id} onClick={() => loadCustomerDetail(c.id)}>
-                                <Td>{c.name || "—"}</Td>
-                                <Td>{c.email || "—"}</Td>
-                                <Td mono>{c.phone || "—"}</Td>
-                                <Td>{timeAgo(c.created_at)}</Td>
+                                <Td style={{ fontSize: 11 }}>{c.name || "—"}</Td>
+                                <Td style={{ fontSize: 11 }}>{c.email || "—"}</Td>
+                                <Td mono style={{ fontSize: 11 }}>{c.phone || "—"}</Td>
+                                <Td style={{ fontSize: 11 }}>{timeAgo(c.created_at)}</Td>
                               </TableRow>
                             ))}
                           </DataTable>
@@ -1131,16 +1136,16 @@ export default function AdminDashboard() {
                         {/* ── Recent payments ── */}
                         {overview.recentPayments.length > 0 && (
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                              <h3 style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
-                              <button className="quick-action" onClick={() => switchTab("payments")}>View all →</button>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
+                              <button className="quick-action" onClick={() => switchTab("payments")} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
                             </div>
                             <DataTable headers={["Amount", "Status", "Date"]}>
                               {overview.recentPayments.map((p, i) => (
                                 <TableRow key={i}>
-                                  <Td mono accent>{formatCurrency(p.amount)}</Td>
-                                  <Td><StatusBadge status={p.status} /></Td>
-                                  <Td>{formatDate(p.created_at)}</Td>
+                                  <Td mono accent style={{ fontSize: 11 }}>{formatCurrency(p.amount)}</Td>
+                                  <Td style={{ fontSize: 11 }}><StatusBadge status={p.status} /></Td>
+                                  <Td style={{ fontSize: 11 }}>{formatDate(p.created_at)}</Td>
                                 </TableRow>
                               ))}
                             </DataTable>
