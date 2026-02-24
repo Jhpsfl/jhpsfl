@@ -1021,7 +1021,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
                 Everything Your Property Needs
               </h2>
               <p style={{ color: "#7a9a7a", fontSize: 16, maxWidth: 560, margin: "0 auto" }}>
-                Services starting at $50+. One call handles it all — from weekly lawn care to full property transformations.
+                One call handles it all — from weekly lawn care to full property transformations.
               </p>
             </div>
           </FadeIn>
