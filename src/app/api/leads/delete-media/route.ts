@@ -52,10 +52,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Delete from Backblaze B2
+    let b2DeleteSuccess = true;
     try {
       await deleteFromB2(media.storage_path);
     } catch (b2Error) {
       console.error("Failed to delete from B2:", b2Error);
+      b2DeleteSuccess = false;
       // Continue with DB deletion even if B2 fails, but log it
       // We could choose to return an error here, but for now we continue
     }
@@ -68,9 +70,14 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       return NextResponse.json(
-        { error: "Failed to delete media record" },
+        { error: "Failed to delete media record from database" },
         { status: 500 }
       );
+    }
+
+    // Log if B2 deletion failed but DB deletion succeeded
+    if (!b2DeleteSuccess) {
+      console.warn(`Media record deleted from database but not from B2: ${media.storage_path}`);
     }
 
     return NextResponse.json({
