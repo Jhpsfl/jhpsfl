@@ -184,6 +184,35 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
     }
   };
 
+  // ─── Delete entire lead ───
+  const deleteLead = async (leadId: string) => {
+    if (!window.confirm("Delete this entire lead? This will permanently delete:\n• All media files\n• All quotes\n• The lead record\n\nThis action cannot be undone.")) {
+      return;
+    }
+
+    const res = await fetch("/api/leads/delete-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clerk_user_id: userId, lead_id: leadId }),
+    });
+
+    if (res.ok) {
+      showToast("Lead and all media deleted successfully");
+      // Go back to leads list
+      setSelectedLead(null);
+      setLeadDetail(null);
+      // Refresh the leads list
+      fetchLeads();
+    } else {
+      try {
+        const error = await res.json();
+        showToast(`Failed to delete lead: ${error.error || "Unknown error"}`, "error");
+      } catch {
+        showToast("Failed to delete lead: Network error", "error");
+      }
+    }
+  };
+
   // ─── Delete media ───
   const deleteMedia = async (mediaId: string) => {
     const res = await fetch("/api/leads/delete-media", {
@@ -309,6 +338,15 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
                   background: "transparent", color: "#ef5350", fontSize: 13, fontWeight: 600, cursor: "pointer",
                 }}>Decline</button>
               )}
+              
+              {/* Delete Lead Button */}
+              <button onClick={() => deleteLead(leadDetail.lead.id)} style={{
+                padding: "8px 16px", borderRadius: 10, border: "1px solid #1a3a1a",
+                background: "transparent", color: "#ef5350", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                🗑️ Delete Lead
+              </button>
             </div>
           </div>
 
@@ -404,6 +442,35 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
             ))}
           </div>
         )}
+
+        {/* Danger Zone */}
+        <div style={{
+          marginTop: 32, padding: "20px 24px", background: "rgba(239,83,80,0.05)",
+          border: "1px solid rgba(239,83,80,0.2)", borderRadius: 16,
+        }}>
+          <div style={{ fontSize: 12, color: "#ef5350", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>
+            ⚠️ Danger Zone
+          </div>
+          <div style={{ color: "#c8e0c8", fontSize: 14, marginBottom: 16 }}>
+            Permanently delete this lead and all associated media files. This action cannot be undone.
+          </div>
+          <button onClick={() => {
+            if (window.confirm("⚠️ WARNING: This will permanently delete:\n\n• All media files (videos/photos)\n• All quotes\n• The lead record\n\nThis action cannot be undone. Type 'DELETE' to confirm:")) {
+              const userInput = prompt("Type 'DELETE' to confirm permanent deletion:");
+              if (userInput === "DELETE") {
+                deleteLead(leadDetail.lead.id);
+              } else {
+                showToast("Deletion cancelled", "error");
+              }
+            }
+          }} style={{
+            padding: "10px 20px", borderRadius: 10, border: "1px solid #ef5350",
+            background: "transparent", color: "#ef5350", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            🗑️ Delete Entire Lead
+          </button>
+        </div>
       </div>
     );
   }
