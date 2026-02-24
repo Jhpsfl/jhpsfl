@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseAdmin } from "@/lib/supabase";
 import { deleteFromB2 } from "@/lib/b2Storage";
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 async function verifyAdmin(clerkUserId: string) {
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("admin_users")
     .select("id, role")
@@ -38,6 +34,8 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    const supabase = createSupabaseAdmin();
 
     // 1. Get the media record to get storage_path
     const { data: media, error: fetchError } = await supabase
