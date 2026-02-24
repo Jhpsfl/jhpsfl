@@ -514,6 +514,10 @@ export default function AdminDashboard() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
 
+  // PWA install prompt
+  const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
+  const [installed, setInstalled] = useState(false);
+
   // Toasts
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -612,6 +616,23 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (userId && activeTab !== "customer_detail") loadTab(activeTab);
   }, [activeTab, userId, loadTab]);
+
+  // ─── PWA install prompt ───
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as Event & { prompt: () => Promise<void> });
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => { setInstalled(true); setInstallPrompt(null); });
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    setInstallPrompt(null);
+  };
 
   // ─── Job CRUD ───
   const handleSaveJob = async (data: Record<string, unknown>) => {
@@ -863,7 +884,35 @@ export default function AdminDashboard() {
                   <NavItem icon="📈" label="Analytics" active={false} onClick={() => showToast("Analytics coming soon", "error")} />
                 </nav>
 
-                <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginTop: 16 }}>
+                {/* ─── Install App button ─── */}
+                {installPrompt && !installed && (
+                  <button
+                    onClick={handleInstall}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      width: "100%", padding: "10px 14px", marginBottom: 8,
+                      background: "linear-gradient(135deg, rgba(76,175,80,0.18), rgba(46,125,50,0.1))",
+                      border: "1px solid rgba(76,175,80,0.35)", borderRadius: 12,
+                      color: "#4CAF50", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.background = "linear-gradient(135deg, rgba(76,175,80,0.28), rgba(46,125,50,0.18))")}
+                    onMouseOut={e => (e.currentTarget.style.background = "linear-gradient(135deg, rgba(76,175,80,0.18), rgba(46,125,50,0.1))")}
+                  >
+                    <span style={{ fontSize: 18 }}>📲</span>
+                    <div style={{ textAlign: "left" }}>
+                      <div>Install App</div>
+                      <div style={{ fontSize: 10, color: "#3a6a3a", fontWeight: 400 }}>Add to home screen</div>
+                    </div>
+                  </button>
+                )}
+                {installed && (
+                  <div style={{ padding: "8px 14px", marginBottom: 8, fontSize: 12, color: "#4CAF50" }}>
+                    ✓ App installed
+                  </div>
+                )}
+
+                <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginTop: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px" }}>
                     <UserButton appearance={{ elements: { avatarBox: { width: 36, height: 36 } } }} />
                     <div>
