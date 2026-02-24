@@ -112,9 +112,12 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
   const [leadDetail, setLeadDetail] = useState<{ lead: VideoLead; media: LeadMedia[]; quotes: LeadQuote[] } | null>(null);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToast({ message: msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // ─── Fetch leads list ───
   const fetchLeads = useCallback(async () => {
@@ -181,6 +184,28 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
     }
   };
 
+  // ─── Delete media ───
+  const deleteMedia = async (mediaId: string) => {
+    const res = await fetch("/api/leads/delete-media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clerk_user_id: userId, media_id: mediaId }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      showToast("Media deleted successfully");
+      
+      // Refresh the lead detail to reflect the deletion
+      if (selectedLead) {
+        fetchLeadDetail(selectedLead);
+      }
+    } else {
+      const error = await res.json();
+      showToast(`Failed to delete: ${error.error}`, "error");
+    }
+  };
+
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
   // ─── RENDER: Lead Detail View ───
@@ -190,9 +215,14 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
         {toast && (
           <div style={{
             position: "fixed", top: 20, right: 20, zIndex: 10000, padding: "14px 24px",
-            borderRadius: 12, background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+            borderRadius: 12,
+            background: toast.type === "success" 
+              ? "linear-gradient(135deg, #4CAF50, #2E7D32)" 
+              : "linear-gradient(135deg, #ef5350, #c62828)",
             color: "#fff", fontSize: 14, fontWeight: 600, boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
-          }}>✓ {toast}</div>
+          }}>
+            {toast.type === "success" ? "✓" : "⚠"} {toast.message}
+          </div>
         )}
 
         <button onClick={() => { setSelectedLead(null); setLeadDetail(null); }} style={{
@@ -322,7 +352,7 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
               {leadDetail.media.map((m) => (
-                <MediaCard key={m.id} media={m} getUrl={getMediaUrl} />
+                <MediaCard key={m.id} media={m} getUrl={getMediaUrl} onDelete={deleteMedia} />
               ))}
             </div>
           )}
@@ -455,9 +485,15 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
 }
 
 // ─── Media Card (loads signed URL on demand) ───
-function MediaCard({ media, getUrl }: { media: LeadMedia; getUrl: (path: string) => Promise<string> }) {
+function MediaCard({ media, getUrl, onDelete }: { 
+  media: LeadMedia; 
+  getUrl: (path: string) => Promise<string>;
+  onDelete: (mediaId: string) => Promise<void>;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const loadUrl = async () => {
     if (url || loading) return;
@@ -467,11 +503,79 @@ function MediaCard({ media, getUrl }: { media: LeadMedia; getUrl: (path: string)
     setLoading(false);
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete(media.id);
+    } finally {
+      setDeleting(false);
+      setShowConfirm(false);
+    }
+  };
+
   return (
     <div style={{
       background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 14,
-      overflow: "hidden",
+      overflow: "hidden", position: "relative",
     }}>
+      {/* Delete button overlay */}
+      <button
+        onClick={() => setShowConfirm(true)}
+        style={{
+          position: "absolute", top: 8, right: 8, zIndex: 10,
+          background: "rgba(239,83,80,0.9)", color: "#fff",
+          border: "none", borderRadius: "50%", width: 28, height: 28,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer", fontSize: 14, fontWeight: "bold",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        }}
+        title="Delete media"
+      >
+        ×
+      </button>
+
+      {/* Confirmation dialog */}
+      {showConfirm && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 20,
+          background: "rgba(5,14,5,0.95)", display: "flex",
+          flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: 20, gap: 12,
+        }}>
+          <div style={{ color: "#e8f5e8", fontSize: 14, fontWeight: 600, textAlign: "center" }}>
+            Delete this media file?
+          </div>
+          <div style={{ color: "#5a8a5a", fontSize: 12, textAlign: "center" }}>
+            This cannot be undone. The file will be removed from storage.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{
+                padding: "6px 16px", background: "#ef5350", color: "#fff",
+                border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                cursor: deleting ? "not-allowed" : "pointer",
+                opacity: deleting ? 0.7 : 1,
+              }}
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+            <button
+              onClick={() => setShowConfirm(false)}
+              disabled={deleting}
+              style={{
+                padding: "6px 16px", background: "transparent", color: "#5a8a5a",
+                border: "1px solid #1a3a1a", borderRadius: 8, fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ position: "relative", aspectRatio: "16/9", background: "#050e05" }}>
         {!url ? (
           <button onClick={loadUrl} style={{
