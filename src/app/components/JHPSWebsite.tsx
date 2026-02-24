@@ -619,6 +619,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
           .footer-grid { grid-template-columns: 1fr !important; }
           .promo-grid { grid-template-columns: 1fr !important; }
           .quote-steps-grid { grid-template-columns: 1fr !important; }
+          .mobile-header-right { display: flex !important; }
           .stats-grid { grid-template-columns: 1fr 1fr !important; }
           .hero-grid { grid-template-columns: 1fr !important; }
           .desktop-nav { display: none !important; }
@@ -671,6 +672,34 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
             <button className="cta-primary" onClick={() => setShowEstimate(true)} style={{ padding: "10px 24px", fontSize: 14 }}>
               Free Estimate
             </button>
+            <Link href="/get-quote" style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              background: "linear-gradient(135deg, #b8860b, #ffd700, #b8860b)",
+              backgroundSize: "200% 100%",
+              color: "#0a0a00", fontWeight: 800, fontSize: 13,
+              padding: "10px 22px", borderRadius: 30, textDecoration: "none",
+              letterSpacing: 0.3, whiteSpace: "nowrap",
+              boxShadow: "0 4px 20px rgba(184,134,11,0.4)",
+              transition: "transform 0.2s, box-shadow 0.2s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 30px rgba(184,134,11,0.6)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 4px 20px rgba(184,134,11,0.4)"; }}>
+              📹 Video Quote
+            </Link>
+          </div>
+
+          {/* Mobile: gold quote button + hamburger */}
+          <div style={{ display: "none", alignItems: "center", gap: 10 }} className="mobile-header-right">
+            <Link href="/get-quote" style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "linear-gradient(135deg, #b8860b, #ffd700)",
+              color: "#0a0a00", fontWeight: 800, fontSize: 12,
+              padding: "8px 14px", borderRadius: 24, textDecoration: "none",
+              letterSpacing: 0.2, whiteSpace: "nowrap",
+              boxShadow: "0 3px 14px rgba(184,134,11,0.45)",
+            }}>
+              📹 Quote
+            </Link>
           </div>
 
           <button onClick={() => setMenuOpen(!menuOpen)} style={{
@@ -687,6 +716,25 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       {menuOpen && (
         <div className="mobile-menu">
           <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: primaryHex, fontSize: 32, cursor: "pointer" }}>✕</button>
+
+          {/* Featured quote CTA at top of menu */}
+          <Link href="/get-quote" onClick={() => setMenuOpen(false)} style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            background: "linear-gradient(135deg, #b8860b 0%, #ffd700 50%, #b8860b 100%)",
+            color: "#0a0a00", fontWeight: 800, fontSize: 18,
+            padding: "18px 32px", borderRadius: 16, textDecoration: "none",
+            letterSpacing: 0.3, width: "100%", boxSizing: "border-box",
+            boxShadow: "0 6px 30px rgba(184,134,11,0.5)",
+            marginBottom: 8,
+          }}>
+            <span style={{ fontSize: 22 }}>📹</span>
+            Get Your Free Video Quote
+            <span style={{ opacity: 0.7 }}>→</span>
+          </Link>
+          <div style={{ fontSize: 11, color: "#7a6a3a", letterSpacing: 2, textAlign: "center", marginBottom: 24 }}>
+            SNAP PHOTOS · WE REVIEW · QUOTE DELIVERED
+          </div>
+
           {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
             <a key={id} href={`#${id}`} onClick={() => { scrollTo(id!); setMenuOpen(false); }}>{label}</a>
           ))}
@@ -1289,17 +1337,25 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       <div className="sticky-bar">
         <a href={phoneHref} style={{
           flex: 1, background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`, color: "#fff",
-          border: "none", padding: "14px", borderRadius: 14, fontSize: 15, fontWeight: 700,
+          border: "none", padding: "14px", borderRadius: 14, fontSize: 14, fontWeight: 700,
           textAlign: "center", textDecoration: "none", display: "block",
         }}>
-          📞 Call Now
+          📞 Call
         </a>
+        <Link href="/get-quote" style={{
+          flex: 1.4, background: "linear-gradient(135deg, #b8860b, #ffd700, #b8860b)",
+          color: "#0a0a00", padding: "14px", borderRadius: 14,
+          fontSize: 14, fontWeight: 800, textAlign: "center", textDecoration: "none", display: "block",
+          boxShadow: "0 2px 16px rgba(184,134,11,0.5)",
+        }}>
+          📹 Video Quote
+        </Link>
         <a href={`sms:${phone}`} style={{
           flex: 1, background: "transparent", color: primaryHex,
           border: "2px solid #2a5a2a", padding: "12px", borderRadius: 14,
-          fontSize: 15, fontWeight: 700, textAlign: "center", textDecoration: "none", display: "block",
+          fontSize: 14, fontWeight: 700, textAlign: "center", textDecoration: "none", display: "block",
         }}>
-          💬 Text Us
+          💬 Text
         </a>
       </div>
 
