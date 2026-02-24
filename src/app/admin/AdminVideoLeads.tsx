@@ -395,9 +395,14 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
       {toast && (
         <div style={{
           position: "fixed", top: 20, right: 20, zIndex: 10000, padding: "14px 24px",
-          borderRadius: 12, background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+          borderRadius: 12,
+          background: toast.type === "success" 
+            ? "linear-gradient(135deg, #4CAF50, #2E7D32)" 
+            : "linear-gradient(135deg, #ef5350, #c62828)",
           color: "#fff", fontSize: 14, fontWeight: 600, boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
-        }}>✓ {toast}</div>
+        }}>
+          {toast.type === "success" ? "✓" : "⚠"} {toast.message}
+        </div>
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
