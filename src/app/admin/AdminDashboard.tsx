@@ -989,6 +989,31 @@ export default function AdminDashboard() {
             display: flex !important;
           }
           
+          /* Enhanced stacked table design */
+          .mobile-stacked-table .table-row {
+            padding: 20px;
+            gap: 12px;
+            border: 1px solid #1a3a1a;
+            margin-bottom: 12px;
+            border-radius: 16px;
+            background: linear-gradient(160deg, #0d1f0d, #091409);
+          }
+          .mobile-stacked-table .table-cell {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(76,175,80,0.1);
+          }
+          .mobile-stacked-table .table-label {
+            font-size: 12px;
+            color: #4CAF50;
+            min-width: 90px;
+          }
+          .mobile-stacked-table .table-value {
+            font-size: 15px;
+            color: #e8f5e8;
+            text-align: right;
+            font-weight: 500;
+          }
+          
           .admin-content-inner table th { 
             padding: 16px 10px !important; 
             font-size: 11px !important; 
@@ -1008,9 +1033,10 @@ export default function AdminDashboard() {
             min-height: 52px;
           }
           .quick-action {
-            min-height: 40px;
+            min-height: 44px;
             padding: 12px 16px !important;
             font-size: 13px !important;
+            border-radius: 10px;
           }
           .mobile-toggle {
             top: 16px;
@@ -1018,6 +1044,9 @@ export default function AdminDashboard() {
             padding: 16px;
             min-width: 52px;
             min-height: 52px;
+            background: rgba(5,14,5,0.98);
+            border: 1px solid #4CAF50;
+            box-shadow: 0 4px 20px rgba(76,175,80,0.3);
           }
           
           /* Enhanced touch targets */
@@ -1037,6 +1066,8 @@ export default function AdminDashboard() {
             width: calc(100% - 20px);
             padding: 24px 20px;
             border-radius: 24px;
+            border: 1px solid #1a3a1a;
+            background: linear-gradient(160deg, #0d1f0d, #091409);
           }
           
           /* Mobile form inputs */
@@ -1044,6 +1075,9 @@ export default function AdminDashboard() {
             font-size: 16px !important;
             min-height: 52px;
             padding: 14px 16px !important;
+            border-radius: 12px;
+            background: #0a160a;
+            border: 1px solid #1a3a1a;
           }
           
           /* Better spacing */
@@ -1056,11 +1090,20 @@ export default function AdminDashboard() {
             padding: 12px 8px 20px !important;
             border-top: 1px solid #1a3a1a;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+            background: rgba(5,14,5,0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
           }
           .mobile-bottom-nav button {
             min-height: 56px;
             padding: 8px 4px !important;
             min-width: 64px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+          }
+          .mobile-bottom-nav button:active {
+            background: rgba(76,175,80,0.15);
+            transform: scale(0.95);
           }
           .mobile-bottom-nav span:first-child {
             font-size: 22px !important;
@@ -1068,6 +1111,30 @@ export default function AdminDashboard() {
           }
           .mobile-bottom-nav span:last-child {
             font-size: 12px !important;
+            font-weight: 600;
+          }
+          
+          /* Active state for bottom nav */
+          .mobile-bottom-nav button[data-active="true"] {
+            color: #4CAF50;
+            background: rgba(76,175,80,0.1);
+          }
+          
+          /* Improved search input */
+          .search-input {
+            min-height: 52px;
+            border-radius: 12px;
+            font-size: 16px;
+            padding: 14px 16px 14px 48px;
+            background: #0a160a;
+            border: 1px solid #1a3a1a;
+          }
+          
+          /* Better spacing for mobile cards */
+          .stat-card {
+            padding: 20px 16px !important;
+            border-radius: 16px !important;
+            min-height: 120px;
           }
         }
         
@@ -1078,17 +1145,52 @@ export default function AdminDashboard() {
           }
           .stats-grid-admin > div {
             padding: 18px 14px !important;
+            border-radius: 14px !important;
           }
           .action-btn {
             padding: 12px 16px !important;
             font-size: 14px !important;
+            min-height: 48px;
+            border-radius: 12px;
           }
           .mobile-bottom-nav button {
             min-width: 56px;
             font-size: 11px;
+            padding: 6px 2px !important;
           }
           .mobile-bottom-nav span:first-child {
             font-size: 20px !important;
+          }
+          .mobile-bottom-nav span:last-child {
+            font-size: 11px !important;
+          }
+          
+          /* Even smaller stacked tables */
+          .mobile-stacked-table .table-row {
+            padding: 16px;
+            gap: 10px;
+          }
+          .mobile-stacked-table .table-label {
+            font-size: 11px;
+            min-width: 80px;
+          }
+          .mobile-stacked-table .table-value {
+            font-size: 14px;
+          }
+          
+          /* Better modal sizing */
+          .modal-content {
+            margin: 8px;
+            width: calc(100% - 16px);
+            padding: 20px 16px;
+            border-radius: 20px;
+          }
+          
+          /* Improved touch targets */
+          .quick-action {
+            min-height: 40px;
+            padding: 10px 14px !important;
+            font-size: 12px !important;
           }
         }
         
@@ -1781,7 +1883,7 @@ export default function AdminDashboard() {
         bottom: 0,
         left: 0,
         right: 0,
-        background: "rgba(5,14,5,0.95)",
+        background: "rgba(5,14,5,0.98)",
         borderTop: "1px solid #1a3a1a",
         padding: "12px 8px 20px",
         zIndex: 90,
@@ -1801,66 +1903,85 @@ export default function AdminDashboard() {
             { icon: "🔧", label: "Jobs", tab: "jobs" },
             { icon: "💰", label: "Payments", tab: "payments" },
             { icon: "📹", label: "Leads", tab: "video_leads" }
-          ].map((item) => (
-            <button
-              key={item.tab}
-              onClick={() => {
-                switchTab(item.tab as Tab);
-                setSidebarOpen(false);
-              }}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                background: "none",
-                border: "none",
-                color: activeTab === item.tab ? "#4CAF50" : "#5a8a5a",
-                padding: "8px 4px",
-                minWidth: "64px",
-                minHeight: "64px",
-                cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: activeTab === item.tab ? 700 : 500,
-                transition: "all 0.2s",
-                position: "relative",
-                flex: 1
-              }}
-              aria-label={`Switch to ${item.label}`}
-              onMouseOver={(e) => {
-                if (activeTab !== item.tab) {
-                  e.currentTarget.style.color = "#7ab87a";
-                }
-              }}
-              onMouseOut={(e) => {
-                if (activeTab !== item.tab) {
-                  e.currentTarget.style.color = "#5a8a5a";
-                }
-              }}
-            >
-              <span style={{ 
-                fontSize: "22px", 
-                marginBottom: "4px",
-                transition: "transform 0.2s",
-                transform: activeTab === item.tab ? "scale(1.1)" : "scale(1)"
-              }}>{item.icon}</span>
-              <span style={{
-                fontSize: "11px",
-                fontWeight: activeTab === item.tab ? 700 : 500,
-                letterSpacing: "0.3px"
-              }}>{item.label}</span>
-              {activeTab === item.tab && (
-                <div style={{
-                  position: "absolute",
-                  top: 0,
-                  width: "24px",
-                  height: "3px",
-                  background: "#4CAF50",
-                  borderRadius: "0 0 2px 2px",
-                  boxShadow: "0 0 8px rgba(76,175,80,0.5)"
-                }} />
-              )}
-            </button>
-          ))}
+          ].map((item) => {
+            const isActive = activeTab === item.tab;
+            return (
+              <button
+                key={item.tab}
+                onClick={() => {
+                  switchTab(item.tab as Tab);
+                  setSidebarOpen(false);
+                }}
+                data-active={isActive}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  background: isActive ? "rgba(76,175,80,0.15)" : "transparent",
+                  border: "none",
+                  color: isActive ? "#4CAF50" : "#5a8a5a",
+                  padding: "8px 4px",
+                  minWidth: "64px",
+                  minHeight: "64px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: isActive ? 700 : 500,
+                  transition: "all 0.2s",
+                  position: "relative",
+                  flex: 1,
+                  borderRadius: "12px",
+                  outline: "none"
+                }}
+                aria-label={`Switch to ${item.label}`}
+                onTouchStart={(e) => {
+                  e.currentTarget.style.transform = "scale(0.95)";
+                  e.currentTarget.style.background = "rgba(76,175,80,0.2)";
+                }}
+                onTouchEnd={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.background = isActive ? "rgba(76,175,80,0.15)" : "transparent";
+                }}
+                onMouseOver={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = "#7ab87a";
+                    e.currentTarget.style.background = "rgba(76,175,80,0.08)";
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = "#5a8a5a";
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+              >
+                <span style={{ 
+                  fontSize: "22px", 
+                  marginBottom: "4px",
+                  transition: "transform 0.2s",
+                  transform: isActive ? "scale(1.1)" : "scale(1)",
+                  display: "inline-block"
+                }}>{item.icon}</span>
+                <span style={{
+                  fontSize: "11px",
+                  fontWeight: isActive ? 700 : 500,
+                  letterSpacing: "0.3px"
+                }}>{item.label}</span>
+                {isActive && (
+                  <div style={{
+                    position: "absolute",
+                    top: 0,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: "24px",
+                    height: "3px",
+                    background: "#4CAF50",
+                    borderRadius: "0 0 2px 2px",
+                    boxShadow: "0 0 8px rgba(76,175,80,0.5)"
+                  }} />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
       
@@ -1902,6 +2023,43 @@ export default function AdminDashboard() {
         @supports (padding-bottom: env(safe-area-inset-bottom)) {
           .mobile-bottom-nav {
             padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+          }
+          .admin-content-inner {
+            padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+          }
+        }
+        
+        /* Improved mobile table touch interactions */
+        .table-row {
+          position: relative;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          padding: 12px 0;
+        }
+        .table-row:active {
+          background: rgba(76,175,80,0.08) !important;
+        }
+        
+        /* Better modal touch interactions */
+        @media (max-width: 600px) {
+          .JobModal > div,
+          .CustomerModal > div {
+            width: calc(100% - 20px) !important;
+            margin: 10px !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+          }
+          
+          /* Improved form inputs for mobile */
+          .JobModal input,
+          .JobModal select,
+          .JobModal textarea,
+          .CustomerModal input {
+            font-size: 16px !important;
+            min-height: 52px !important;
+            padding: 14px 16px !important;
           }
         }
       `}</style>
