@@ -752,8 +752,8 @@ export default function AdminDashboard() {
           cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
         }
         .quick-action:hover { background: rgba(76,175,80,0.1); color: #4CAF50; border-color: #4CAF50; }
-        .quick-action-danger { color: #ef5350; border-color: rgba(239,83,80,0.2); }
-        .quick-action-danger:hover { background: rgba(239,83,80,0.1) !important; color: #ef5350 !important; border-color: #ef5350 !important; }
+        .quick-action-danger { color: "#ef5350"; border-color: rgba(239,83,80,0.2); }
+        .quick-action-danger:hover { background: rgba(239,83,80,0.1) !important; color: "#ef5350" !important; border-color: "#ef5350" !important; }
 
         .mobile-toggle {
           display: none; position: fixed; top: 16px; left: 16px; z-index: 200;
@@ -836,20 +836,6 @@ export default function AdminDashboard() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-        }
-
-        /* ── Very small phones ── */
-        @media (max-width: 375px) {
-          .admin-content-inner {
-            padding: 72px 8px 60px;
-          }
-          .stats-grid-admin > div {
-            padding: 16px 12px !important;
-          }
-          .action-btn {
-            padding: 10px 14px !important;
-            font-size: 13px !important;
-          }
         }
 
         /* ── Improve touch scrolling ── */
@@ -1033,7 +1019,7 @@ export default function AdminDashboard() {
 
               {/* ─── MAIN CONTENT ─── */}
               <main className="admin-main" style={{ background: "linear-gradient(170deg, #050e05, #081808, #050e05)" }}>
-                <div className="admin-content-inner">
+                <div className="admin-content-inner" style={{ padding: "16px" }}>
                 {loading && isAdmin === null ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
                     <div style={{ textAlign: "center", color: "#3a5a3a" }}>
