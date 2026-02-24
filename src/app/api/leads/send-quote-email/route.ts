@@ -76,7 +76,7 @@ function buildEmailHtml(q: QuoteEmailPayload): string {
       <!-- Greeting -->
       <h2 style="margin:0 0 8px;font-size:22px;color:#1a1a1a;font-weight:700;">Hi ${q.customer_name},</h2>
       <p style="margin:0 0 24px;font-size:15px;color:#444;line-height:1.6;">
-        Thank you for submitting your video quote request! We've reviewed your property and prepared a customized estimate for you.
+        Thank you for choosing JHPS Florida! We've reviewed your property details and prepared a customized estimate for you.
       </p>
 
       <!-- Service summary -->
