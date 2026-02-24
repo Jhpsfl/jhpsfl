@@ -10,7 +10,6 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "JHPS Admin",
-  manifest: "/admin-manifest.json",
   appleWebApp: {
     capable: true,
     title: "JHPS Admin",
