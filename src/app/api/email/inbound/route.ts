@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const resp = await fetch(`https://api.resend.com/emails/receiving/${email_id}`, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+      headers: { Authorization: `Bearer ${process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY}` },
     });
     if (resp.ok) {
       const full = await resp.json();
