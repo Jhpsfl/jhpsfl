@@ -167,21 +167,28 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ─── Stat Card ───
-function StatCard({ icon, label, value, accent = false }: {
-  icon: string; label: string; value: string | number; accent?: boolean;
+function StatCard({ icon, label, value, accent = false, onClick }: {
+  icon: string; label: string; value: string | number; accent?: boolean; onClick?: () => void;
 }) {
   return (
-    <div style={{
-      background: accent
-        ? "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))"
-        : "linear-gradient(160deg, #0d1f0d, #091409)",
-      border: accent ? "1px solid rgba(76,175,80,0.3)" : "1px solid #1a3a1a",
-      borderRadius: 16, padding: "24px 20px",
-      transition: "transform 0.3s, box-shadow 0.3s",
-    }}
-    onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.2)"; }}
-    onMouseOut={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
+    <div
+      onClick={onClick}
+      style={{
+        background: accent
+          ? "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))"
+          : "linear-gradient(160deg, #0d1f0d, #091409)",
+        border: accent ? "1px solid rgba(76,175,80,0.3)" : "1px solid #1a3a1a",
+        borderRadius: 16, padding: "24px 20px",
+        transition: "transform 0.3s, box-shadow 0.3s",
+        cursor: onClick ? "pointer" : "default",
+        position: "relative",
+      }}
+      onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.2)"; }}
+      onMouseOut={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
     >
+      {onClick && (
+        <div style={{ position: "absolute", top: 12, right: 14, fontSize: 11, color: "#2a4a2a" }}>→</div>
+      )}
       <div style={{ fontSize: 24, marginBottom: 8 }}>{icon}</div>
       <div style={{
         fontSize: 28, fontWeight: 800, color: accent ? "#4CAF50" : "#e8f5e8",
@@ -882,38 +889,104 @@ export default function AdminDashboard() {
                     {/* ─── OVERVIEW TAB ─── */}
                     {activeTab === "overview" && overview && (
                       <>
-                        <div style={{ marginBottom: 32 }}>
-                          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8", fontWeight: 800, marginBottom: 4 }}>
-                            Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
-                          </h1>
-                          <p style={{ color: "#5a8a5a", fontSize: 15 }}>Here&apos;s what&apos;s happening with your business.</p>
+                        {/* ── Top bar: greeting + revenue pill ── */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+                          <div>
+                            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8", fontWeight: 800, marginBottom: 4 }}>
+                              Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
+                            </h1>
+                            <p style={{ color: "#5a8a5a", fontSize: 15 }}>Here&apos;s what&apos;s happening with your business.</p>
+                          </div>
+                          {/* Revenue info pill */}
+                          <div
+                            onClick={() => switchTab("payments")}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 10,
+                              background: "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))",
+                              border: "1px solid rgba(76,175,80,0.3)", borderRadius: 14,
+                              padding: "12px 20px", cursor: "pointer", transition: "all 0.2s",
+                              flexShrink: 0,
+                            }}
+                            onMouseOver={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 20px rgba(76,175,80,0.2)"; }}
+                            onMouseOut={e => { (e.currentTarget as HTMLElement).style.transform = "none"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
+                          >
+                            <span style={{ fontSize: 20 }}>💰</span>
+                            <div>
+                              <div style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Revenue (30d)</div>
+                              <div style={{ fontSize: 22, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                {formatCurrency(overview.recentRevenue)}
+                              </div>
+                            </div>
+                            <span style={{ color: "#2a4a2a", fontSize: 14, marginLeft: 4 }}>→</span>
+                          </div>
                         </div>
 
-                        <div className="stats-grid-admin" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 32 }}>
-                          <StatCard icon="👥" label="Customers" value={overview.totalCustomers} />
-                          <StatCard icon="📋" label="Active Jobs" value={overview.activeJobs} accent />
-                          <StatCard icon="✅" label="Completed" value={overview.completedJobs} />
-                          <StatCard icon="🔄" label="Subscriptions" value={overview.activeSubscriptions} />
-                          <StatCard icon="💰" label="Recent Revenue" value={formatCurrency(overview.recentRevenue)} accent />
+                        {/* ── Clickable stat cards (4 cards, no revenue) ── */}
+                        <div className="stats-grid-admin" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+                          <StatCard icon="👥" label="Customers" value={overview.totalCustomers} onClick={() => switchTab("customers")} />
+                          <StatCard icon="🔧" label="Active Jobs" value={overview.activeJobs} accent onClick={() => switchTab("jobs")} />
+                          <StatCard icon="✅" label="Completed" value={overview.completedJobs} onClick={() => switchTab("jobs")} />
+                          <StatCard icon="🔄" label="Subscriptions" value={overview.activeSubscriptions} onClick={() => switchTab("subscriptions")} />
                         </div>
 
-                        {/* Quick actions */}
-                        <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap" }}>
-                          <button className="action-btn action-btn-primary" onClick={() => { switchTab("jobs"); setTimeout(() => setShowJobModal(true), 100); }}>
-                            + New Job
-                          </button>
-                          <button className="action-btn action-btn-ghost" onClick={() => switchTab("customers")}>
-                            👥 View Customers
-                          </button>
-                          <button className="action-btn action-btn-ghost" onClick={() => switchTab("payments")}>
-                            💰 Payments
-                          </button>
-                          <Link href="/pay" target="_blank" className="action-btn action-btn-ghost" style={{ textDecoration: "none" }}>
-                            💳 Payment Page ↗
+                        {/* ── Separator ── */}
+                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, #1a3a1a, transparent)", margin: "4px 0 20px" }} />
+
+                        {/* ── Compact nav tabs ── */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+                          {[
+                            { icon: "➕", label: "New Job", action: () => { switchTab("jobs"); setTimeout(() => setShowJobModal(true), 100); }, primary: true },
+                            { icon: "👥", label: "Customers", action: () => switchTab("customers") },
+                            { icon: "🔧", label: "Jobs", action: () => switchTab("jobs") },
+                            { icon: "💰", label: "Payments", action: () => switchTab("payments") },
+                            { icon: "🔄", label: "Subscriptions", action: () => switchTab("subscriptions") },
+                            { icon: "📹", label: "Video Quotes", action: () => switchTab("video_leads") },
+                            { icon: "✉️", label: "Messages", action: () => switchTab("messages") },
+                          ].map(({ icon, label, action, primary }) => (
+                            <button
+                              key={label}
+                              onClick={action}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 5,
+                                padding: "6px 14px", borderRadius: 20, border: "none",
+                                background: primary
+                                  ? "linear-gradient(135deg, #4CAF50, #2E7D32)"
+                                  : "rgba(76,175,80,0.08)",
+                                color: primary ? "#fff" : "#7ab87a",
+                                fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                fontFamily: "'DM Sans', sans-serif",
+                                border: primary ? "none" : "1px solid #1a3a1a",
+                                transition: "all 0.15s",
+                                boxShadow: primary ? "0 2px 12px rgba(76,175,80,0.25)" : "none",
+                              } as React.CSSProperties}
+                              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = primary ? "linear-gradient(135deg, #56c75a, #388e3c)" : "rgba(76,175,80,0.14)"; }}
+                              onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = primary ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "rgba(76,175,80,0.08)"; }}
+                            >
+                              <span style={{ fontSize: 13 }}>{icon}</span>
+                              {label}
+                            </button>
+                          ))}
+                          <Link
+                            href="/pay"
+                            target="_blank"
+                            style={{
+                              display: "flex", alignItems: "center", gap: 5,
+                              padding: "6px 14px", borderRadius: 20,
+                              background: "rgba(76,175,80,0.08)", border: "1px solid #1a3a1a",
+                              color: "#7ab87a", fontSize: 12, fontWeight: 600,
+                              fontFamily: "'DM Sans', sans-serif", textDecoration: "none",
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            <span style={{ fontSize: 13 }}>💳</span>
+                            Payment Page ↗
                           </Link>
                         </div>
 
-                        {/* Recent customers */}
+                        {/* ── Separator ── */}
+                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, #1a3a1a, transparent)", margin: "4px 0 24px" }} />
+
+                        {/* ── Recent customers ── */}
                         <div style={{ marginBottom: 32 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                             <h3 style={{ fontSize: 16, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
@@ -931,7 +1004,7 @@ export default function AdminDashboard() {
                           </DataTable>
                         </div>
 
-                        {/* Recent payments */}
+                        {/* ── Recent payments ── */}
                         {overview.recentPayments.length > 0 && (
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
