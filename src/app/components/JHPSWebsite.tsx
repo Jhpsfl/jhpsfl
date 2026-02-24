@@ -591,7 +591,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
         .sticky-bar {
           position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
           background: rgba(5,14,5,0.95); backdrop-filter: blur(20px);
-          border-top: 1px solid #1a3a1a; padding: 12px 16px; display: none;
+          border-top: 1px solid #1a3a1a; padding: 8px 12px; display: none;
           animation: slideUp 0.3s ease;
         }
         @media (max-width: 768px) { .sticky-bar { display: flex; gap: 10px; } }
@@ -1337,22 +1337,22 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       <div className="sticky-bar">
         <a href={phoneHref} style={{
           flex: 1, background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`, color: "#fff",
-          border: "none", padding: "14px", borderRadius: 14, fontSize: 14, fontWeight: 700,
+          border: "none", padding: "9px 6px", borderRadius: 12, fontSize: 13, fontWeight: 700,
           textAlign: "center", textDecoration: "none", display: "block",
         }}>
           📞 Call
         </a>
         <Link href="/get-quote" style={{
           flex: 1.4, background: "linear-gradient(135deg, #b8860b, #ffd700, #b8860b)",
-          color: "#0a0a00", padding: "14px", borderRadius: 14,
-          fontSize: 14, fontWeight: 800, textAlign: "center", textDecoration: "none", display: "block",
+          color: "#0a0a00", padding: "9px 6px", borderRadius: 12,
+          fontSize: 13, fontWeight: 800, textAlign: "center", textDecoration: "none", display: "block",
           boxShadow: "0 2px 16px rgba(184,134,11,0.5)",
         }}>
           📹 Video Quote
         </Link>
         <a href={`sms:${phone}`} style={{
           flex: 1, background: "transparent", color: primaryHex,
-          border: "2px solid #2a5a2a", padding: "12px", borderRadius: 14,
+          border: "2px solid #2a5a2a", padding: "7px 6px", borderRadius: 12,
           fontSize: 14, fontWeight: 700, textAlign: "center", textDecoration: "none", display: "block",
         }}>
           💬 Text
