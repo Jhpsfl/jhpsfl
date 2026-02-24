@@ -776,34 +776,198 @@ export default function AdminDashboard() {
         /* ── Tablet / collapsed sidebar ── */
         @media (max-width: 900px) {
           .admin-layout { grid-template-columns: 1fr; }
-          .admin-sidebar { transform: translateX(-100%); transition: transform 0.3s; width: 280px; }
+          .admin-sidebar { 
+            transform: translateX(-100%); 
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            width: 280px; 
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+          }
           .admin-sidebar.open { transform: translateX(0); }
           .admin-main { margin-left: 0; }
           .admin-content-inner { padding: 64px 14px 56px; }
-          .mobile-toggle { display: flex; }
-          .mobile-overlay.open { display: block; }
-          .stats-grid-admin { grid-template-columns: repeat(3, 1fr) !important; }
-          .stats-grid-admin > div { padding: 16px 12px !important; border-radius: 12px !important; }
-          .admin-content-inner table th { padding: 9px 8px !important; font-size: 10px !important; letter-spacing: 0.8px !important; }
-          .admin-content-inner table td { padding: 9px 8px !important; font-size: 12px !important; }
-          .quick-action { padding: 3px 8px !important; font-size: 10px !important; }
-          .action-btn { padding: 7px 12px !important; font-size: 12px !important; }
-          .admin-content-inner h1 { font-size: 20px !important; }
-          .search-input { width: 200px !important; }
+          .mobile-toggle { 
+            display: flex; 
+            z-index: 200;
+            background: rgba(5,14,5,0.95); 
+            border: 1px solid #1a3a1a;
+            border-radius: 12px; 
+            padding: 12px 16px; 
+            cursor: pointer;
+            color: #4CAF50; 
+            font-size: 22px;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            min-height: 48px;
+          }
+          .mobile-overlay.open { 
+            display: block; 
+            backdrop-filter: blur(4px);
+            background: rgba(0,0,0,0.7);
+          }
+          .stats-grid-admin { 
+            grid-template-columns: repeat(2, 1fr) !important; 
+            gap: 12px !important;
+          }
+          .stats-grid-admin > div { 
+            padding: 16px 12px !important; 
+            border-radius: 12px !important; 
+            min-height: 100px;
+          }
+          .admin-content-inner table { 
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .admin-content-inner table th { 
+            padding: 12px 8px !important; 
+            font-size: 11px !important; 
+            letter-spacing: 0.8px !important; 
+            min-width: 80px;
+          }
+          .admin-content-inner table td { 
+            padding: 12px 8px !important; 
+            font-size: 13px !important; 
+            min-width: 80px;
+          }
+          .quick-action { 
+            padding: 8px 12px !important; 
+            font-size: 11px !important; 
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+          }
+          .action-btn { 
+            padding: 10px 16px !important; 
+            font-size: 13px !important; 
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .admin-content-inner h1 { 
+            font-size: 22px !important; 
+            line-height: 1.3;
+            margin-bottom: 8px;
+          }
+          .search-input { 
+            width: 100% !important; 
+            min-height: 44px;
+            font-size: 16px; /* Prevents iOS zoom */
+          }
+          .nav-item button {
+            min-height: 44px;
+            padding: 12px 16px !important;
+          }
+          .stat-card {
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+          }
         }
 
         /* ── Mobile phone ── */
         @media (max-width: 600px) {
-          .admin-content-inner { padding: 60px 8px 56px; }
-          .stats-grid-admin { grid-template-columns: 1fr 1fr !important; }
-          .stats-grid-admin > div { padding: 14px 10px !important; }
-          .stats-grid-admin > div > div:nth-child(1) { font-size: 18px !important; margin-bottom: 4px !important; }
-          .stats-grid-admin > div > div:nth-child(2) { font-size: 20px !important; }
-          .stats-grid-admin > div > div:nth-child(3) { font-size: 10px !important; }
-          .admin-content-inner table th { padding: 7px 6px !important; font-size: 9px !important; letter-spacing: 0.3px !important; }
-          .admin-content-inner table td { padding: 7px 6px !important; font-size: 11px !important; }
-          .admin-content-inner h1 { font-size: 18px !important; }
-          .action-btn { padding: 6px 10px !important; font-size: 11px !important; }
+          .admin-content-inner { 
+            padding: 72px 12px 60px; 
+          }
+          .stats-grid-admin { 
+            grid-template-columns: 1fr !important; 
+            gap: 10px !important;
+          }
+          .stats-grid-admin > div { 
+            padding: 18px 14px !important; 
+            min-height: 110px;
+          }
+          .stats-grid-admin > div > div:nth-child(1) { 
+            font-size: 20px !important; 
+            margin-bottom: 6px !important; 
+          }
+          .stats-grid-admin > div > div:nth-child(2) { 
+            font-size: 24px !important; 
+            margin-bottom: 4px !important;
+          }
+          .stats-grid-admin > div > div:nth-child(3) { 
+            font-size: 11px !important; 
+          }
+          .admin-content-inner table th { 
+            padding: 14px 8px !important; 
+            font-size: 10px !important; 
+            letter-spacing: 0.5px !important; 
+          }
+          .admin-content-inner table td { 
+            padding: 14px 8px !important; 
+            font-size: 12px !important; 
+          }
+          .admin-content-inner h1 { 
+            font-size: 20px !important; 
+            margin-bottom: 12px;
+          }
+          .action-btn { 
+            padding: 12px 18px !important; 
+            font-size: 14px !important; 
+            min-height: 48px;
+          }
+          .quick-action {
+            min-height: 36px;
+            padding: 10px 14px !important;
+          }
+          .mobile-toggle {
+            top: 12px;
+            left: 12px;
+            padding: 14px;
+          }
+          /* Improve touch targets for all interactive elements */
+          button, 
+          [role="button"],
+          .nav-item,
+          .table-row {
+            min-height: 44px;
+          }
+          /* Make modals more mobile-friendly */
+          .modal-content {
+            max-height: 85vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          /* Improve form inputs for mobile */
+          input, select, textarea {
+            font-size: 16px !important; /* Prevents iOS zoom */
+            min-height: 44px;
+          }
+          /* Better spacing for mobile */
+          .section-spacing {
+            margin-bottom: 24px !important;
+          }
+        }
+
+        /* ── Very small phones ── */
+        @media (max-width: 375px) {
+          .admin-content-inner {
+            padding: 72px 8px 60px;
+          }
+          .stats-grid-admin > div {
+            padding: 16px 12px !important;
+          }
+          .action-btn {
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+          }
+        }
+
+        /* ── Improve touch scrolling ── */
+        .admin-sidebar,
+        .admin-content-inner,
+        .modal-content {
+          -webkit-overflow-scrolling: touch;
+          scroll-behavior: smooth;
+        }
+
+        /* ── Prevent text size adjustment on orientation change ── */
+        html {
+          -webkit-text-size-adjust: 100%;
+          text-size-adjust: 100%;
         }
       `}</style>
 
@@ -849,11 +1013,36 @@ export default function AdminDashboard() {
 
         {isAdmin !== false && (
           <>
-            {/* Mobile toggle */}
-            <button className="mobile-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-              {sidebarOpen ? "✕" : "☰"}
+            {/* Mobile toggle - improved for accessibility */}
+            <button 
+              className="mobile-toggle" 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+              aria-expanded={sidebarOpen}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              {sidebarOpen ? (
+                <span style={{ fontSize: "24px", lineHeight: 1 }}>✕</span>
+              ) : (
+                <span style={{ fontSize: "24px", lineHeight: 1 }}>☰</span>
+              )}
             </button>
-            <div className={`mobile-overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
+            <div 
+              className={`mobile-overlay ${sidebarOpen ? "open" : ""}`} 
+              onClick={() => setSidebarOpen(false)}
+              role="button"
+              tabIndex={0}
+              aria-label="Close menu"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setSidebarOpen(false);
+                }
+              }}
+            />
 
             <div className="admin-layout">
               {/* ─── SIDEBAR ─── */}
@@ -1343,6 +1532,81 @@ export default function AdminDashboard() {
           </>
         )}
       </SignedIn>
+      
+      {/* Mobile bottom navigation for quick access */}
+      <div className="mobile-bottom-nav" style={{
+        display: "none",
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: "linear-gradient(180deg, #071207 0%, #050e05 100%)",
+        borderTop: "1px solid #1a3a1a",
+        padding: "8px 12px",
+        zIndex: 90,
+        backdropFilter: "blur(10px)"
+      }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-around",
+          alignItems: "center"
+        }}>
+          {[
+            { icon: "📊", label: "Overview", tab: "overview" },
+            { icon: "👥", label: "Customers", tab: "customers" },
+            { icon: "🔧", label: "Jobs", tab: "jobs" },
+            { icon: "💰", label: "Payments", tab: "payments" },
+            { icon: "📹", label: "Leads", tab: "video_leads" }
+          ].map((item) => (
+            <button
+              key={item.tab}
+              onClick={() => switchTab(item.tab as Tab)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                background: "none",
+                border: "none",
+                color: activeTab === item.tab ? "#4CAF50" : "#5a8a5a",
+                padding: "8px 4px",
+                minWidth: "60px",
+                minHeight: "60px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: activeTab === item.tab ? 700 : 500,
+                transition: "all 0.2s"
+              }}
+              aria-label={`Switch to ${item.label}`}
+            >
+              <span style={{ fontSize: "20px", marginBottom: "4px" }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      <style>{`
+        @media (max-width: 900px) {
+          .mobile-bottom-nav {
+            display: block !important;
+          }
+          .admin-content-inner {
+            padding-bottom: 80px !important;
+          }
+        }
+        @media (max-width: 600px) {
+          .mobile-bottom-nav {
+            padding: 6px 8px;
+          }
+          .mobile-bottom-nav button {
+            min-width: 56px;
+            font-size: 11px;
+          }
+          .mobile-bottom-nav span:first-child {
+            font-size: 18px;
+          }
+        }
+      `}</style>
     </>
   );
 }

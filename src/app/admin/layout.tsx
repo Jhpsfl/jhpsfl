@@ -5,7 +5,9 @@ export const viewport: Viewport = {
   themeColor: "#050e05",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
+  userScalable: false,
 };
 
 export const metadata: Metadata = {
@@ -25,6 +27,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <AdminSwRegistrar />
+      {/* Add mobile-friendly meta tags */}
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="HandheldFriendly" content="true" />
+      </head>
       {children}
     </>
   );

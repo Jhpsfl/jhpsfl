@@ -18,5 +18,28 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "portrait-primary",
     categories: ["business", "productivity"],
+    // Additional PWA features for better mobile experience
+    shortcuts: [
+      {
+        name: "New Job",
+        short_name: "New Job",
+        description: "Create a new job",
+        url: "/admin?action=new-job",
+        icons: [{ src: "/favicon-192.png", sizes: "192x192" }]
+      },
+      {
+        name: "Video Leads",
+        short_name: "Leads",
+        description: "View video quote leads",
+        url: "/admin?tab=video_leads",
+        icons: [{ src: "/favicon-192.png", sizes: "192x192" }]
+      }
+    ],
+    // Better mobile support
+    prefer_related_applications: false,
+    // iOS specific
+    apple_touch_icon: "/favicon-192.png",
+    apple_mobile_web_app_capable: "yes",
+    apple_mobile_web_app_status_bar_style: "black-translucent",
   };
 }
