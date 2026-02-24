@@ -10,6 +10,7 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import AdminVideoLeads from "./AdminVideoLeads";
+import AdminInbox from "./AdminInbox";
 
 // ─── Types ───
 interface Customer {
@@ -110,7 +111,7 @@ interface CustomerDetail {
   invoices: Invoice[];
 }
 
-type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads";
+type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages";
 
 // ─── Helpers ───
 function formatDate(d: string | null) {
@@ -846,6 +847,7 @@ export default function AdminDashboard() {
                   <NavItem icon="💰" label="Payments" active={activeTab === "payments"} onClick={() => switchTab("payments")} />
                   <NavItem icon="🔄" label="Subscriptions" active={activeTab === "subscriptions"} onClick={() => switchTab("subscriptions")} />
                   <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} />
+                  <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} />
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
 
@@ -1188,6 +1190,11 @@ export default function AdminDashboard() {
                     {/* ─── VIDEO LEADS TAB ─── */}
                     {activeTab === "video_leads" && userId && (
                       <AdminVideoLeads userId={userId} />
+                    )}
+
+                    {/* ─── MESSAGES TAB ─── */}
+                    {activeTab === "messages" && userId && (
+                      <AdminInbox userId={userId} />
                     )}
                   </div>
                 )}
