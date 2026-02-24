@@ -784,6 +784,8 @@ export default function AdminDashboard() {
             width: 280px; 
             box-shadow: 0 0 40px rgba(0,0,0,0.5);
             z-index: 1000;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
           }
           .admin-sidebar.open { 
             transform: translateX(0); 
@@ -806,12 +808,18 @@ export default function AdminDashboard() {
             min-width: 48px;
             min-height: 48px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+          }
+          .mobile-toggle:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px rgba(76,175,80,0.3);
           }
           .mobile-overlay.open { 
             display: block; 
             backdrop-filter: blur(8px);
             background: rgba(0,0,0,0.8);
             z-index: 999;
+            animation: fadeIn 0.3s ease;
           }
           .stats-grid-admin { 
             grid-template-columns: repeat(2, 1fr) !important; 
