@@ -122,3 +122,22 @@ async function fallbackThreadQuery(supabase: ReturnType<typeof createSupabaseAdm
 
   return NextResponse.json({ threads });
 }
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const clerkUserId = searchParams.get('clerk_user_id');
+  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const supabase = createSupabaseAdmin();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const body = await req.json();
+  const { thread_ids } = body as { thread_ids: string[] };
+  if (!thread_ids?.length) return NextResponse.json({ error: 'No thread_ids provided' }, { status: 400 });
+
+  const { error } = await supabase.from('email_messages').delete().in('thread_id', thread_ids);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ deleted: thread_ids.length });
+}
