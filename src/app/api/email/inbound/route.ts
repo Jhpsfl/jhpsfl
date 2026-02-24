@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
         ? `<p style="color:#888;font-size:12px;margin-bottom:16px">Forwarded from: ${from}<br>To: ${to_email}</p>${body_html}`
         : `<p style="color:#888;font-size:12px;margin-bottom:16px">From: ${from}</p><pre>${body_text || ''}</pre>`,
       text: `From: ${from}\n\n${body_text || ''}`,
-      reply_to: [from_email],
+      replyTo: from_email,
     });
   } catch (err) {
     console.error('Forward to Gmail failed (non-fatal):', err);
