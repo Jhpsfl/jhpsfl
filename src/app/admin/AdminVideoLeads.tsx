@@ -494,6 +494,12 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
                       }}>📧 Send</button>
                     </>
                   )}
+                  {q.status !== "draft" && (
+                    <button onClick={() => sendExistingQuote(q.id, leadDetail.lead.id)} style={{
+                      padding: "5px 12px", borderRadius: 8, border: "1px solid #2E7D32",
+                      background: "transparent", color: "#4CAF50", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    }}>↺ Resend</button>
+                  )}
                 </div>
               </div>
 
