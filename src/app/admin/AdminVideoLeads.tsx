@@ -194,7 +194,7 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
 
     if (res.ok) {
       const data = await res.json();
-      showToast("Media deleted successfully");
+      showToast("Media file deleted successfully");
       
       // Update local state immediately for better UX
       if (leadDetail) {
@@ -203,14 +203,13 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           media: leadDetail.media.filter(m => m.id !== mediaId)
         });
       }
-      
-      // Also refresh from server to ensure consistency
-      if (selectedLead) {
-        fetchLeadDetail(selectedLead);
-      }
     } else {
-      const error = await res.json();
-      showToast(`Failed to delete: ${error.error}`, "error");
+      try {
+        const error = await res.json();
+        showToast(`Failed to delete: ${error.error || "Unknown error"}`, "error");
+      } catch {
+        showToast("Failed to delete media: Network error", "error");
+      }
     }
   };
 

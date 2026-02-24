@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
       await deleteFromB2(media.storage_path);
     } catch (b2Error) {
       console.error("Failed to delete from B2:", b2Error);
-      // Continue with DB deletion even if B2 fails
+      // Continue with DB deletion even if B2 fails, but log it
+      // We could choose to return an error here, but for now we continue
     }
 
     // 3. Delete from Supabase
