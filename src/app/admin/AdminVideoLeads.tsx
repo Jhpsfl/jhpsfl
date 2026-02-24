@@ -203,6 +203,18 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
           media: leadDetail.media.filter(m => m.id !== mediaId)
         });
       }
+      // Also update the leads list to reflect the change
+      setLeads(prevLeads => 
+        prevLeads.map(lead => {
+          if (lead.id === selectedLead && lead.lead_media) {
+            return {
+              ...lead,
+              lead_media: lead.lead_media.filter(m => m.id !== mediaId)
+            };
+          }
+          return lead;
+        })
+      );
     } else {
       try {
         const error = await res.json();
