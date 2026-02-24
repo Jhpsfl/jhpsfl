@@ -719,7 +719,7 @@ export default function AdminDashboard() {
           overflow-y: auto;
         }
         .admin-main { margin-left: 260px; min-height: 100vh; overflow-x: hidden; }
-        .admin-content-inner { padding: 28px 28px 60px; max-width: 1400px; }
+        .admin-content-inner { padding: 16px; max-width: 1400px; }
 
         .search-input {
           width: 100%; padding: 10px 14px 10px 36px; background: #0a160a;
@@ -766,441 +766,47 @@ export default function AdminDashboard() {
           z-index: 99;
         }
 
-        /* ── Windowed desktop: ~1150px and below, sidebar still visible ── */
-        @media (max-width: 1150px) {
-          .admin-content-inner { padding: 22px 18px 56px; }
-          .admin-content-inner h1 { font-size: 22px !important; }
-          .admin-content-inner table th { padding: 10px 10px !important; }
-          .admin-content-inner table td { padding: 10px 10px !important; font-size: 13px !important; }
-          .stats-grid-admin > div { padding: 18px 14px !important; }
-        }
-
-        /* ── Tablet / collapsed sidebar ── */
+        /* ── High-Density Mobile Styles ── */
         @media (max-width: 900px) {
           .admin-layout { grid-template-columns: 1fr; }
           .admin-sidebar { 
             transform: translateX(-100%); 
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             width: 280px; 
-            box-shadow: 0 0 40px rgba(0,0,0,0.5);
-            z-index: 1000;
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
           }
-          .admin-sidebar.open { 
-            transform: translateX(0); 
-            box-shadow: 0 0 60px rgba(0,0,0,0.7);
-          }
+          .admin-sidebar.open { transform: translateX(0); }
           .admin-main { margin-left: 0; }
-          .admin-content-inner { padding: 64px 14px 56px; }
-          .mobile-toggle { 
-            display: flex; 
-            z-index: 2000;
-            background: rgba(5,14,5,0.95); 
-            border: 1px solid #1a3a1a;
-            border-radius: 12px; 
-            padding: 12px 16px; 
-            cursor: pointer;
-            color: #4CAF50; 
-            font-size: 22px;
-            align-items: center;
-            justify-content: center;
-            min-width: 48px;
-            min-height: 48px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-          }
-          .mobile-toggle:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 25px rgba(76,175,80,0.3);
-          }
-          .mobile-overlay.open { 
-            display: block; 
-            backdrop-filter: blur(8px);
-            background: rgba(0,0,0,0.8);
-            z-index: 999;
-            animation: fadeIn 0.3s ease;
-          }
-          .stats-grid-admin { 
-            grid-template-columns: repeat(2, 1fr) !important; 
-            gap: 12px !important;
-          }
-          .stats-grid-admin > div { 
-            padding: 16px 12px !important; 
-            border-radius: 12px !important; 
-            min-height: 100px;
-          }
+          .admin-content-inner { padding: 16px; }
+          .mobile-toggle { display: flex; }
+          .mobile-overlay.open { display: block; }
           
-          /* Mobile-optimized tables */
-          .admin-content-inner table { 
-            display: block;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
+          /* Compact tables */
           .admin-content-inner table th { 
-            padding: 14px 10px !important; 
-            font-size: 11px !important; 
-            letter-spacing: 0.8px !important; 
-            min-width: 80px;
+            padding: 8px 6px !important; 
+            font-size: 10px !important; 
           }
           .admin-content-inner table td { 
-            padding: 14px 10px !important; 
-            font-size: 13px !important; 
-            min-width: 80px;
+            padding: 8px 6px !important; 
+            font-size: 11px !important; 
           }
           
-          /* Stacked table layout for very small screens */
-          .mobile-stacked-table {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          }
-          .mobile-stacked-table .table-row {
-            background: linear-gradient(160deg, #0d1f0d, #091409);
-            border: 1px solid #1a3a1a;
-            border-radius: 12px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-          }
-          .mobile-stacked-table .table-cell {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(26,58,26,0.3);
-          }
-          .mobile-stacked-table .table-cell:last-child {
-            border-bottom: none;
-          }
-          .mobile-stacked-table .table-label {
-            font-size: 11px;
-            color: #5a8a5a;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            min-width: 80px;
-          }
-          .mobile-stacked-table .table-value {
-            font-size: 14px;
-            color: #e8f5e8;
-            text-align: right;
-            flex: 1;
-          }
-          
-          .quick-action { 
-            padding: 10px 14px !important; 
-            font-size: 12px !important; 
-            min-height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .action-btn { 
-            padding: 12px 18px !important; 
-            font-size: 14px !important; 
-            min-height: 48px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-          }
-          .admin-content-inner h1 { 
-            font-size: 24px !important; 
-            line-height: 1.3;
-            margin-bottom: 8px;
-          }
-          .search-input { 
-            width: 100% !important; 
-            min-height: 48px;
-            font-size: 16px; /* Prevents iOS zoom */
-            padding: 12px 16px 12px 42px;
-          }
-          .nav-item button {
-            min-height: 52px;
-            padding: 14px 18px !important;
-            font-size: 15px;
-            gap: 14px;
-          }
-          .stat-card {
-            min-height: 120px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-          }
-          
-          /* Mobile modal improvements */
-          .modal-content {
-            max-height: 85vh;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            padding: 20px;
-            border-radius: 20px;
-            margin: 20px;
-            width: calc(100% - 40px);
-          }
-          
-          /* Mobile form improvements */
-          .mobile-form-input {
-            font-size: 16px !important;
-            min-height: 52px;
-            padding: 14px 16px !important;
-          }
-          
-          /* Mobile tab improvements */
-          .mobile-tab-container {
-            display: flex;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            gap: 8px;
-            padding: 8px 0;
-            margin-bottom: 16px;
-          }
-          .mobile-tab {
-            padding: 12px 18px;
-            white-space: nowrap;
-            min-height: 48px;
+          /* Navigation Grid - 2 columns on very small screens */
+          @media (max-width: 480px) {
+            .navigation-grid { grid-template-columns: repeat(2, 1fr) !important; }
           }
         }
 
-        /* ── Mobile phone ── */
-        @media (max-width: 600px) {
-          .admin-content-inner { 
-            padding: 72px 12px 80px; 
-          }
-          .stats-grid-admin { 
-            grid-template-columns: 1fr !important; 
-            gap: 10px !important;
-          }
-          .stats-grid-admin > div { 
-            padding: 20px 16px !important; 
-            min-height: 120px;
-          }
-          .stats-grid-admin > div > div:nth-child(1) { 
-            font-size: 22px !important; 
-            margin-bottom: 8px !important; 
-          }
-          .stats-grid-admin > div > div:nth-child(2) { 
-            font-size: 28px !important; 
-            margin-bottom: 6px !important;
-          }
-          .stats-grid-admin > div > div:nth-child(3) { 
-            font-size: 12px !important; 
-          }
-          
-          /* Force stacked tables on small mobile */
-          .mobile-force-stack table {
-            display: none !important;
-          }
-          .mobile-force-stack .mobile-stacked-table {
-            display: flex !important;
-          }
-          
-          /* Enhanced stacked table design */
-          .mobile-stacked-table .table-row {
-            padding: 20px;
-            gap: 12px;
-            border: 1px solid #1a3a1a;
-            margin-bottom: 12px;
-            border-radius: 16px;
-            background: linear-gradient(160deg, #0d1f0d, #091409);
-          }
-          .mobile-stacked-table .table-cell {
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(76,175,80,0.1);
-          }
-          .mobile-stacked-table .table-label {
-            font-size: 12px;
-            color: #4CAF50;
-            min-width: 90px;
-          }
-          .mobile-stacked-table .table-value {
-            font-size: 15px;
-            color: #e8f5e8;
-            text-align: right;
-            font-weight: 500;
-          }
-          
-          .admin-content-inner table th { 
-            padding: 16px 10px !important; 
-            font-size: 11px !important; 
-            letter-spacing: 0.5px !important; 
-          }
-          .admin-content-inner table td { 
-            padding: 16px 10px !important; 
-            font-size: 13px !important; 
-          }
-          .admin-content-inner h1 { 
-            font-size: 22px !important; 
-            margin-bottom: 16px;
-          }
-          .action-btn { 
-            padding: 14px 20px !important; 
-            font-size: 15px !important; 
-            min-height: 52px;
-          }
-          .quick-action {
-            min-height: 44px;
-            padding: 12px 16px !important;
-            font-size: 13px !important;
-            border-radius: 10px;
-          }
-          .mobile-toggle {
-            top: 16px;
-            left: 16px;
-            padding: 16px;
-            min-width: 52px;
-            min-height: 52px;
-            background: rgba(5,14,5,0.98);
-            border: 1px solid #4CAF50;
-            box-shadow: 0 4px 20px rgba(76,175,80,0.3);
-          }
-          
-          /* Enhanced touch targets */
-          button, 
-          [role="button"],
-          .nav-item,
-          .table-row,
-          .action-btn,
-          .quick-action {
-            min-height: 44px;
-          }
-          
-          /* Mobile modals */
-          .modal-content {
-            max-height: 90vh;
-            margin: 10px;
-            width: calc(100% - 20px);
-            padding: 24px 20px;
-            border-radius: 24px;
-            border: 1px solid #1a3a1a;
-            background: linear-gradient(160deg, #0d1f0d, #091409);
-          }
-          
-          /* Mobile form inputs */
-          input, select, textarea {
-            font-size: 16px !important;
-            min-height: 52px;
-            padding: 14px 16px !important;
-            border-radius: 12px;
-            background: #0a160a;
-            border: 1px solid #1a3a1a;
-          }
-          
-          /* Better spacing */
-          .section-spacing {
-            margin-bottom: 28px !important;
-          }
-          
-          /* Mobile bottom nav adjustments */
-          .mobile-bottom-nav {
-            padding: 12px 8px 20px !important;
-            border-top: 1px solid #1a3a1a;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
-            background: rgba(5,14,5,0.98);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-          }
-          .mobile-bottom-nav button {
-            min-height: 56px;
-            padding: 8px 4px !important;
-            min-width: 64px;
-            border-radius: 12px;
-            transition: all 0.2s ease;
-          }
-          .mobile-bottom-nav button:active {
-            background: rgba(76,175,80,0.15);
-            transform: scale(0.95);
-          }
-          .mobile-bottom-nav span:first-child {
-            font-size: 22px !important;
-            margin-bottom: 4px;
-          }
-          .mobile-bottom-nav span:last-child {
-            font-size: 12px !important;
-            font-weight: 600;
-          }
-          
-          /* Active state for bottom nav */
-          .mobile-bottom-nav button[data-active="true"] {
-            color: #4CAF50;
-            background: rgba(76,175,80,0.1);
-          }
-          
-          /* Improved search input */
-          .search-input {
-            min-height: 52px;
-            border-radius: 12px;
-            font-size: 16px;
-            padding: 14px 16px 14px 48px;
-            background: #0a160a;
-            border: 1px solid #1a3a1a;
-          }
-          
-          /* Better spacing for mobile cards */
-          .stat-card {
-            padding: 20px 16px !important;
-            border-radius: 16px !important;
-            min-height: 120px;
-          }
+        /* Remove all touch target size increases - keep compact */
+        button, [role="button"], .action-btn, .quick-action {
+          min-height: 32px !important;
+          padding: 6px 10px !important;
         }
-        
-        /* ── Very small phones ── */
-        @media (max-width: 375px) {
-          .admin-content-inner {
-            padding: 72px 8px 80px;
-          }
-          .stats-grid-admin > div {
-            padding: 18px 14px !important;
-            border-radius: 14px !important;
-          }
-          .action-btn {
-            padding: 12px 16px !important;
-            font-size: 14px !important;
-            min-height: 48px;
-            border-radius: 12px;
-          }
-          .mobile-bottom-nav button {
-            min-width: 56px;
-            font-size: 11px;
-            padding: 6px 2px !important;
-          }
-          .mobile-bottom-nav span:first-child {
-            font-size: 20px !important;
-          }
-          .mobile-bottom-nav span:last-child {
-            font-size: 11px !important;
-          }
-          
-          /* Even smaller stacked tables */
-          .mobile-stacked-table .table-row {
-            padding: 16px;
-            gap: 10px;
-          }
-          .mobile-stacked-table .table-label {
-            font-size: 11px;
-            min-width: 80px;
-          }
-          .mobile-stacked-table .table-value {
-            font-size: 14px;
-          }
-          
-          /* Better modal sizing */
-          .modal-content {
-            margin: 8px;
-            width: calc(100% - 16px);
-            padding: 20px 16px;
-            border-radius: 20px;
-          }
-          
-          /* Improved touch targets */
-          .quick-action {
-            min-height: 40px;
-            padding: 10px 14px !important;
-            font-size: 12px !important;
-          }
-        }
+
+        /* Reduce all font sizes for high density */
+        .admin-content-inner h1 { font-size: 20px !important; }
+        .admin-content-inner h3 { font-size: 14px !important; }
+        .admin-content-inner p, .admin-content-inner td { font-size: 12px !important; }
+        .action-btn { font-size: 12px !important; }
+        .quick-action { font-size: 10px !important; }
         
         /* ── Mobile sidebar touch improvements ── */
         .admin-sidebar {
@@ -1440,107 +1046,88 @@ export default function AdminDashboard() {
                     {/* ─── OVERVIEW TAB ─── */}
                     {activeTab === "overview" && overview && (
                       <>
-                        {/* ── Top bar: greeting + revenue pill ── */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-                          <div>
-                            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: "#e8f5e8", fontWeight: 800, marginBottom: 4 }}>
-                              Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
-                            </h1>
-                            <p style={{ color: "#5a8a5a", fontSize: 15 }}>Here&apos;s what&apos;s happening with your business.</p>
+                        {/* ── Top bar: greeting ── */}
+                        <div style={{ marginBottom: 16 }}>
+                          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 800, marginBottom: 4 }}>
+                            Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
+                          </h1>
+                          <p style={{ color: "#5a8a5a", fontSize: 12 }}>Here&apos;s what&apos;s happening with your business.</p>
+                        </div>
+
+                        {/* Stats Ticker */}
+                        <div style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          padding: "8px 12px", background: "#0a160a", border: "1px solid #1a3a1a",
+                          borderRadius: 8, marginBottom: 8, fontSize: 11, color: "#5a8a5a",
+                          fontWeight: 600, letterSpacing: 0.5,
+                        }}>
+                          <div style={{ display: "flex", gap: 16 }}>
+                            <span>Customers: {overview?.totalCustomers || 0}</span>
+                            <span>Jobs: {overview?.activeJobs || 0}</span>
+                            <span>Completed: {overview?.completedJobs || 0}</span>
                           </div>
-                          {/* Revenue info pill */}
-                          <div
-                            onClick={() => switchTab("payments")}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              background: "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))",
-                              border: "1px solid rgba(76,175,80,0.3)", borderRadius: 14,
-                              padding: "12px 20px", cursor: "pointer", transition: "all 0.2s",
-                              flexShrink: 0,
-                            }}
-                            onMouseOver={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 20px rgba(76,175,80,0.2)"; }}
-                            onMouseOut={e => { (e.currentTarget as HTMLElement).style.transform = "none"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
-                          >
-                            <span style={{ fontSize: 20 }}>💰</span>
-                            <div>
-                              <div style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Revenue (30d)</div>
-                              <div style={{ fontSize: 22, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
-                                {formatCurrency(overview.recentRevenue)}
-                              </div>
-                            </div>
-                            <span style={{ color: "#2a4a2a", fontSize: 14, marginLeft: 4 }}>→</span>
+                          <div style={{ color: "#4CAF50", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                            Revenue (30d): {formatCurrency(overview?.recentRevenue || 0)}
                           </div>
                         </div>
 
-                        {/* ── Clickable stat cards (4 cards, no revenue) ── */}
-                        <div className="stats-grid-admin" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-                          <StatCard icon="👥" label="Customers" value={overview.totalCustomers} onClick={() => switchTab("customers")} />
-                          <StatCard icon="🔧" label="Active Jobs" value={overview.activeJobs} accent onClick={() => switchTab("jobs")} />
-                          <StatCard icon="✅" label="Completed" value={overview.completedJobs} onClick={() => switchTab("jobs")} />
-                          <StatCard icon="🔄" label="Subscriptions" value={overview.activeSubscriptions} onClick={() => switchTab("subscriptions")} />
-                        </div>
+                        {/* Slim New Job Button */}
+                        <button 
+                          onClick={() => { setEditingJob(null); setShowJobModal(true); }}
+                          style={{
+                            width: "100%", padding: "8px 12px", marginBottom: 16,
+                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                            border: "none", borderRadius: 8, color: "#fff",
+                            fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            fontFamily: "'DM Sans', sans-serif",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>+</span> New Job
+                        </button>
 
-                        {/* ── Separator ── */}
-                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, #1a3a1a, transparent)", margin: "4px 0 20px" }} />
-
-                        {/* ── Compact nav tabs ── */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+                        {/* Navigation Grid */}
+                        <div style={{
+                          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+                          marginBottom: 20,
+                        }}>
                           {[
-                            { icon: "➕", label: "New Job", action: () => { switchTab("jobs"); setTimeout(() => setShowJobModal(true), 100); }, primary: true },
-                            { icon: "👥", label: "Customers", action: () => switchTab("customers") },
-                            { icon: "🔧", label: "Jobs", action: () => switchTab("jobs") },
-                            { icon: "💰", label: "Payments", action: () => switchTab("payments") },
-                            { icon: "🔄", label: "Subscriptions", action: () => switchTab("subscriptions") },
-                            { icon: "📹", label: "Video Quotes", action: () => switchTab("video_leads") },
-                            { icon: "✉️", label: "Messages", action: () => switchTab("messages") },
-                          ].map(({ icon, label, action, primary }) => (
+                            { icon: "✉️", label: "Messages", tab: "messages" },
+                            { icon: "📹", label: "Video Quotes", tab: "video_leads" },
+                            { icon: "💰", label: "Payments", tab: "payments" },
+                            { icon: "🔄", label: "Subscriptions", tab: "subscriptions" },
+                            { icon: "🔧", label: "Jobs", tab: "jobs" },
+                            { icon: "👥", label: "Customers", tab: "customers" },
+                          ].map((item) => (
                             <button
-                              key={label}
-                              onClick={action}
+                              key={item.tab}
+                              onClick={() => switchTab(item.tab as Tab)}
                               style={{
-                                display: "flex", alignItems: "center", gap: 5,
-                                padding: "6px 14px", borderRadius: 20,
-                                background: primary
-                                  ? "linear-gradient(135deg, #4CAF50, #2E7D32)"
-                                  : "rgba(76,175,80,0.08)",
-                                color: primary ? "#fff" : "#7ab87a",
-                                fontSize: 12, fontWeight: 600, cursor: "pointer",
-                                fontFamily: "'DM Sans', sans-serif",
-                                border: primary ? "none" : "1px solid #1a3a1a",
-                                transition: "all 0.15s",
-                                boxShadow: primary ? "0 2px 12px rgba(76,175,80,0.25)" : "none",
-                              } as React.CSSProperties}
-                              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = primary ? "linear-gradient(135deg, #56c75a, #388e3c)" : "rgba(76,175,80,0.14)"; }}
-                              onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = primary ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "rgba(76,175,80,0.08)"; }}
+                                display: "flex", flexDirection: "column", alignItems: "center",
+                                padding: "12px 8px", background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                                border: "1px solid #1a3a1a", borderRadius: 12, color: "#c8e0c8",
+                                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                transition: "all 0.2s", minHeight: 70,
+                              }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.background = "linear-gradient(160deg, rgba(76,175,80,0.15), rgba(46,125,50,0.08))";
+                                e.currentTarget.style.borderColor = "#4CAF50";
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.background = "linear-gradient(160deg, #0d1f0d, #091409)";
+                                e.currentTarget.style.borderColor = "#1a3a1a";
+                              }}
                             >
-                              <span style={{ fontSize: 13 }}>{icon}</span>
-                              {label}
+                              <span style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</span>
+                              <span>{item.label}</span>
                             </button>
                           ))}
-                          <Link
-                            href="/pay"
-                            target="_blank"
-                            style={{
-                              display: "flex", alignItems: "center", gap: 5,
-                              padding: "6px 14px", borderRadius: 20,
-                              background: "rgba(76,175,80,0.08)", border: "1px solid #1a3a1a",
-                              color: "#7ab87a", fontSize: 12, fontWeight: 600,
-                              fontFamily: "'DM Sans', sans-serif", textDecoration: "none",
-                              transition: "all 0.15s",
-                            }}
-                          >
-                            <span style={{ fontSize: 13 }}>💳</span>
-                            Payment Page ↗
-                          </Link>
                         </div>
 
-                        {/* ── Separator ── */}
-                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, #1a3a1a, transparent)", margin: "4px 0 24px" }} />
-
                         {/* ── Recent customers ── */}
-                        <div style={{ marginBottom: 32 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                            <h3 style={{ fontSize: 16, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
+                        <div style={{ marginBottom: 20 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <h3 style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
                             <button className="quick-action" onClick={() => switchTab("customers")}>View all →</button>
                           </div>
                           <DataTable headers={["Name", "Email", "Phone", "Joined"]} emptyMessage="No customers yet. Share your site to get signups!">
@@ -1558,8 +1145,8 @@ export default function AdminDashboard() {
                         {/* ── Recent payments ── */}
                         {overview.recentPayments.length > 0 && (
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                              <h3 style={{ fontSize: 16, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                              <h3 style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
                               <button className="quick-action" onClick={() => switchTab("payments")}>View all →</button>
                             </div>
                             <DataTable headers={["Amount", "Status", "Date"]}>
