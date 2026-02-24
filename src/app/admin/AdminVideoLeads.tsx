@@ -196,7 +196,15 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
       const data = await res.json();
       showToast("Media deleted successfully");
       
-      // Refresh the lead detail to reflect the deletion
+      // Update local state immediately for better UX
+      if (leadDetail) {
+        setLeadDetail({
+          ...leadDetail,
+          media: leadDetail.media.filter(m => m.id !== mediaId)
+        });
+      }
+      
+      // Also refresh from server to ensure consistency
       if (selectedLead) {
         fetchLeadDetail(selectedLead);
       }
