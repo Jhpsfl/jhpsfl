@@ -278,9 +278,11 @@ function JobModal({ onClose, onSave, customers, job }: {
   });
 
   const inputStyle = {
-    width: "100%", padding: "12px 14px", background: "#0d1a0d",
-    border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
-    fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
+    width: "100%", padding: "14px 16px", background: "#0d1a0d",
+    border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
+    fontSize: 16, outline: "none", fontFamily: "'DM Sans', sans-serif",
+    minHeight: "52px",
+    boxSizing: "border-box" as const,
   };
 
   return (
@@ -781,13 +783,17 @@ export default function AdminDashboard() {
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             width: 280px; 
             box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            z-index: 1000;
           }
-          .admin-sidebar.open { transform: translateX(0); }
+          .admin-sidebar.open { 
+            transform: translateX(0); 
+            box-shadow: 0 0 60px rgba(0,0,0,0.7);
+          }
           .admin-main { margin-left: 0; }
           .admin-content-inner { padding: 64px 14px 56px; }
           .mobile-toggle { 
             display: flex; 
-            z-index: 200;
+            z-index: 2000;
             background: rgba(5,14,5,0.95); 
             border: 1px solid #1a3a1a;
             border-radius: 12px; 
@@ -799,11 +805,13 @@ export default function AdminDashboard() {
             justify-content: center;
             min-width: 48px;
             min-height: 48px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
           }
           .mobile-overlay.open { 
             display: block; 
-            backdrop-filter: blur(4px);
-            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            background: rgba(0,0,0,0.8);
+            z-index: 999;
           }
           .stats-grid-admin { 
             grid-template-columns: repeat(2, 1fr) !important; 
@@ -814,50 +822,98 @@ export default function AdminDashboard() {
             border-radius: 12px !important; 
             min-height: 100px;
           }
+          
+          /* Mobile-optimized tables */
           .admin-content-inner table { 
             display: block;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
           }
           .admin-content-inner table th { 
-            padding: 12px 8px !important; 
+            padding: 14px 10px !important; 
             font-size: 11px !important; 
             letter-spacing: 0.8px !important; 
             min-width: 80px;
           }
           .admin-content-inner table td { 
-            padding: 12px 8px !important; 
+            padding: 14px 10px !important; 
             font-size: 13px !important; 
             min-width: 80px;
           }
-          .quick-action { 
-            padding: 8px 12px !important; 
-            font-size: 11px !important; 
-            min-height: 32px;
-            display: inline-flex;
-            align-items: center;
+          
+          /* Stacked table layout for very small screens */
+          .mobile-stacked-table {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
           }
-          .action-btn { 
-            padding: 10px 16px !important; 
-            font-size: 13px !important; 
-            min-height: 44px;
+          .mobile-stacked-table .table-row {
+            background: linear-gradient(160deg, #0d1f0d, #091409);
+            border: 1px solid #1a3a1a;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          .mobile-stacked-table .table-cell {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(26,58,26,0.3);
+          }
+          .mobile-stacked-table .table-cell:last-child {
+            border-bottom: none;
+          }
+          .mobile-stacked-table .table-label {
+            font-size: 11px;
+            color: #5a8a5a;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 80px;
+          }
+          .mobile-stacked-table .table-value {
+            font-size: 14px;
+            color: #e8f5e8;
+            text-align: right;
+            flex: 1;
+          }
+          
+          .quick-action { 
+            padding: 10px 14px !important; 
+            font-size: 12px !important; 
+            min-height: 40px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
           }
+          .action-btn { 
+            padding: 12px 18px !important; 
+            font-size: 14px !important; 
+            min-height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+          }
           .admin-content-inner h1 { 
-            font-size: 22px !important; 
+            font-size: 24px !important; 
             line-height: 1.3;
             margin-bottom: 8px;
           }
           .search-input { 
             width: 100% !important; 
-            min-height: 44px;
+            min-height: 48px;
             font-size: 16px; /* Prevents iOS zoom */
+            padding: 12px 16px 12px 42px;
           }
           .nav-item button {
-            min-height: 44px;
-            padding: 12px 16px !important;
+            min-height: 52px;
+            padding: 14px 18px !important;
+            font-size: 15px;
+            gap: 14px;
           }
           .stat-card {
             min-height: 120px;
@@ -865,81 +921,205 @@ export default function AdminDashboard() {
             flex-direction: column;
             justify-content: center;
           }
+          
+          /* Mobile modal improvements */
+          .modal-content {
+            max-height: 85vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px;
+            border-radius: 20px;
+            margin: 20px;
+            width: calc(100% - 40px);
+          }
+          
+          /* Mobile form improvements */
+          .mobile-form-input {
+            font-size: 16px !important;
+            min-height: 52px;
+            padding: 14px 16px !important;
+          }
+          
+          /* Mobile tab improvements */
+          .mobile-tab-container {
+            display: flex;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            gap: 8px;
+            padding: 8px 0;
+            margin-bottom: 16px;
+          }
+          .mobile-tab {
+            padding: 12px 18px;
+            white-space: nowrap;
+            min-height: 48px;
+          }
         }
 
         /* ── Mobile phone ── */
         @media (max-width: 600px) {
           .admin-content-inner { 
-            padding: 72px 12px 60px; 
+            padding: 72px 12px 80px; 
           }
           .stats-grid-admin { 
             grid-template-columns: 1fr !important; 
             gap: 10px !important;
           }
           .stats-grid-admin > div { 
-            padding: 18px 14px !important; 
-            min-height: 110px;
+            padding: 20px 16px !important; 
+            min-height: 120px;
           }
           .stats-grid-admin > div > div:nth-child(1) { 
-            font-size: 20px !important; 
-            margin-bottom: 6px !important; 
+            font-size: 22px !important; 
+            margin-bottom: 8px !important; 
           }
           .stats-grid-admin > div > div:nth-child(2) { 
-            font-size: 24px !important; 
-            margin-bottom: 4px !important;
+            font-size: 28px !important; 
+            margin-bottom: 6px !important;
           }
           .stats-grid-admin > div > div:nth-child(3) { 
-            font-size: 11px !important; 
+            font-size: 12px !important; 
           }
+          
+          /* Force stacked tables on small mobile */
+          .mobile-force-stack table {
+            display: none !important;
+          }
+          .mobile-force-stack .mobile-stacked-table {
+            display: flex !important;
+          }
+          
           .admin-content-inner table th { 
-            padding: 14px 8px !important; 
-            font-size: 10px !important; 
+            padding: 16px 10px !important; 
+            font-size: 11px !important; 
             letter-spacing: 0.5px !important; 
           }
           .admin-content-inner table td { 
-            padding: 14px 8px !important; 
-            font-size: 12px !important; 
+            padding: 16px 10px !important; 
+            font-size: 13px !important; 
           }
           .admin-content-inner h1 { 
-            font-size: 20px !important; 
-            margin-bottom: 12px;
+            font-size: 22px !important; 
+            margin-bottom: 16px;
           }
           .action-btn { 
-            padding: 12px 18px !important; 
-            font-size: 14px !important; 
-            min-height: 48px;
+            padding: 14px 20px !important; 
+            font-size: 15px !important; 
+            min-height: 52px;
           }
           .quick-action {
-            min-height: 36px;
-            padding: 10px 14px !important;
+            min-height: 40px;
+            padding: 12px 16px !important;
+            font-size: 13px !important;
           }
           .mobile-toggle {
-            top: 12px;
-            left: 12px;
-            padding: 14px;
+            top: 16px;
+            left: 16px;
+            padding: 16px;
+            min-width: 52px;
+            min-height: 52px;
           }
-          /* Improve touch targets for all interactive elements */
+          
+          /* Enhanced touch targets */
           button, 
           [role="button"],
           .nav-item,
-          .table-row {
+          .table-row,
+          .action-btn,
+          .quick-action {
             min-height: 44px;
           }
-          /* Make modals more mobile-friendly */
+          
+          /* Mobile modals */
           .modal-content {
-            max-height: 85vh;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
+            max-height: 90vh;
+            margin: 10px;
+            width: calc(100% - 20px);
+            padding: 24px 20px;
+            border-radius: 24px;
           }
-          /* Improve form inputs for mobile */
+          
+          /* Mobile form inputs */
           input, select, textarea {
-            font-size: 16px !important; /* Prevents iOS zoom */
-            min-height: 44px;
+            font-size: 16px !important;
+            min-height: 52px;
+            padding: 14px 16px !important;
           }
-          /* Better spacing for mobile */
+          
+          /* Better spacing */
           .section-spacing {
-            margin-bottom: 24px !important;
+            margin-bottom: 28px !important;
           }
+          
+          /* Mobile bottom nav adjustments */
+          .mobile-bottom-nav {
+            padding: 12px 8px 20px !important;
+            border-top: 1px solid #1a3a1a;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+          }
+          .mobile-bottom-nav button {
+            min-height: 56px;
+            padding: 8px 4px !important;
+            min-width: 64px;
+          }
+          .mobile-bottom-nav span:first-child {
+            font-size: 22px !important;
+            margin-bottom: 4px;
+          }
+          .mobile-bottom-nav span:last-child {
+            font-size: 12px !important;
+          }
+        }
+        
+        /* ── Very small phones ── */
+        @media (max-width: 375px) {
+          .admin-content-inner {
+            padding: 72px 8px 80px;
+          }
+          .stats-grid-admin > div {
+            padding: 18px 14px !important;
+          }
+          .action-btn {
+            padding: 12px 16px !important;
+            font-size: 14px !important;
+          }
+          .mobile-bottom-nav button {
+            min-width: 56px;
+            font-size: 11px;
+          }
+          .mobile-bottom-nav span:first-child {
+            font-size: 20px !important;
+          }
+        }
+        
+        /* ── Mobile sidebar touch improvements ── */
+        .admin-sidebar {
+          -webkit-overflow-scrolling: touch;
+          scroll-behavior: smooth;
+        }
+        
+        /* ── Enhanced mobile table touch ── */
+        .table-row {
+          position: relative;
+        }
+        .table-row::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 16px;
+          right: 16px;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, #1a3a1a, transparent);
+        }
+        
+        /* ── Mobile status badges ── */
+        .mobile-status-badge {
+          padding: 8px 16px !important;
+          font-size: 12px !important;
+          min-height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
         /* ── Very small phones ── */
@@ -1013,7 +1193,7 @@ export default function AdminDashboard() {
 
         {isAdmin !== false && (
           <>
-            {/* Mobile toggle - improved for accessibility */}
+            {/* Enhanced Mobile Toggle Button */}
             <button 
               className="mobile-toggle" 
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1022,13 +1202,33 @@ export default function AdminDashboard() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center"
+                justifyContent: "center",
+                transition: "all 0.3s ease"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = "scale(1.05)";
+                e.currentTarget.style.boxShadow = "0 6px 25px rgba(76,175,80,0.3)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.3)";
               }}
             >
               {sidebarOpen ? (
-                <span style={{ fontSize: "24px", lineHeight: 1 }}>✕</span>
+                <span style={{ 
+                  fontSize: "26px", 
+                  lineHeight: 1,
+                  transition: "transform 0.3s",
+                  display: "inline-block",
+                  transform: "rotate(90deg)"
+                }}>✕</span>
               ) : (
-                <span style={{ fontSize: "24px", lineHeight: 1 }}>☰</span>
+                <span style={{ 
+                  fontSize: "26px", 
+                  lineHeight: 1,
+                  transition: "transform 0.3s",
+                  display: "inline-block"
+                }}>☰</span>
               )}
             </button>
             <div 
@@ -1041,6 +1241,9 @@ export default function AdminDashboard() {
                 if (e.key === 'Enter' || e.key === ' ') {
                   setSidebarOpen(false);
                 }
+              }}
+              style={{
+                transition: "opacity 0.3s ease"
               }}
             />
 
@@ -1275,24 +1478,62 @@ export default function AdminDashboard() {
                               + Add Customer
                             </button>
                           </div>
-                          <div style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3a5a3a", fontSize: 14 }}>🔍</span>
+                          <div style={{ position: "relative", flex: "1 1 300px", maxWidth: "100%" }}>
+                            <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "#3a5a3a", fontSize: 16, zIndex: 1 }}>🔍</span>
                             <input className="search-input" placeholder="Search customers..."
                               value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                              style={{ width: 280 }} />
+                              style={{ width: "100%", paddingLeft: "42px" }} />
                           </div>
                         </div>
-                        <DataTable headers={["Name", "Email", "Phone", "Joined", ""]} emptyMessage="No customers found">
-                          {filteredCustomers.map((c) => (
-                            <TableRow key={c.id} onClick={() => loadCustomerDetail(c.id)}>
-                              <Td>{c.name || "—"}</Td>
-                              <Td>{c.email || "—"}</Td>
-                              <Td mono>{c.phone || "—"}</Td>
-                              <Td>{formatDate(c.created_at)}</Td>
-                              <Td><span style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600 }}>View →</span></Td>
-                            </TableRow>
-                          ))}
-                        </DataTable>
+                        
+                        {/* Mobile stacked table view */}
+                        <div className="mobile-force-stack">
+                          <div className="mobile-stacked-table" style={{ display: "none" }}>
+                            {filteredCustomers.length === 0 ? (
+                              <div style={{ padding: "40px 16px", textAlign: "center", color: "#3a5a3a", fontSize: 14 }}>
+                                No customers found
+                              </div>
+                            ) : (
+                              filteredCustomers.map((c) => (
+                                <div key={c.id} className="table-row" onClick={() => loadCustomerDetail(c.id)}>
+                                  <div className="table-cell">
+                                    <span className="table-label">Name</span>
+                                    <span className="table-value">{c.name || "—"}</span>
+                                  </div>
+                                  <div className="table-cell">
+                                    <span className="table-label">Email</span>
+                                    <span className="table-value">{c.email || "—"}</span>
+                                  </div>
+                                  <div className="table-cell">
+                                    <span className="table-label">Phone</span>
+                                    <span className="table-value" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.phone || "—"}</span>
+                                  </div>
+                                  <div className="table-cell">
+                                    <span className="table-label">Joined</span>
+                                    <span className="table-value">{formatDate(c.created_at)}</span>
+                                  </div>
+                                  <div className="table-cell">
+                                    <span className="table-label"></span>
+                                    <span className="table-value" style={{ color: "#4CAF50", fontWeight: 600 }}>View →</span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          
+                          {/* Desktop table view */}
+                          <DataTable headers={["Name", "Email", "Phone", "Joined", ""]} emptyMessage="No customers found">
+                            {filteredCustomers.map((c) => (
+                              <TableRow key={c.id} onClick={() => loadCustomerDetail(c.id)}>
+                                <Td>{c.name || "—"}</Td>
+                                <Td>{c.email || "—"}</Td>
+                                <Td mono>{c.phone || "—"}</Td>
+                                <Td>{formatDate(c.created_at)}</Td>
+                                <Td><span style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600 }}>View →</span></Td>
+                              </TableRow>
+                            ))}
+                          </DataTable>
+                        </div>
                       </>
                     )}
 
@@ -1533,23 +1774,26 @@ export default function AdminDashboard() {
         )}
       </SignedIn>
       
-      {/* Mobile bottom navigation for quick access */}
+      {/* Enhanced Mobile Bottom Navigation */}
       <div className="mobile-bottom-nav" style={{
         display: "none",
         position: "fixed",
         bottom: 0,
         left: 0,
         right: 0,
-        background: "linear-gradient(180deg, #071207 0%, #050e05 100%)",
+        background: "rgba(5,14,5,0.95)",
         borderTop: "1px solid #1a3a1a",
-        padding: "8px 12px",
+        padding: "12px 8px 20px",
         zIndex: 90,
-        backdropFilter: "blur(10px)"
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        boxShadow: "0 -4px 30px rgba(0,0,0,0.4)"
       }}>
         <div style={{
           display: "flex",
           justifyContent: "space-around",
-          alignItems: "center"
+          alignItems: "center",
+          gap: "4px"
         }}>
           {[
             { icon: "📊", label: "Overview", tab: "overview" },
@@ -1560,7 +1804,10 @@ export default function AdminDashboard() {
           ].map((item) => (
             <button
               key={item.tab}
-              onClick={() => switchTab(item.tab as Tab)}
+              onClick={() => {
+                switchTab(item.tab as Tab);
+                setSidebarOpen(false);
+              }}
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -1569,17 +1816,49 @@ export default function AdminDashboard() {
                 border: "none",
                 color: activeTab === item.tab ? "#4CAF50" : "#5a8a5a",
                 padding: "8px 4px",
-                minWidth: "60px",
-                minHeight: "60px",
+                minWidth: "64px",
+                minHeight: "64px",
                 cursor: "pointer",
                 fontSize: "12px",
                 fontWeight: activeTab === item.tab ? 700 : 500,
-                transition: "all 0.2s"
+                transition: "all 0.2s",
+                position: "relative",
+                flex: 1
               }}
               aria-label={`Switch to ${item.label}`}
+              onMouseOver={(e) => {
+                if (activeTab !== item.tab) {
+                  e.currentTarget.style.color = "#7ab87a";
+                }
+              }}
+              onMouseOut={(e) => {
+                if (activeTab !== item.tab) {
+                  e.currentTarget.style.color = "#5a8a5a";
+                }
+              }}
             >
-              <span style={{ fontSize: "20px", marginBottom: "4px" }}>{item.icon}</span>
-              <span>{item.label}</span>
+              <span style={{ 
+                fontSize: "22px", 
+                marginBottom: "4px",
+                transition: "transform 0.2s",
+                transform: activeTab === item.tab ? "scale(1.1)" : "scale(1)"
+              }}>{item.icon}</span>
+              <span style={{
+                fontSize: "11px",
+                fontWeight: activeTab === item.tab ? 700 : 500,
+                letterSpacing: "0.3px"
+              }}>{item.label}</span>
+              {activeTab === item.tab && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  width: "24px",
+                  height: "3px",
+                  background: "#4CAF50",
+                  borderRadius: "0 0 2px 2px",
+                  boxShadow: "0 0 8px rgba(76,175,80,0.5)"
+                }} />
+              )}
             </button>
           ))}
         </div>
@@ -1591,19 +1870,38 @@ export default function AdminDashboard() {
             display: block !important;
           }
           .admin-content-inner {
-            padding-bottom: 80px !important;
+            padding-bottom: 100px !important;
           }
         }
         @media (max-width: 600px) {
           .mobile-bottom-nav {
-            padding: 6px 8px;
+            padding: 12px 8px 24px !important;
           }
           .mobile-bottom-nav button {
-            min-width: 56px;
+            min-width: 64px;
+            min-height: 64px;
             font-size: 11px;
           }
           .mobile-bottom-nav span:first-child {
-            font-size: 18px;
+            font-size: 22px !important;
+          }
+          .admin-content-inner {
+            padding-bottom: 100px !important;
+          }
+        }
+        @media (max-width: 375px) {
+          .mobile-bottom-nav button {
+            min-width: 56px;
+          }
+          .mobile-bottom-nav span:first-child {
+            font-size: 20px !important;
+          }
+        }
+        
+        /* Safe area support for notched phones */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+          .mobile-bottom-nav {
+            padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
           }
         }
       `}</style>
