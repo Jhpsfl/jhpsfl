@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
     from_email,
     to_email,
     subject: subjectStr,
-    body_html,
-    body_text,
+    body_html: body_html ?? undefined,
+    body_text: body_text ?? undefined,
   });
 
   // Forward a copy to Gmail so it's readable from any device
