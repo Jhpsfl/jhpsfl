@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import AdminSwRegistrar from "./AdminSwRegistrar";
 
 export const viewport: Viewport = {
   themeColor: "#050e05",
@@ -14,9 +15,7 @@ export const metadata: Metadata = {
     capable: true,
     title: "JHPS Admin",
     statusBarStyle: "black-translucent",
-    startupImage: [
-      { url: "/favicon-512.png" },
-    ],
+    startupImage: [{ url: "/favicon-512.png" }],
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -24,5 +23,10 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <AdminSwRegistrar />
+      {children}
+    </>
+  );
 }
