@@ -640,7 +640,17 @@ export default function AdminDashboard() {
 
     // Poll every 60 seconds
     const pollInterval = setInterval(fetchBadgeCounts, 60000);
-    return () => clearInterval(pollInterval);
+
+    // Also refresh instantly when a push notification arrives
+    const swMessageHandler = (event: MessageEvent) => {
+      if (event.data?.type === "REFRESH_BADGES") fetchBadgeCounts();
+    };
+    navigator.serviceWorker?.addEventListener("message", swMessageHandler);
+
+    return () => {
+      clearInterval(pollInterval);
+      navigator.serviceWorker?.removeEventListener("message", swMessageHandler);
+    };
   }, [userId]);
 
   const handleInstall = async () => {
@@ -1187,20 +1197,24 @@ export default function AdminDashboard() {
                           marginBottom: 16,
                         }}>
                           {[
-                            { icon: "✉️", label: "Messages", tab: "messages" },
-                            { icon: "📹", label: "Video", tab: "video_leads" },
-                            { icon: "💰", label: "Payments", tab: "payments" },
-                            { icon: "🔄", label: "Subs", tab: "subscriptions" },
-                            { icon: "🔧", label: "Jobs", tab: "jobs" },
-                            { icon: "👥", label: "Customers", tab: "customers" },
+                            { icon: "✉️", label: "Messages", tab: "messages", badge: badgeCounts.unreadEmail },
+                            { icon: "📹", label: "Video", tab: "video_leads", badge: badgeCounts.newLeads },
+                            { icon: "💰", label: "Payments", tab: "payments", badge: 0 },
+                            { icon: "🔄", label: "Subs", tab: "subscriptions", badge: 0 },
+                            { icon: "🔧", label: "Jobs", tab: "jobs", badge: 0 },
+                            { icon: "👥", label: "Customers", tab: "customers", badge: 0 },
                           ].map((item) => (
                             <button
                               key={item.tab}
                               onClick={() => switchTab(item.tab as Tab)}
                               style={{
+                                position: "relative",
                                 display: "flex", flexDirection: "column", alignItems: "center",
-                                padding: "8px 4px", background: "linear-gradient(160deg, #0d1f0d, #091409)",
-                                border: "1px solid #1a3a1a", borderRadius: 8, color: "#c8e0c8",
+                                padding: "8px 4px", background: item.badge > 0
+                                  ? "linear-gradient(160deg, rgba(76,175,80,0.12), rgba(46,125,50,0.06))"
+                                  : "linear-gradient(160deg, #0d1f0d, #091409)",
+                                border: item.badge > 0 ? "1px solid rgba(76,175,80,0.4)" : "1px solid #1a3a1a",
+                                borderRadius: 8, color: "#c8e0c8",
                                 fontSize: 10, fontWeight: 600, cursor: "pointer",
                                 transition: "all 0.2s", minHeight: 60,
                               }}
@@ -1209,10 +1223,21 @@ export default function AdminDashboard() {
                                 e.currentTarget.style.borderColor = "#4CAF50";
                               }}
                               onMouseOut={(e) => {
-                                e.currentTarget.style.background = "linear-gradient(160deg, #0d1f0d, #091409)";
-                                e.currentTarget.style.borderColor = "#1a3a1a";
+                                e.currentTarget.style.background = item.badge > 0
+                                  ? "linear-gradient(160deg, rgba(76,175,80,0.12), rgba(46,125,50,0.06))"
+                                  : "linear-gradient(160deg, #0d1f0d, #091409)";
+                                e.currentTarget.style.borderColor = item.badge > 0 ? "rgba(76,175,80,0.4)" : "#1a3a1a";
                               }}
                             >
+                              {item.badge > 0 && (
+                                <span style={{
+                                  position: "absolute", top: 4, right: 4,
+                                  background: "#ef5350", color: "#fff",
+                                  fontSize: 9, fontWeight: 800, lineHeight: 1,
+                                  padding: "2px 5px", borderRadius: 10,
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                }}>{item.badge}</span>
+                              )}
                               <span style={{ fontSize: 16, marginBottom: 4 }}>{item.icon}</span>
                               <span style={{ fontSize: 9 }}>{item.label}</span>
                             </button>

@@ -42,7 +42,13 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(title || "JHPS Admin", options)
+    Promise.all([
+      self.registration.showNotification(title || "JHPS Admin", options),
+      // Tell open admin tabs to refresh badge counts immediately
+      clients.matchAll({ type: "window" }).then(windowClients => {
+        windowClients.forEach(client => client.postMessage({ type: "REFRESH_BADGES" }));
+      }),
+    ])
   );
 });
 
