@@ -515,7 +515,7 @@ export default function AdminInbox({ userId }: { userId: string }) {
           minHeight: 600,
         }}>
           {/* ─── Thread List (Left Panel) ─── */}
-          <div style={{
+          <div className="inbox-thread-list" style={{
             borderRight: selectedThread ? "1px solid #1a3a1a" : "none",
             overflowY: "auto",
             maxHeight: "calc(100vh - 200px)",
@@ -747,105 +747,169 @@ export default function AdminInbox({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* ─── Thread Detail (Right Panel) ─── */}
+          {/* ─── Thread Detail (Right Panel) — Gmail-style ─── */}
           {selectedThread && (
-            <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 200px)" }}>
-              {/* Thread header */}
-              <div style={{ padding: "16px 20px", borderBottom: "1px solid #1a3a1a", background: "rgba(5,14,5,0.6)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="inbox-detail-panel" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 200px)" }}>
+              {/* Thread header — compact like Gmail */}
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid #1a3a1a", background: "rgba(5,14,5,0.6)", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <button
                     onClick={() => setSelectedThread(null)}
                     className="inbox-back-btn"
-                    style={{ display: "none", background: "none", border: "none", color: "#5a8a5a", fontSize: 18, cursor: "pointer", padding: "4px 8px" }}
-                  >←</button>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#e8f5e8" }}>
-                      {selectedThreadData?.customer_name || selectedThreadData?.to_email || "Thread"}
+                    style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 20, cursor: "pointer", padding: "4px 8px", display: "flex", alignItems: "center" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {selectedThreadData?.subject || "Thread"}
                     </div>
-                    <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>
-                      {selectedThreadData?.subject}
-                      {selectedThreadData && selectedThreadData.message_count > 1 && (
-                        <span style={{ color: "#3a5a3a" }}> · {selectedThreadData.message_count} messages</span>
-                      )}
+                    <div style={{ fontSize: 11, color: "#5a8a5a", marginTop: 1 }}>
+                      {selectedThreadData?.message_count || 0} message{(selectedThreadData?.message_count || 0) !== 1 ? "s" : ""}
                     </div>
                   </div>
                   {leadInfo && (
                     <a href={`tel:${leadInfo.phone}`} style={{
-                      padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600,
                       background: "rgba(76,175,80,0.08)", border: "1px solid #1a3a1a",
-                      color: "#4CAF50", textDecoration: "none",
+                      color: "#4CAF50", textDecoration: "none", flexShrink: 0,
                     }}>📞 Call</a>
                   )}
                 </div>
               </div>
 
-              {/* Messages */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
-                {messages.map(msg => (
-                  <div key={msg.id} style={{ display: "flex", justifyContent: msg.direction === "outbound" ? "flex-end" : "flex-start" }}>
-                    <div style={{
-                      maxWidth: "75%", padding: "14px 18px",
-                      borderRadius: msg.direction === "outbound" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                      background: msg.direction === "outbound"
-                        ? "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(46,125,50,0.1))"
-                        : "rgba(255,255,255,0.04)",
-                      border: msg.direction === "outbound" ? "1px solid rgba(76,175,80,0.2)" : "1px solid #1a3a1a",
+              {/* Messages — Gmail card-style, full width */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2 }}>
+                {messages.map((msg, idx) => {
+                  const isOutbound = msg.direction === "outbound";
+                  const senderName = isOutbound ? "JHPS" : (selectedThreadData?.customer_name || msg.from_email);
+                  const senderEmail = isOutbound ? "info@jhpsfl.com" : msg.from_email;
+                  const initials = isOutbound ? "JP" : getInitials(selectedThreadData?.customer_name, msg.from_email);
+                  const isLast = idx === messages.length - 1;
+                  // For HTML emails, extract readable text properly
+                  const bodyContent = msg.body_text || (msg.body_html ? (() => {
+                    // Strip style/script tags entirely first, then HTML tags
+                    const cleaned = msg.body_html
+                      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+                      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+                      .replace(/<br\s*\/?>/gi, "\n")
+                      .replace(/<\/p>/gi, "\n\n")
+                      .replace(/<\/div>/gi, "\n")
+                      .replace(/<\/tr>/gi, "\n")
+                      .replace(/<\/li>/gi, "\n")
+                      .replace(/<[^>]+>/g, "")
+                      .replace(/&nbsp;/gi, " ")
+                      .replace(/&amp;/gi, "&")
+                      .replace(/&lt;/gi, "<")
+                      .replace(/&gt;/gi, ">")
+                      .replace(/&#39;/gi, "'")
+                      .replace(/&quot;/gi, '"')
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim();
+                    return cleaned;
+                  })() : "—");
+
+                  return (
+                    <div key={msg.id} style={{
+                      background: "rgba(255,255,255,0.02)",
+                      border: "1px solid #1a3a1a",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      marginBottom: isLast ? 0 : 4,
                     }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.5, color: msg.direction === "outbound" ? "#4CAF50" : "#5a8a5a" }}>
-                        {msg.direction === "outbound" ? "JHPS" : (selectedThreadData?.customer_name || msg.from_email)}
+                      {/* Sender row — Gmail style */}
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 14px 8px",
+                      }}>
+                        {/* Avatar circle */}
+                        <div style={{
+                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                          background: isOutbound
+                            ? "linear-gradient(135deg, #4CAF50, #2E7D32)"
+                            : "linear-gradient(135deg, #37474f, #263238)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.5,
+                        }}>
+                          {initials}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#e8f5e8" }}>{senderName}</span>
+                            <span style={{ fontSize: 11, color: "#3a5a3a" }}>&lt;{senderEmail}&gt;</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#3a5a3a", marginTop: 1 }}>
+                            to {isOutbound ? (selectedThreadData?.customer_name || selectedThreadData?.to_email) : "me"}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#3a5a3a", flexShrink: 0, textAlign: "right" }}>
+                          <div>{formatDate(msg.created_at)}</div>
+                          {isOutbound && msg.resend_message_id && (
+                            <div style={{ color: "#2E7D32", fontSize: 10, marginTop: 1 }}>✓ Sent</div>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 14, lineHeight: 1.6, color: msg.direction === "outbound" ? "#c8e0c8" : "#a0c0a0" }}>
-                        {msg.body_text || (msg.body_html ? msg.body_html.replace(/<[^>]+>/g, "").substring(0, 500) : "—")}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#3a5a3a", marginTop: 8, textAlign: msg.direction === "outbound" ? "right" : "left" }}>
-                        {formatDate(msg.created_at)}
-                        {msg.direction === "outbound" && msg.resend_message_id && (
-                          <span style={{ marginLeft: 6, color: "#2a5a2a" }}>✓ Sent</span>
-                        )}
+
+                      {/* Message body — full width, smaller font */}
+                      <div style={{
+                        padding: "4px 14px 14px 56px",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: "#b8d8b8",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        overflowWrap: "break-word",
+                      }}>
+                        {bodyContent}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Reply Box */}
-              <div style={{ padding: "16px 20px", borderTop: "1px solid #1a3a1a", background: "rgba(5,14,5,0.6)" }}>
-                <div style={{ display: "flex", gap: 10 }}>
+              {/* Reply Box — compact, Gmail-style */}
+              <div style={{ padding: "10px 12px", borderTop: "1px solid #1a3a1a", background: "rgba(5,14,5,0.6)", flexShrink: 0 }}>
+                <div style={{
+                  background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 12,
+                  overflow: "hidden",
+                }}>
                   <textarea
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
                     placeholder="Type your reply..."
-                    rows={3}
+                    rows={2}
                     onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendReply(); } }}
                     style={{
-                      flex: 1, padding: "12px 14px", background: "#0d1a0d",
-                      border: "1px solid #1a3a1a", borderRadius: 12, color: "#e8f5e8",
-                      fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
-                      resize: "vertical", minHeight: 60,
+                      width: "100%", padding: "10px 12px", background: "transparent",
+                      border: "none", color: "#e8f5e8",
+                      fontSize: 13, outline: "none", fontFamily: "'DM Sans', sans-serif",
+                      resize: "none", boxSizing: "border-box",
                     }}
                   />
-                  <button
-                    onClick={sendReply}
-                    disabled={sending || !replyText.trim()}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8,
-                      padding: "0 20px",
-                      background: replyText.trim() ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "rgba(76,175,80,0.1)",
-                      border: "none", borderRadius: 12, color: "#fff",
-                      fontSize: 14, fontWeight: 700, cursor: replyText.trim() ? "pointer" : "default",
-                      fontFamily: "'DM Sans', sans-serif",
-                      opacity: sending ? 0.6 : 1,
-                      boxShadow: replyText.trim() ? "0 4px 20px rgba(76,175,80,0.35)" : "none",
-                      transition: "all 0.2s", whiteSpace: "nowrap",
-                      alignSelf: "flex-end", minHeight: 44,
-                    }}
-                  >
-                    <IconSend />
-                    {sending ? "..." : "Send"}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderTop: "1px solid rgba(26,58,26,0.5)" }}>
+                    <span style={{ fontSize: 10, color: "#2a4a2a" }}>Ctrl+Enter to send</span>
+                    <button
+                      onClick={sendReply}
+                      disabled={sending || !replyText.trim()}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "6px 16px",
+                        background: replyText.trim() ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "rgba(76,175,80,0.1)",
+                        border: "none", borderRadius: 18, color: "#fff",
+                        fontSize: 13, fontWeight: 700, cursor: replyText.trim() ? "pointer" : "default",
+                        fontFamily: "'DM Sans', sans-serif",
+                        opacity: sending ? 0.6 : 1,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <IconSend />
+                      {sending ? "..." : "Send"}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: "#2a4a2a", marginTop: 6 }}>Ctrl+Enter to send</div>
               </div>
             </div>
           )}
@@ -906,10 +970,31 @@ export default function AdminInbox({ userId }: { userId: string }) {
       {/* ─── Styles ─── */}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .inbox-thread-row:hover { background: rgba(76,175,80,0.04) !important; }
+        
         @media (max-width: 768px) {
           .inbox-back-btn { display: flex !important; }
+          
+          /* When detail panel is open on mobile, take over full screen */
+          .inbox-detail-panel {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 100 !important;
+            background: #050e05 !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            border-radius: 0 !important;
+          }
+          
+          /* Hide thread list on mobile when viewing a thread */
+          .inbox-thread-list { display: block; }
         }
-        .inbox-thread-row:hover { background: rgba(76,175,80,0.04) !important; }
+        
+        /* Desktop: hide back button */
+        @media (min-width: 769px) {
+          .inbox-back-btn { display: none !important; }
+        }
       `}</style>
     </div>
   );
