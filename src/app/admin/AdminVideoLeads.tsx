@@ -282,6 +282,25 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
+  // Handle Android Back Button for Lead Detail
+  useEffect(() => {
+    if (selectedLead) {
+      window.history.pushState({ videoLeadId: selectedLead }, "");
+    }
+  }, [selectedLead]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (selectedLead) {
+        // Stop default back behavior and close detail
+        setSelectedLead(null);
+        setLeadDetail(null);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [selectedLead]);
+
   // ─── RENDER: Lead Detail View ───
   if (selectedLead && leadDetail) {
     return (
@@ -1028,3 +1047,4 @@ function MediaCard({ media, getUrl, onDelete }: {
     </div>
   );
 }
+

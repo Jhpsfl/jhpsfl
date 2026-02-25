@@ -468,6 +468,7 @@ export default function AdminDashboard() {
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [prevTab, setPrevTab] = useState<Tab | null>(null);
+  const [prevTab, setPrevTab] = useState<Tab | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -485,6 +486,9 @@ export default function AdminDashboard() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  useEffect(() => {
+    if (showCustomerModal) window.history.pushState({ modal: "customer" }, "");
+  }, [showCustomerModal]);
 
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
@@ -1806,6 +1810,7 @@ export default function AdminDashboard() {
     </>
   );
 }
+
 
 
 
