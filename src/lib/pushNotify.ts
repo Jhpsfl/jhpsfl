@@ -46,12 +46,6 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
 
     if (fetchError) {
       console.error('Failed to fetch push subscriptions:', fetchError);
-      return;
-    }
-
-    if (!subscriptions || subscriptions.length === 0) {
-      console.log('No push subscriptions found');
-      return;
     }
 
     // Get current badge count (unread emails + new leads) unless caller provided one
@@ -73,56 +67,68 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
       badge: badgeCount,
     });
 
-    // Send to each subscription, track failures
-    const failures: string[] = [];
-    const results = await Promise.allSettled(
-      subscriptions.map(async (sub) => {
-        try {
-          const subscription = sub.subscription as any;
-          console.log(`📤 Sending push to ${sub.clerk_user_id}:`, {
-            endpoint: subscription.endpoint.substring(0, 80),
-            hasKeys: !!subscription.keys,
-          });
+    // Launch FCM immediately — runs in parallel with web push so a slow/dead
+    // web push subscription cannot block or time out FCM delivery.
+    const fcmPromise = sendFcmToAll(payload);
 
-          const result = await webpush.sendNotification(subscription, pushData, {
-            urgency: 'high',
-            TTL: 86400,
-          });
-          console.log(`✅ Push sent successfully to ${sub.id}:`, result);
-          return { success: true, id: sub.id };
-        } catch (error: any) {
-          console.error(`❌ Push send FAILED for ${sub.id}:`, {
-            statusCode: error.statusCode,
-            message: error.message,
-            body: error.body,
-          });
-
-          // 410 Gone = subscription expired, remove from DB
-          if (error.statusCode === 410 || error.statusCode === 404) {
-            failures.push(sub.id);
-          }
-          return { success: false, id: sub.id, error: error.message };
-        }
-      })
-    );
-
-    console.log(`📊 Push send results:`, results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
-
-    // Clean up expired subscriptions
-    if (failures.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('push_subscriptions')
-        .delete()
-        .in('id', failures);
-
-      if (deleteError) {
-        console.error('Failed to delete expired subscriptions:', deleteError);
-      } else {
-        console.log(`Removed ${failures.length} expired subscriptions`);
+    // Send web push to browser subscriptions
+    const webPushPromise = (async () => {
+      if (!subscriptions || subscriptions.length === 0) {
+        console.log('No web push subscriptions found');
+        return;
       }
-    }
-    // Also send via native FCM to Android TWA
-    await sendFcmToAll(payload);
+
+      const failures: string[] = [];
+      const results = await Promise.allSettled(
+        subscriptions.map(async (sub) => {
+          try {
+            const subscription = sub.subscription as any;
+            console.log(`📤 Sending push to ${sub.clerk_user_id}:`, {
+              endpoint: subscription.endpoint.substring(0, 80),
+              hasKeys: !!subscription.keys,
+            });
+
+            const result = await webpush.sendNotification(subscription, pushData, {
+              urgency: 'high',
+              TTL: 86400,
+            });
+            console.log(`✅ Push sent successfully to ${sub.id}:`, result);
+            return { success: true, id: sub.id };
+          } catch (error: any) {
+            console.error(`❌ Push send FAILED for ${sub.id}:`, {
+              statusCode: error.statusCode,
+              message: error.message,
+              body: error.body,
+            });
+
+            // 410 Gone = subscription expired, remove from DB
+            if (error.statusCode === 410 || error.statusCode === 404) {
+              failures.push(sub.id);
+            }
+            return { success: false, id: sub.id, error: error.message };
+          }
+        })
+      );
+
+      console.log(`📊 Push send results:`, results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
+
+      // Clean up expired subscriptions
+      if (failures.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('push_subscriptions')
+          .delete()
+          .in('id', failures);
+
+        if (deleteError) {
+          console.error('Failed to delete expired subscriptions:', deleteError);
+        } else {
+          console.log(`Removed ${failures.length} expired subscriptions`);
+        }
+      }
+    })();
+
+    // Wait for both to settle
+    await Promise.allSettled([webPushPromise, fcmPromise]);
   } catch (err) {
     console.error('sendPushToAllAdmins error:', err);
   }
