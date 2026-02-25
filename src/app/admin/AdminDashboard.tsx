@@ -467,6 +467,7 @@ export default function AdminDashboard() {
   const { userId } = useAuth();
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [prevTab, setPrevTab] = useState<Tab | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1805,3 +1806,6 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+
+
