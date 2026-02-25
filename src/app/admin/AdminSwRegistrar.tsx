@@ -59,6 +59,23 @@ export default function AdminSwRegistrar() {
 
 async function subscribeToNotifications(registration: ServiceWorkerRegistration) {
   try {
+    // Wait for clerk_user_id to be available in localStorage (set by AdminDashboard)
+    let clerkUserId = localStorage.getItem("jhps_admin_uid");
+    let retries = 0;
+    while (!clerkUserId && retries < 30) {
+      console.log("Waiting for clerk_user_id to be set in localStorage...");
+      await new Promise(resolve => setTimeout(resolve, 100));
+      clerkUserId = localStorage.getItem("jhps_admin_uid");
+      retries++;
+    }
+
+    if (!clerkUserId) {
+      console.error("✗ clerk_user_id not found in localStorage after 3 seconds");
+      return;
+    }
+
+    console.log("✓ Found clerk_user_id, proceeding with subscription");
+
     // Get VAPID public key from server
     const vapidRes = await fetch("/api/push/vapid-public-key");
     if (!vapidRes.ok) {
@@ -77,14 +94,10 @@ async function subscribeToNotifications(registration: ServiceWorkerRegistration)
       applicationServerKey: convertedVapidKey as BufferSource,
     });
 
-    // Get clerk_user_id from localStorage (set by AdminDashboard)
-    const clerkUserId = localStorage.getItem("jhps_admin_uid");
-    if (!clerkUserId) {
-      console.warn("clerk_user_id not found in localStorage");
-      return;
-    }
+    console.log("✓ Browser subscription created:", subscription.endpoint.substring(0, 80));
 
     // Send subscription to server
+    console.log("📤 Sending subscription to server...");
     const subRes = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -95,10 +108,11 @@ async function subscribeToNotifications(registration: ServiceWorkerRegistration)
     });
 
     if (subRes.ok) {
-      console.log("✓ Push subscription registered to database");
+      console.log("✓✓✓ SUCCESS: Push subscription registered to database!");
+      console.log("Notifications are now active. You can test with /api/push/test");
     } else {
       const errorText = await subRes.text();
-      console.error(`✗ Failed to register push subscription (${subRes.status}):`, errorText);
+      console.error(`✗ Failed to register push subscription (HTTP ${subRes.status}):`, errorText);
     }
   } catch (err) {
     console.error("Push subscription error:", err);
