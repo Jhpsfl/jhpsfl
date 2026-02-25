@@ -672,10 +672,12 @@ export default function AdminDashboard() {
       if (showJobModal) {
         setShowJobModal(false);
         setEditingJob(null);
+        window.history.pushState({ view: activeTab, timestamp: Date.now() }, "");
         return;
       }
       if (showCustomerModal) {
         setShowCustomerModal(false);
+        window.history.pushState({ view: activeTab, timestamp: Date.now() }, "");
         return;
       }
       
@@ -683,14 +685,19 @@ export default function AdminDashboard() {
       if (activeTab === "customer_detail") {
         setActiveTab("customers");
         setCustomerDetail(null);
+        window.history.pushState({ view: "customers", timestamp: Date.now() }, "");
         return;
       }
 
       // 3. Admin tab priority (fall back to previous tab)
-      if (e.state?.adminTab) {
-        setActiveTab(e.state.adminTab);
-      } else if (prevTab) {
-        setActiveTab(prevTab);
+      if (prevTab && prevTab !== activeTab) {
+        const nextTab = prevTab;
+        setPrevTab(null);
+        setActiveTab(nextTab);
+        window.history.pushState({ view: nextTab, timestamp: Date.now() }, "");
+      } else if (activeTab !== "overview") {
+        setActiveTab("overview");
+        window.history.pushState({ view: "overview", timestamp: Date.now() }, "");
       }
     };
     
@@ -1842,6 +1849,8 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+
 
 
 
