@@ -13,7 +13,9 @@ if (publicKey && privateKey) {
 export interface PushPayload {
   title: string;
   body: string;
-  url?: string;
+  tag?: string;        // same tag = replace/update existing notification
+  url?: string;        // where to navigate on click
+  icon?: string;
 }
 
 /**
