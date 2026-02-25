@@ -6,8 +6,19 @@ const publicKey = (process.env.VAPID_PUBLIC_KEY || '').trim();
 const privateKey = (process.env.VAPID_PRIVATE_KEY || '').trim();
 const subject = (process.env.VAPID_SUBJECT || 'mailto:FRLawnCareFL@gmail.com').trim();
 
+console.log('🔑 VAPID Configuration:', {
+  hasPublicKey: !!publicKey,
+  hasPrivateKey: !!privateKey,
+  subject,
+  publicKeyLength: publicKey?.length || 0,
+  privateKeyLength: privateKey?.length || 0,
+});
+
 if (publicKey && privateKey) {
   webpush.setVapidDetails(subject, publicKey, privateKey);
+  console.log('✅ Web-push VAPID details configured');
+} else {
+  console.error('❌ Missing VAPID keys - push notifications will not work');
 }
 
 export interface PushPayload {
@@ -49,23 +60,35 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
 
     // Send to each subscription, track failures
     const failures: string[] = [];
-
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
           const subscription = sub.subscription as any;
-          await webpush.sendNotification(subscription, pushData);
-          console.log(`Push sent to subscription ${sub.id}`);
+          console.log(`📤 Sending push to ${sub.clerk_user_id}:`, {
+            endpoint: subscription.endpoint.substring(0, 80),
+            hasKeys: !!subscription.keys,
+          });
+
+          const result = await webpush.sendNotification(subscription, pushData);
+          console.log(`✅ Push sent successfully to ${sub.id}:`, result);
+          return { success: true, id: sub.id };
         } catch (error: any) {
+          console.error(`❌ Push send FAILED for ${sub.id}:`, {
+            statusCode: error.statusCode,
+            message: error.message,
+            body: error.body,
+          });
+
           // 410 Gone = subscription expired, remove from DB
-          if (error.statusCode === 410) {
+          if (error.statusCode === 410 || error.statusCode === 404) {
             failures.push(sub.id);
-          } else {
-            console.error(`Push send failed for ${sub.id}:`, error);
           }
+          return { success: false, id: sub.id, error: error.message };
         }
       })
     );
+
+    console.log(`📊 Push send results:`, results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
 
     // Clean up expired subscriptions
     if (failures.length > 0) {
