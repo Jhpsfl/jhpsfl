@@ -619,6 +619,16 @@ export default function AdminDashboard() {
         if (res.ok) {
           const data = await res.json();
           setBadgeCounts(data);
+
+          // Update PWA app badge icon
+          if (typeof navigator !== "undefined" && "setAppBadge" in navigator) {
+            const totalBadge = (data.unreadEmail || 0) + (data.newLeads || 0);
+            if (totalBadge > 0) {
+              (navigator as any).setAppBadge(totalBadge);
+            } else {
+              (navigator as any).clearAppBadge?.();
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to fetch badge counts:", err);

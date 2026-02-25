@@ -25,7 +25,7 @@ self.addEventListener("push", (event) => {
     payload = { title: "JHPS", body: event.data.text() };
   }
 
-  const { title, body, tag, url, icon } = payload;
+  const { title, body, tag, url, icon, badge: badgeCount } = payload;
 
   const options = {
     body: body || "You have a new notification",
