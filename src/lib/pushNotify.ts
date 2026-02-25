@@ -27,6 +27,7 @@ export interface PushPayload {
   tag?: string;        // same tag = replace/update existing notification
   url?: string;        // where to navigate on click
   icon?: string;
+  badge?: number;      // app icon badge count; if omitted, server fetches live count
 }
 
 /**
@@ -52,10 +53,23 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
       return;
     }
 
+    // Get current badge count (unread emails + new leads) unless caller provided one
+    let badgeCount = payload.badge;
+    if (badgeCount === undefined) {
+      const [{ count: emailCount }, { count: leadsCount }] = await Promise.all([
+        supabase.from('email_messages').select('*', { count: 'exact', head: true }).eq('read', false),
+        supabase.from('video_leads').select('*', { count: 'exact', head: true }).eq('status', 'new'),
+      ]);
+      badgeCount = (emailCount || 0) + (leadsCount || 0);
+    }
+
     const pushData = JSON.stringify({
       title: payload.title,
       body: payload.body,
       url: payload.url || '/admin',
+      tag: payload.tag,
+      icon: payload.icon,
+      badge: badgeCount,
     });
 
     // Send to each subscription, track failures

@@ -44,6 +44,10 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(title || "JHPS Admin", options),
+      // Set app icon badge (works on Android Chrome 81+ and iOS Safari 16.4+ PWA)
+      "setAppBadge" in self.registration
+        ? self.registration.setAppBadge(badgeCount !== undefined ? badgeCount : 1)
+        : Promise.resolve(),
       // Tell open admin tabs to refresh badge counts immediately
       clients.matchAll({ type: "window" }).then(windowClients => {
         windowClients.forEach(client => client.postMessage({ type: "REFRESH_BADGES" }));

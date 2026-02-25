@@ -489,6 +489,14 @@ export default function AdminDashboard() {
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
   const [installed, setInstalled] = useState(false);
 
+  // iOS / standalone detection (computed once, stable)
+  const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isStandalone = typeof window !== "undefined" && (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    !!(window.navigator as any).standalone
+  );
+  const showIOSInstallHint = isIOS && !isStandalone;
+
   // Badge counts for push notifications
   const [badgeCounts, setBadgeCounts] = useState<{ unreadEmail: number; newLeads: number }>({
     unreadEmail: 0,
@@ -1068,6 +1076,22 @@ export default function AdminDashboard() {
                 {installed && (
                   <div style={{ padding: "8px 14px", marginBottom: 8, fontSize: 12, color: "#4CAF50" }}>
                     ✓ App installed
+                  </div>
+                )}
+
+                {/* ─── iOS install hint (Safari only) ─── */}
+                {showIOSInstallHint && (
+                  <div style={{
+                    padding: "10px 14px", marginBottom: 8,
+                    background: "linear-gradient(135deg, rgba(33,150,243,0.12), rgba(13,125,205,0.07))",
+                    border: "1px solid rgba(33,150,243,0.3)", borderRadius: 12,
+                    fontSize: 12, color: "#64b5f6", lineHeight: 1.5,
+                  }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>📲 iPhone: Install for Notifications</div>
+                    <div style={{ color: "#4a8fc4" }}>
+                      Safari → <strong style={{ color: "#64b5f6" }}>Share ⬆</strong> → <strong style={{ color: "#64b5f6" }}>Add to Home Screen</strong>
+                    </div>
+                    <div style={{ marginTop: 4, color: "#3a6a9a", fontSize: 11 }}>Requires iOS 16.4+ · Safari only</div>
                   </div>
                 )}
 
