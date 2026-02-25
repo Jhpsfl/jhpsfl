@@ -83,7 +83,10 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
             hasKeys: !!subscription.keys,
           });
 
-          const result = await webpush.sendNotification(subscription, pushData);
+          const result = await webpush.sendNotification(subscription, pushData, {
+            urgency: 'high',
+            TTL: 86400,
+          });
           console.log(`✅ Push sent successfully to ${sub.id}:`, result);
           return { success: true, id: sub.id };
         } catch (error: any) {
