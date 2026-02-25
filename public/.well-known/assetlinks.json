@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.jhpsfl.twa",
+    "sha256_cert_fingerprints": ["AF:61:22:0F:7A:A7:01:DA:45:C2:A5:9B:E1:E6:07:C9:09:E9:B2:4F:1D:75:45:F6:A7:1F:55:EF:20:5A:7A:41"]
+  }
+}]

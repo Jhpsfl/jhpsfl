@@ -109,3 +109,4 @@ function buildSummaryBody(data) {
   if (data.newLeads > 0) parts.push(`${data.newLeads} new video quote${data.newLeads > 1 ? "s" : ""}`);
   return parts.join(" · ");
 }
+
