@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Fetch the lead to get customer name and service type
     const { data: leadData } = await supabase
       .from("video_leads")
-      .select("customer_name, service_type")
+      .select("name, service_requested")
       .eq("id", leadId)
       .single();
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (leadData) {
       await sendPushToAllAdmins({
         title: "📹 New Quote Request",
-        body: `${leadData.customer_name} wants a quote for ${leadData.service_type}`,
+        body: `${leadData.name} wants a quote for ${leadData.service_requested}`,
         url: "/admin?tab=video_leads",
       });
     }

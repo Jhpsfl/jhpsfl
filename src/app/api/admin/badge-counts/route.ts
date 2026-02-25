@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const { count: unreadEmail, error: emailError } = await supabase
       .from('email_messages')
       .select('*', { count: 'exact', head: true })
-      .eq('is_read', false);
+      .eq('read', false);
 
     // Count new leads
     const { count: newLeads, error: leadsError } = await supabase
