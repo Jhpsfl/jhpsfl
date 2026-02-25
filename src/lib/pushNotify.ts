@@ -40,7 +40,7 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
     // Fetch all active subscriptions
     const { data: subscriptions, error: fetchError } = await supabase
       .from('push_subscriptions')
-      .select('id, subscription');
+      .select('id, clerk_user_id, subscription');
 
     if (fetchError) {
       console.error('Failed to fetch push subscriptions:', fetchError);
