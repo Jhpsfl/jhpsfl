@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { GoogleAuth } from 'google-auth-library';
 import { createSupabaseAdmin } from './supabase';
 
 // Configure web-push with VAPID keys
@@ -120,7 +121,118 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
         console.log(`Removed ${failures.length} expired subscriptions`);
       }
     }
+    // Also send via native FCM to Android TWA
+    await sendFcmToAll(payload);
   } catch (err) {
     console.error('sendPushToAllAdmins error:', err);
+  }
+}
+
+/**
+ * Send FCM push notifications to all registered Android TWA devices.
+ * Uses the FCM v1 HTTP API with a service account OAuth2 token.
+ * Invalid/expired tokens (404) are removed from the DB automatically.
+ */
+async function sendFcmToAll(payload: PushPayload) {
+  try {
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!serviceAccountJson) {
+      console.log('FIREBASE_SERVICE_ACCOUNT_JSON not set — skipping FCM send');
+      return;
+    }
+
+    // Parse the service account and get an OAuth2 access token
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    const auth = new GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
+    const client = await auth.getClient();
+    const tokenResponse = await client.getAccessToken();
+    const accessToken = tokenResponse.token;
+    if (!accessToken) {
+      console.error('FCM: failed to obtain OAuth2 access token');
+      return;
+    }
+
+    // Fetch all FCM tokens from the DB
+    const supabase = createSupabaseAdmin();
+    const { data: fcmRows, error: fetchError } = await supabase
+      .from('fcm_tokens')
+      .select('id, fcm_token');
+
+    if (fetchError) {
+      console.error('FCM: failed to fetch fcm_tokens:', fetchError);
+      return;
+    }
+    if (!fcmRows || fcmRows.length === 0) {
+      console.log('FCM: no FCM tokens registered');
+      return;
+    }
+
+    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
+    const expiredIds: string[] = [];
+
+    await Promise.allSettled(
+      fcmRows.map(async (row) => {
+        try {
+          const messageBody = JSON.stringify({
+            message: {
+              token: row.fcm_token,
+              data: {
+                title: payload.title,
+                body: payload.body,
+                url: payload.url || '/admin',
+              },
+              android: {
+                priority: 'high',
+                notification: {
+                  title: payload.title,
+                  body: payload.body,
+                  channel_id: 'jhps_admin',
+                  sound: 'default',
+                },
+              },
+            },
+          });
+
+          const res = await fetch(fcmUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: messageBody,
+          });
+
+          if (res.ok) {
+            console.log(`FCM: sent to token ${row.fcm_token.substring(0, 20)}...`);
+          } else if (res.status === 404) {
+            console.log(`FCM: token ${row.fcm_token.substring(0, 20)}... is invalid (404), scheduling removal`);
+            expiredIds.push(row.id);
+          } else {
+            const errText = await res.text();
+            console.error(`FCM: send failed (${res.status}) for token ${row.fcm_token.substring(0, 20)}...:`, errText);
+          }
+        } catch (err) {
+          console.error(`FCM: network error for token ${row.fcm_token.substring(0, 20)}...:`, err);
+        }
+      })
+    );
+
+    // Clean up invalid tokens
+    if (expiredIds.length > 0) {
+      const { error: delError } = await supabase
+        .from('fcm_tokens')
+        .delete()
+        .in('id', expiredIds);
+      if (delError) {
+        console.error('FCM: failed to delete expired tokens:', delError);
+      } else {
+        console.log(`FCM: removed ${expiredIds.length} expired token(s)`);
+      }
+    }
+  } catch (err) {
+    console.error('sendFcmToAll error:', err);
   }
 }
