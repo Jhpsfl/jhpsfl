@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import PaymentPage from "./PaymentPage";
 
 export const metadata: Metadata = {
@@ -20,5 +21,9 @@ export const metadata: Metadata = {
 };
 
 export default function PayPage() {
-  return <PaymentPage />;
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#050e05" }} />}>
+      <PaymentPage />
+    </Suspense>
+  );
 }

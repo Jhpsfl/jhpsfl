@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 // Square Web Payments SDK type shim
@@ -44,7 +45,7 @@ function SquareCardSection({
             const existing = document.querySelector('script[src*="squarecdn"]');
             if (existing) { resolve(); return; }
             const s = document.createElement("script");
-            s.src = "https://sandbox.web.squarecdn.com/v1/square.js";
+            s.src = "https://web.squarecdn.com/v1/square.js";
             s.onload = () => resolve();
             s.onerror = () => reject(new Error("Square SDK failed to load"));
             document.head.appendChild(s);
@@ -175,6 +176,38 @@ export default function PaymentPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Auto-fill from invoice payment link params
+  useEffect(() => {
+    const invoice = searchParams.get("invoice");
+    const amount = searchParams.get("amount");
+    const name = searchParams.get("name");
+    const email = searchParams.get("email");
+    const phone = searchParams.get("phone");
+    const service = searchParams.get("service");
+    const description = searchParams.get("description");
+    const address = searchParams.get("address");
+    const city = searchParams.get("city");
+    const zip = searchParams.get("zip");
+
+    if (invoice || amount || name) {
+      setFormData(prev => ({
+        ...prev,
+        ...(name && { name }),
+        ...(email && { email }),
+        ...(phone && { phone }),
+        ...(address && { address }),
+        ...(city && { city }),
+        ...(zip && { zip }),
+        ...(service && { service }),
+        ...(description && { jobDescription: description }),
+        ...(invoice && { invoiceNumber: invoice }),
+        ...(amount && { amount }),
+      }));
+    }
+  }, [searchParams]);
+
   const nameRef = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLDivElement>(null);
   const emailRef = useRef<HTMLDivElement>(null);

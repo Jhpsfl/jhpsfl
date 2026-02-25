@@ -218,24 +218,56 @@ export async function POST(request: NextRequest) {
       }
 
       case "invoices": {
-        if (action === "create") {
-          const { customer_id, amount, due_date, line_items, notes } = payload;
-          if (!customer_id || !amount) return NextResponse.json({ error: "customer_id and amount required" }, { status: 400 });
-          const { count } = await supabase.from("invoices").select("id", { count: "exact", head: true });
-          const invoiceNumber = `JHPS-${String((count || 0) + 1).padStart(4, "0")}`;
-          const { data, error } = await supabase.from("invoices").insert({
-            customer_id, amount, invoice_number: invoiceNumber, status: "draft",
-            due_date: due_date || null, line_items: line_items || null, notes: notes || null,
-          }).select().single();
-          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-          return NextResponse.json({ success: true, data });
-        }
-        if (action === "update") {
-          const { id, ...updates } = payload;
-          if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-          const { data, error } = await supabase.from("invoices").update(updates).eq("id", id).select().single();
-          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-          return NextResponse.json({ success: true, data });
+        switch (action) {
+          case "create": {
+            const { data, error } = await supabase
+              .from("invoices")
+              .insert({
+                customer_id: payload.customer_id,
+                invoice_number: payload.invoice_number,
+                status: payload.status || "draft",
+                subtotal: payload.subtotal,
+                tax_rate: payload.tax_rate || 0,
+                tax_amount: payload.tax_amount || 0,
+                total: payload.total,
+                amount_paid: payload.amount_paid || 0,
+                due_date: payload.due_date || null,
+                notes: payload.notes || null,
+                line_items: payload.line_items || [],
+                payment_link: payload.payment_link || null,
+                sent_at: payload.sent_at || null,
+              })
+              .select(`*, customers ( name, email, phone )`)
+              .single();
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true, data });
+          }
+          case "update": {
+            const updateData: Record<string, unknown> = {};
+            const allowedFields = [
+              "customer_id", "invoice_number", "status", "subtotal",
+              "tax_rate", "tax_amount", "total", "amount_paid",
+              "due_date", "paid_date", "notes", "line_items",
+              "payment_link", "sent_at"
+            ];
+            for (const field of allowedFields) {
+              if (payload[field] !== undefined) updateData[field] = payload[field];
+            }
+            updateData.updated_at = new Date().toISOString();
+            const { data, error } = await supabase
+              .from("invoices")
+              .update(updateData)
+              .eq("id", payload.id)
+              .select(`*, customers ( name, email, phone )`)
+              .single();
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true, data });
+          }
+          case "delete": {
+            const { error } = await supabase.from("invoices").delete().eq("id", payload.id);
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true });
+          }
         }
         break;
       }

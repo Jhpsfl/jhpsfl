@@ -11,6 +11,7 @@ import {
 } from "@clerk/nextjs";
 import AdminVideoLeads from "./AdminVideoLeads";
 import AdminInbox from "./AdminInbox";
+import AdminInvoices from "./AdminInvoices";
 
 // ─── Types ───
 interface Customer {
@@ -111,7 +112,7 @@ interface CustomerDetail {
   invoices: Invoice[];
 }
 
-type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages";
+type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices";
 
 // ─── Helpers ───
 function formatDate(d: string | null) {
@@ -1088,10 +1089,11 @@ export default function AdminDashboard() {
                   <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} badge={badgeCounts.newLeads} />
                   <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
 
+                  <NavItem icon="📄" label="Invoices" active={activeTab === "invoices"} onClick={() => switchTab("invoices")} />
+
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
 
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
-                  <NavItem icon="📄" label="Invoices" active={false} onClick={() => showToast("Invoice management coming soon", "error")} />
                   <NavItem icon="📈" label="Analytics" active={false} onClick={() => showToast("Analytics coming soon", "error")} />
                 </nav>
 
@@ -1632,6 +1634,11 @@ export default function AdminDashboard() {
                     {/* ─── MESSAGES TAB ─── */}
                     {activeTab === "messages" && userId && (
                       <AdminInbox userId={userId} />
+                    )}
+
+                    {/* ─── INVOICES TAB ─── */}
+                    {activeTab === "invoices" && userId && (
+                      <AdminInvoices userId={userId} />
                     )}
                   </div>
                 )}
