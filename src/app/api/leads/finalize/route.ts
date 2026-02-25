@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
+import { sendPushToAllAdmins } from "@/lib/pushNotify";
 
 /**
  * POST /api/leads/finalize
  *
  * Called when user hits "Submit Quote Request" on the review screen.
  * Promotes the lead from "incomplete" to "new" and saves customer notes.
+ * Also sends push notification to admins.
  *
  * Body: { leadId, customerNotes? }
  * Returns: { success: true }
@@ -20,6 +22,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
+    // Fetch the lead to get customer name and service type
+    const { data: leadData } = await supabase
+      .from("video_leads")
+      .select("customer_name, service_type")
+      .eq("id", leadId)
+      .single();
+
     const { error } = await supabase
       .from("video_leads")
       .update({
@@ -31,6 +40,15 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Lead finalize error:", error);
       return NextResponse.json({ error: "Failed to finalize lead" }, { status: 500 });
+    }
+
+    // Send push notification to all admins
+    if (leadData) {
+      await sendPushToAllAdmins({
+        title: "📹 New Quote Request",
+        body: `${leadData.customer_name} wants a quote for ${leadData.service_type}`,
+        url: "/admin?tab=video_leads",
+      });
     }
 
     return NextResponse.json({ success: true });

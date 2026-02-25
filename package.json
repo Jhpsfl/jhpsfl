@@ -16,6 +16,7 @@
     "@sanity/image-url": "^1.2.0",
     "@sanity/vision": "^4.22.0",
     "@supabase/supabase-js": "^2.97.0",
+    "@types/web-push": "^3.6.4",
     "@vercel/analytics": "^1.6.1",
     "next": "16.1.6",
     "next-sanity": "^11.6.12",
@@ -25,7 +26,8 @@
     "sanity": "^4.22.0",
     "square": "^44.0.0",
     "styled-components": "^6.3.11",
-    "svix": "^1.85.0"
+    "svix": "^1.85.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

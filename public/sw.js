@@ -17,3 +17,22 @@ self.addEventListener('fetch', e => {
     );
   }
 });
+
+// Handle push notifications
+self.addEventListener('push', e => {
+  const data = e.data?.json() ?? {};
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'JHPS', {
+      body: data.body || '',
+      icon: '/favicon-192.png',
+      badge: '/favicon-32.png',
+      data: { url: data.url || '/admin' },
+    })
+  );
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow(e.notification.data.url));
+});

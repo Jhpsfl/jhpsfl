@@ -3,6 +3,7 @@ import { Webhook } from 'svix';
 import { Resend } from 'resend';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { sendPushToAllAdmins } from '@/lib/pushNotify';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -131,6 +132,13 @@ export async function POST(req: NextRequest) {
     subject: subjectStr,
     body_html: body_html ?? undefined,
     body_text: body_text ?? undefined,
+  });
+
+  // Send push notification to all admins
+  await sendPushToAllAdmins({
+    title: '✉️ New Email',
+    body: `From: ${from_email}`,
+    url: '/admin?tab=messages',
   });
 
   // Forward a copy to Gmail so it's readable from any device

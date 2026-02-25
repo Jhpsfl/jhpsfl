@@ -216,13 +216,14 @@ function TableRow({ children, onClick }: { children: React.ReactNode; onClick?: 
   );
 }
 
-function Td({ children, mono, accent }: { children: React.ReactNode; mono?: boolean; accent?: boolean }) {
+function Td({ children, mono, accent, style }: { children: React.ReactNode; mono?: boolean; accent?: boolean; style?: React.CSSProperties }) {
   return (
     <td style={{
       padding: "14px 16px", fontSize: 14, color: accent ? "#4CAF50" : "#c8e0c8",
       borderBottom: "1px solid #0d1a0d",
       fontFamily: mono ? "'JetBrains Mono', monospace" : "inherit",
       fontWeight: mono ? 600 : 400, whiteSpace: "nowrap",
+      ...style,
     }}>{children}</td>
   );
 }
@@ -488,6 +489,12 @@ export default function AdminDashboard() {
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
   const [installed, setInstalled] = useState(false);
 
+  // Badge counts for push notifications
+  const [badgeCounts, setBadgeCounts] = useState<{ unreadEmail: number; newLeads: number }>({
+    unreadEmail: 0,
+    newLeads: 0,
+  });
+
   // Toasts
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -598,6 +605,34 @@ export default function AdminDashboard() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
+  // ─── Badge counts polling & push registration ───
+  useEffect(() => {
+    if (!userId) return;
+
+    // Store clerk_user_id in localStorage for AdminSwRegistrar
+    localStorage.setItem("jhps_admin_uid", userId);
+
+    // Fetch badge counts
+    const fetchBadgeCounts = async () => {
+      try {
+        const res = await fetch("/api/admin/badge-counts");
+        if (res.ok) {
+          const data = await res.json();
+          setBadgeCounts(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch badge counts:", err);
+      }
+    };
+
+    // Fetch immediately on mount
+    fetchBadgeCounts();
+
+    // Poll every 60 seconds
+    const pollInterval = setInterval(fetchBadgeCounts, 60000);
+    return () => clearInterval(pollInterval);
+  }, [userId]);
+
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -661,6 +696,12 @@ export default function AdminDashboard() {
     setActiveTab(tab);
     setCustomerDetail(null);
     setSidebarOpen(false);
+    // Optimistically clear badge when user switches to that tab
+    if (tab === "messages") {
+      setBadgeCounts(prev => ({ ...prev, unreadEmail: 0 }));
+    } else if (tab === "video_leads") {
+      setBadgeCounts(prev => ({ ...prev, newLeads: 0 }));
+    }
   };
 
   // ─── RENDER ───
@@ -972,8 +1013,8 @@ export default function AdminDashboard() {
                   <NavItem icon="🔧" label="Jobs" active={activeTab === "jobs"} onClick={() => switchTab("jobs")} />
                   <NavItem icon="💰" label="Payments" active={activeTab === "payments"} onClick={() => switchTab("payments")} />
                   <NavItem icon="🔄" label="Subscriptions" active={activeTab === "subscriptions"} onClick={() => switchTab("subscriptions")} />
-                  <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} />
-                  <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} />
+                  <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} badge={badgeCounts.newLeads} />
+                  <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
 
