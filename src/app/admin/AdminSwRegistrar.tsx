@@ -17,7 +17,7 @@ export default function AdminSwRegistrar() {
     }
 
     // Check current notification permission
-    if ("Notification" in window) {
+    if (typeof window !== 'undefined' && "Notification" in window) {
       setNotificationPermission(Notification.permission);
     }
   }, []);
@@ -45,11 +45,13 @@ export default function AdminSwRegistrar() {
   };
 
   // Only show button if notifications are supported and not already granted
-  const shouldShowButton = "Notification" in window && notificationPermission !== "granted";
+  const shouldShowButton = typeof window !== 'undefined' && "Notification" in window && notificationPermission !== "granted";
 
   // Expose the handler globally so AdminDashboard can call it
   useEffect(() => {
-    (window as any).__enablePushNotifications = handleEnableNotifications;
+    if (typeof window !== 'undefined') {
+      (window as any).__enablePushNotifications = handleEnableNotifications;
+    }
   }, [handleEnableNotifications]);
 
   return null;
@@ -104,6 +106,10 @@ async function subscribeToNotifications(registration: ServiceWorkerRegistration)
 
 // Helper to convert VAPID key from base64
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  if (typeof window === 'undefined') {
+    throw new Error("urlBase64ToUint8Array can only be called in the browser");
+  }
+
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/\-/g, "+")

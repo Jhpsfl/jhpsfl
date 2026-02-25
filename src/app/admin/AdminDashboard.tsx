@@ -1052,7 +1052,7 @@ export default function AdminDashboard() {
                 )}
 
                 {/* ─── Enable Notifications button ─── */}
-                {"Notification" in window && Notification.permission !== "granted" && (
+                {typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" && (
                   <button
                     onClick={() => {
                       const enableFn = (window as any).__enablePushNotifications;
@@ -1076,7 +1076,7 @@ export default function AdminDashboard() {
                     </div>
                   </button>
                 )}
-                {Notification.permission === "granted" && (
+                {typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && (
                   <div style={{ padding: "8px 14px", marginBottom: 8, fontSize: 12, color: "#42a5f5" }}>
                     ✓ Notifications enabled
                   </div>
