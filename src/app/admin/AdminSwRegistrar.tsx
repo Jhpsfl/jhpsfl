@@ -95,9 +95,10 @@ async function subscribeToNotifications(registration: ServiceWorkerRegistration)
     });
 
     if (subRes.ok) {
-      console.log("Push subscription registered");
+      console.log("✓ Push subscription registered to database");
     } else {
-      console.error("Failed to register push subscription");
+      const errorText = await subRes.text();
+      console.error(`✗ Failed to register push subscription (${subRes.status}):`, errorText);
     }
   } catch (err) {
     console.error("Push subscription error:", err);
