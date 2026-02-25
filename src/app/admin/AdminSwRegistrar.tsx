@@ -1,33 +1,62 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function AdminSwRegistrar() {
+  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/admin" })
-        .then(registration => {
+        .then(reg => {
           console.log("SW registered");
-          registerForPushNotifications(registration);
+          setRegistration(reg);
         })
         .catch(err => console.error("SW registration failed:", err));
     }
+
+    // Check current notification permission
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
   }, []);
+
+  const handleEnableNotifications = async () => {
+    if (!registration) {
+      console.error("Service worker not registered yet");
+      return;
+    }
+
+    try {
+      // Request notification permission (shows browser prompt)
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+
+      if (permission === "granted") {
+        // Subscribe to push notifications
+        await subscribeToNotifications(registration);
+      } else {
+        console.log("Notification permission denied by user");
+      }
+    } catch (err) {
+      console.error("Error requesting notification permission:", err);
+    }
+  };
+
+  // Only show button if notifications are supported and not already granted
+  const shouldShowButton = "Notification" in window && notificationPermission !== "granted";
+
+  // Expose the handler globally so AdminDashboard can call it
+  useEffect(() => {
+    (window as any).__enablePushNotifications = handleEnableNotifications;
+  }, [handleEnableNotifications]);
 
   return null;
 }
 
-async function registerForPushNotifications(registration: ServiceWorkerRegistration) {
+async function subscribeToNotifications(registration: ServiceWorkerRegistration) {
   try {
-    // Request notification permission
-    if ("Notification" in window && Notification.permission === "default") {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        console.log("Notification permission denied");
-        return;
-      }
-    }
-
     // Get VAPID public key from server
     const vapidRes = await fetch("/api/push/vapid-public-key");
     if (!vapidRes.ok) {
@@ -69,7 +98,7 @@ async function registerForPushNotifications(registration: ServiceWorkerRegistrat
       console.error("Failed to register push subscription");
     }
   } catch (err) {
-    console.error("Push registration error:", err);
+    console.error("Push subscription error:", err);
   }
 }
 

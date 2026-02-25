@@ -1051,6 +1051,37 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
+                {/* ─── Enable Notifications button ─── */}
+                {"Notification" in window && Notification.permission !== "granted" && (
+                  <button
+                    onClick={() => {
+                      const enableFn = (window as any).__enablePushNotifications;
+                      if (enableFn) enableFn();
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      width: "100%", padding: "10px 14px", marginBottom: 8,
+                      background: "linear-gradient(135deg, rgba(33,150,243,0.18), rgba(13,125,205,0.1))",
+                      border: "1px solid rgba(33,150,243,0.35)", borderRadius: 12,
+                      color: "#42a5f5", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.background = "linear-gradient(135deg, rgba(33,150,243,0.28), rgba(13,125,205,0.18))")}
+                    onMouseOut={e => (e.currentTarget.style.background = "linear-gradient(135deg, rgba(33,150,243,0.18), rgba(13,125,205,0.1))")}
+                  >
+                    <span style={{ fontSize: 18 }}>🔔</span>
+                    <div style={{ textAlign: "left" }}>
+                      <div>Enable Notifications</div>
+                      <div style={{ fontSize: 10, color: "#2a6aab", fontWeight: 400 }}>Get lead & email alerts</div>
+                    </div>
+                  </button>
+                )}
+                {Notification.permission === "granted" && (
+                  <div style={{ padding: "8px 14px", marginBottom: 8, fontSize: 12, color: "#42a5f5" }}>
+                    ✓ Notifications enabled
+                  </div>
+                )}
+
                 <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginTop: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px" }}>
                     <UserButton appearance={{ elements: { avatarBox: { width: 36, height: 36 } } }} />
