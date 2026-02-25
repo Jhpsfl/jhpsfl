@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
   try {
     const { clerk_user_id, subscription } = await request.json();
 
+    console.log('📤 Push subscribe request:', { clerk_user_id, endpoint: subscription?.endpoint?.substring(0, 80) });
+
     if (!clerk_user_id || !subscription) {
+      console.error('❌ Missing clerk_user_id or subscription');
       return NextResponse.json(
         { error: 'Missing clerk_user_id or subscription' },
         { status: 400 }
@@ -21,6 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!subscription.endpoint) {
+      console.error('❌ Invalid subscription object - no endpoint');
       return NextResponse.json(
         { error: 'Invalid subscription object' },
         { status: 400 }
@@ -29,8 +33,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
+    console.log('💾 Saving to push_subscriptions table...');
+
     // Upsert subscription keyed on endpoint (unique constraint)
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('push_subscriptions')
       .upsert(
         {
@@ -44,18 +50,19 @@ export async function POST(request: NextRequest) {
       );
 
     if (error) {
-      console.error('Failed to save push subscription:', error);
+      console.error('❌ Failed to save push subscription:', error);
       return NextResponse.json(
-        { error: 'Failed to save subscription' },
+        { error: 'Failed to save subscription', details: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    console.log('✅ Push subscription saved successfully:', { clerk_user_id, data });
+    return NextResponse.json({ success: true, data });
   } catch (err) {
-    console.error('Push subscribe error:', err);
+    console.error('❌ Push subscribe error:', err);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(err) },
       { status: 500 }
     );
   }
