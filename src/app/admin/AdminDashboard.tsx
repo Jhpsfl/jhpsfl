@@ -665,6 +665,39 @@ export default function AdminDashboard() {
     };
   }, [userId]);
 
+  // Handle Android Back Button globally for the dashboard
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      // 1. Modals have highest priority
+      if (showJobModal) {
+        setShowJobModal(false);
+        setEditingJob(null);
+        return;
+      }
+      if (showCustomerModal) {
+        setShowCustomerModal(false);
+        return;
+      }
+      
+      // 2. Customer detail view priority
+      if (activeTab === "customer_detail") {
+        setActiveTab("customers");
+        setCustomerDetail(null);
+        return;
+      }
+
+      // 3. Admin tab priority (fall back to previous tab)
+      if (e.state?.adminTab) {
+        setActiveTab(e.state.adminTab);
+      } else if (prevTab) {
+        setActiveTab(prevTab);
+      }
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [activeTab, prevTab, showJobModal, showCustomerModal]);
+
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -1809,6 +1842,9 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+
+
 
 
 
