@@ -192,6 +192,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
   const [collapsedMsgs, setCollapsedMsgs] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ message: msg, type });
@@ -308,7 +309,8 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
   };
 
   useEffect(() => { fetchThreads(); fetchSmsThreads(); }, [fetchThreads, fetchSmsThreads]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Scroll to top when opening a thread (email reads top-to-bottom, not chat-style)
+  useEffect(() => { messagesContainerRef.current?.scrollTo({ top: 0 }); }, [messages]);
 
   const filteredThreads = threads.filter(t => {
     if (!searchQuery) return true;
@@ -554,7 +556,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
           </div>
 
           {/* Messages — scrollable */}
-          <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
             {messages.map(msg => {
               const isOutbound = msg.direction === "outbound";
               const senderName = isOutbound ? "JHPS" : (selectedThreadData?.customer_name || msg.from_email.split("@")[0]);

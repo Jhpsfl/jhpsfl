@@ -553,15 +553,19 @@ export default function AdminDashboard() {
     window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
   }, []);
 
-  // Push 1 extra "buffer" sentinel on the very first user interaction.
-  // This buffer ensures that when the user backtracks all the way to the root,
-  // there's still one sentinel left to catch the back press and show the exit toast.
+  // Push 2 extra "buffer" sentinels on the very first user interaction.
+  // Why 2: when the user backtracks all the way, the LAST sentinel's back press
+  // lands on the initial /admin entry (no sentinel state) which our capture handler
+  // ignores. We need 2 buffers so that after all nav sentinels are consumed:
+  //   buffer-2 back → lands on buffer-1 (sentinel) → handler shows exit toast
+  //   buffer-1 back → lands on initial (no sentinel) → Chrome closes TWA
   const firstInteractionDone = useRef(false);
   useEffect(() => {
     const handler = () => {
       if (!firstInteractionDone.current) {
         firstInteractionDone.current = true;
-        pushSentinel(); // has user activation — non-skippable
+        pushSentinel(); // buffer 1 — has user activation
+        pushSentinel(); // buffer 2 — has user activation
       }
     };
     document.addEventListener("click", handler, true);
