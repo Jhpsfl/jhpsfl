@@ -158,6 +158,9 @@ interface FormData {
   address: string;
   city: string;
   zip: string;
+  billingAddress: string;
+  billingCity: string;
+  billingZip: string;
   service: string;
   jobDescription: string;
   invoiceNumber: string;
@@ -189,8 +192,10 @@ export default function PaymentPage() {
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
   const [formData, setFormData] = useState<FormData>({
     name: "", email: "", phone: "", address: "", city: "", zip: "",
+    billingAddress: "", billingCity: "", billingZip: "",
     service: "", jobDescription: "", invoiceNumber: "", amount: "",
   });
+  const [sameBilling, setSameBilling] = useState(true);
   const [squareCard, setSquareCard] = useState<SquareCard | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -339,6 +344,9 @@ export default function PaymentPage() {
           customerEmail: formData.email,
           service: formData.service,
           invoiceNumber: formData.invoiceNumber,
+          billingAddress: sameBilling
+            ? `${formData.address}${formData.city ? `, ${formData.city}` : ""}${formData.zip ? ` ${formData.zip}` : ""}`
+            : `${formData.billingAddress}${formData.billingCity ? `, ${formData.billingCity}` : ""}${formData.billingZip ? ` ${formData.billingZip}` : ""}`,
           note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
             .filter(Boolean).join(" — "),
           saveCard: saveCard && !!clerkUserId,
@@ -554,6 +562,40 @@ export default function PaymentPage() {
         .mobile-menu a { color: #e8f5e8; font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: 'Playfair Display', serif; }
         .mobile-menu a:hover { color: #4CAF50; }
 
+        .billing-expand {
+          overflow: hidden;
+          transform-origin: center;
+          transition: max-height 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                      transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .billing-expand.open {
+          max-height: 400px;
+          opacity: 1;
+          transform: scaleY(1);
+        }
+        .billing-expand.closed {
+          max-height: 0;
+          opacity: 0;
+          transform: scaleY(0.85);
+        }
+
+        .same-billing-toggle {
+          display: flex; align-items: center; gap: 10; cursor: pointer;
+          padding: 12px 16px; border-radius: 10px;
+          border: 1px solid #1a3a1a; background: rgba(76,175,80,0.04);
+          transition: border-color 0.2s, background 0.2s;
+          user-select: none;
+        }
+        .same-billing-toggle:hover {
+          border-color: rgba(76,175,80,0.3);
+          background: rgba(76,175,80,0.07);
+        }
+        .same-billing-toggle.checked {
+          border-color: rgba(76,175,80,0.35);
+          background: rgba(76,175,80,0.08);
+        }
+
         .noise-overlay {
           position: fixed; inset: 0; pointer-events: none; z-index: 9990; opacity: 0.03;
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -746,7 +788,7 @@ export default function PaymentPage() {
                     📞 407-686-9817
                   </a>
                   <div style={{ marginTop: 24 }}>
-                    <button onClick={() => { setStep("form"); setPaymentId(null); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
+                    <button onClick={() => { setStep("form"); setPaymentId(null); setSameBilling(true); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", billingAddress: "", billingCity: "", billingZip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
                       style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
                       Make another payment
                     </button>
@@ -939,18 +981,16 @@ export default function PaymentPage() {
                         </div>
                       </div>
 
-                      {/* ── Billing Address ── */}
+                      {/* ── Service Address ── */}
                       <div style={{
                         background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
                         border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
                       }}>
                         <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700, marginBottom: 8 }}>
-                          Billing Address
+                          Service Address
                         </h2>
                         <p style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 20 }}>
-                          {invoiceMode
-                            ? "Confirm or enter your billing address for this payment."
-                            : "Enter your service address."}
+                          Where the work is or was performed.
                         </p>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -971,6 +1011,71 @@ export default function PaymentPage() {
                               <label style={labelStyle}>Zip Code</label>
                               <input className="pay-input" placeholder="32725" value={formData.zip}
                                 onChange={(e) => updateField("zip", e.target.value)} />
+                            </div>
+                          </div>
+
+                          {/* Same-as-service-address checkbox */}
+                          <div
+                            className={`same-billing-toggle${sameBilling ? " checked" : ""}`}
+                            onClick={() => setSameBilling(v => !v)}
+                            style={{ display: "flex", alignItems: "center", gap: 12 }}
+                          >
+                            {/* Custom checkbox */}
+                            <div style={{
+                              width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                              border: `2px solid ${sameBilling ? "#4CAF50" : "#2a4a2a"}`,
+                              background: sameBilling ? "rgba(76,175,80,0.2)" : "transparent",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              transition: "all 0.2s",
+                            }}>
+                              {sameBilling && (
+                                <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                                  <path d="M1 4.5L4 7.5L10 1" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: 14, fontWeight: 600, color: sameBilling ? "#8aba8a" : "#5a8a5a" }}>
+                                Billing address same as service address
+                              </p>
+                              {!sameBilling && (
+                                <p style={{ fontSize: 12, color: "#3a5a3a", marginTop: 2 }}>
+                                  Enter a different billing address below
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Animated billing address */}
+                          <div className={`billing-expand${sameBilling ? " closed" : " open"}`}>
+                            <div style={{
+                              background: "rgba(33,150,243,0.04)", border: "1px solid rgba(33,150,243,0.15)",
+                              borderRadius: 14, padding: "20px 18px",
+                              display: "flex", flexDirection: "column", gap: 14,
+                            }}>
+                              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: "#42a5f5", textTransform: "uppercase" }}>
+                                Billing Address
+                              </p>
+                              <div>
+                                <label style={{ ...labelStyle, color: "#5a8a9a" }}>Street Address</label>
+                                <input className="pay-input" placeholder="123 Billing Street" value={formData.billingAddress}
+                                  onChange={(e) => updateField("billingAddress", e.target.value)}
+                                  style={{ borderColor: "rgba(33,150,243,0.2)" }} />
+                              </div>
+                              <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
+                                <div>
+                                  <label style={{ ...labelStyle, color: "#5a8a9a" }}>City</label>
+                                  <input className="pay-input" placeholder="Deltona" value={formData.billingCity}
+                                    onChange={(e) => updateField("billingCity", e.target.value)}
+                                    style={{ borderColor: "rgba(33,150,243,0.2)" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, color: "#5a8a9a" }}>Zip Code</label>
+                                  <input className="pay-input" placeholder="32725" value={formData.billingZip}
+                                    onChange={(e) => updateField("billingZip", e.target.value)}
+                                    style={{ borderColor: "rgba(33,150,243,0.2)" }} />
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
