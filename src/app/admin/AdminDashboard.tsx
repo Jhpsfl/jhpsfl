@@ -654,6 +654,7 @@ export default function AdminDashboard() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
+  const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<{ id: string; name: string } | null>(null);
 
   // ─── Back-button refs for child components ───
   const inboxBackRef = useRef<(() => boolean) | null>(null);
@@ -926,6 +927,46 @@ export default function AdminDashboard() {
       else if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
     } else {
       showToast(res?.error || "Failed to delete job", "error");
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!window.confirm("Delete this payment record? This cannot be undone.")) return;
+    const res = await adminPost("payments", "delete", { id: paymentId });
+    if (res?.success) {
+      showToast("Payment deleted");
+      if (activeTab === "payments") loadTab("payments");
+      if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+      loadTab("overview");
+    } else {
+      showToast(res?.error || "Failed to delete payment", "error");
+    }
+  };
+
+  const handleDeleteSubscription = async (subId: string) => {
+    if (!window.confirm("Delete this subscription? This cannot be undone.")) return;
+    const res = await adminPost("subscriptions", "delete", { id: subId });
+    if (res?.success) {
+      showToast("Subscription deleted");
+      if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+    } else {
+      showToast(res?.error || "Failed to delete subscription", "error");
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!confirmDeleteCustomer) return;
+    const { id } = confirmDeleteCustomer;
+    setConfirmDeleteCustomer(null);
+    const res = await adminPost("customers", "delete", { id });
+    if (res?.success) {
+      showToast("Customer and all related records deleted");
+      setActiveTab("customers");
+      setCustomerDetail(null);
+      loadTab("customers");
+      loadTab("overview");
+    } else {
+      showToast(res?.error || "Failed to delete customer", "error");
     }
   };
 
@@ -1815,6 +1856,16 @@ export default function AdminDashboard() {
                             }}>
                               💵 Cash Payment
                             </button>
+                            <button
+                              className="action-btn"
+                              onClick={() => setConfirmDeleteCustomer({
+                                id: customerDetail.customer.id,
+                                name: customerDetail.customer.name || customerDetail.customer.email || "this customer",
+                              })}
+                              style={{ background: "rgba(198,40,40,0.12)", border: "1px solid rgba(198,40,40,0.3)", color: "#ef9a9a" }}
+                            >
+                              🗑️ Delete Customer
+                            </button>
                           </div>
                         </div>
 
@@ -1867,7 +1918,7 @@ export default function AdminDashboard() {
                         {/* Payments */}
                         <div style={{ marginBottom: 24 }}>
                           <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Payment History</h3>
-                          <DataTable headers={["Amount", "Status", "Method", "Date", "Receipt"]} emptyMessage="No payments recorded">
+                          <DataTable headers={["Amount", "Status", "Method", "Date", "Receipt", ""]} emptyMessage="No payments recorded">
                             {customerDetail.payments.map((p) => (
                               <TableRow key={p.id}>
                                 <Td mono accent>{formatCurrency(p.amount)}</Td>
@@ -1879,6 +1930,9 @@ export default function AdminDashboard() {
                                     <a href={p.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>View ↗</a>
                                   ) : "—"}
                                 </Td>
+                                <Td>
+                                  <button className="quick-action quick-action-danger" onClick={() => handleDeletePayment(p.id)}>Delete</button>
+                                </Td>
                               </TableRow>
                             ))}
                           </DataTable>
@@ -1888,7 +1942,7 @@ export default function AdminDashboard() {
                         {customerDetail.subscriptions.length > 0 && (
                           <div>
                             <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Subscriptions</h3>
-                            <DataTable headers={["Plan", "Service", "Frequency", "Amount", "Status", "Next Billing"]}>
+                            <DataTable headers={["Plan", "Service", "Frequency", "Amount", "Status", "Next Billing", ""]}>
                               {customerDetail.subscriptions.map((s) => (
                                 <TableRow key={s.id}>
                                   <Td>{s.plan_name}</Td>
@@ -1897,6 +1951,9 @@ export default function AdminDashboard() {
                                   <Td mono accent>{formatCurrency(s.amount)}</Td>
                                   <Td><StatusBadge status={s.status} /></Td>
                                   <Td>{formatDate(s.next_billing_date)}</Td>
+                                  <Td>
+                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteSubscription(s.id)}>Delete</button>
+                                  </Td>
                                 </TableRow>
                               ))}
                             </DataTable>
@@ -1944,7 +2001,7 @@ export default function AdminDashboard() {
                     {/* ─── PAYMENTS TAB ─── */}
                     {activeTab === "payments" && (() => {
                       // Merge card/cash payments + paid invoices into one sorted list
-                      type PayEntry = { key: string; customer: string; amount: number; type: string; date: string; invoiceId?: string; invoiceNumber?: string; receiptUrl?: string; };
+                      type PayEntry = { key: string; customer: string; amount: number; type: string; date: string; paymentId?: string; invoiceId?: string; invoiceNumber?: string; receiptUrl?: string; };
                       const entries: PayEntry[] = [
                         ...payments.map(p => ({
                           key: `pay-${p.id}`,
@@ -1952,6 +2009,7 @@ export default function AdminDashboard() {
                           amount: p.amount,
                           type: p.payment_method === "cash" ? "💵 Cash" : p.payment_method === "card" ? "💳 Card" : p.payment_method || "—",
                           date: p.paid_at || p.created_at,
+                          paymentId: p.id,
                           receiptUrl: p.square_receipt_url || undefined,
                         })),
                         ...paidInvoices.map(inv => ({
@@ -1975,7 +2033,7 @@ export default function AdminDashboard() {
                               💵 Record Cash
                             </button>
                           </div>
-                          <DataTable headers={["Customer", "Amount", "Type", "Date", "Action"]} emptyMessage="No payments recorded yet">
+                          <DataTable headers={["Customer", "Amount", "Type", "Date", "Action", ""]} emptyMessage="No payments recorded yet">
                             {entries.map(e => (
                               <TableRow key={e.key}>
                                 <Td>{e.customer}</Td>
@@ -1993,6 +2051,11 @@ export default function AdminDashboard() {
                                   ) : e.receiptUrl ? (
                                     <a href={e.receiptUrl} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Receipt ↗</a>
                                   ) : "—"}
+                                </Td>
+                                <Td>
+                                  {e.paymentId && (
+                                    <button className="quick-action quick-action-danger" onClick={() => handleDeletePayment(e.paymentId!)}>Delete</button>
+                                  )}
                                 </Td>
                               </TableRow>
                             ))}
@@ -2059,6 +2122,52 @@ export default function AdminDashboard() {
                 onSave={handleSaveCustomer}
               />
             )}
+            {/* ─── CONFIRM DELETE CUSTOMER MODAL ─── */}
+            {confirmDeleteCustomer && (
+              <div onClick={() => setConfirmDeleteCustomer(null)} style={{
+                position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 20, backdropFilter: "blur(8px)",
+              }}>
+                <div onClick={e => e.stopPropagation()} style={{
+                  background: "linear-gradient(160deg, #1a0d0d, #110909)",
+                  border: "1px solid rgba(239,83,80,0.3)", borderRadius: 20, padding: "32px 28px",
+                  maxWidth: 440, width: "100%", boxShadow: "0 40px 80px rgba(0,0,0,0.6)",
+                }}>
+                  <div style={{ fontSize: 36, textAlign: "center", marginBottom: 12 }}>⚠️</div>
+                  <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#ffcdd2", fontWeight: 700, textAlign: "center", marginBottom: 8 }}>
+                    Delete Customer?
+                  </h3>
+                  <p style={{ color: "#ef9a9a", fontSize: 15, fontWeight: 600, textAlign: "center", marginBottom: 12 }}>
+                    {confirmDeleteCustomer.name}
+                  </p>
+                  <div style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 24 }}>
+                    <p style={{ color: "#9a7a7a", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+                      This will permanently delete this customer and <strong style={{ color: "#ef9a9a" }}>all associated records</strong>:<br/>
+                      jobs · payments · invoices · subscriptions · job sites
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button onClick={() => setConfirmDeleteCustomer(null)} style={{
+                      flex: 1, padding: "12px", borderRadius: 12,
+                      border: "1px solid #2a2a2a", background: "transparent",
+                      color: "#8aba8a", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleDeleteCustomer} style={{
+                      flex: 1, padding: "12px", borderRadius: 12, border: "none",
+                      background: "linear-gradient(135deg, #c62828, #b71c1c)",
+                      color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      boxShadow: "0 4px 20px rgba(198,40,40,0.4)",
+                    }}>
+                      Yes, Delete Everything
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ─── CASH PAYMENT MODAL ─── */}
             {showCashModal && (
               <CashPaymentModal

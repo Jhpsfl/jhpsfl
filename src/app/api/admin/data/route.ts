@@ -296,6 +296,13 @@ export async function POST(request: NextRequest) {
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });
         }
+        if (action === "delete") {
+          const { id } = payload;
+          if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+          const { error } = await supabase.from("subscriptions").delete().eq("id", id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true });
+        }
         break;
       }
 
@@ -317,6 +324,13 @@ export async function POST(request: NextRequest) {
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });
         }
+        if (action === "delete") {
+          const { id } = payload;
+          if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+          const { error } = await supabase.from("payments").delete().eq("id", id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true });
+        }
         break;
       }
 
@@ -336,6 +350,14 @@ export async function POST(request: NextRequest) {
           const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });
+        }
+        if (action === "delete") {
+          const { id } = payload;
+          if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+          // Hard delete — DB cascades to jobs, payments, invoices, subscriptions, job_sites
+          const { error } = await supabase.from("customers").delete().eq("id", id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true });
         }
         break;
       }
