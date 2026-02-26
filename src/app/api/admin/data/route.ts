@@ -226,6 +226,7 @@ export async function POST(request: NextRequest) {
                 customer_id: payload.customer_id,
                 invoice_number: payload.invoice_number,
                 status: payload.status || "draft",
+                amount: payload.total || payload.subtotal || 0,
                 subtotal: payload.subtotal,
                 tax_rate: payload.tax_rate || 0,
                 tax_amount: payload.tax_amount || 0,
