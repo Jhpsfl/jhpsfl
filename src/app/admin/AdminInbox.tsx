@@ -169,7 +169,7 @@ const IconMore = () => (
 );
 
 // ─── Main Component ───
-export default function AdminInbox({ userId }: { userId: string }) {
+export default function AdminInbox({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
   const [inboxTab, setInboxTab] = useState<InboxTab>("email");
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [smsThreads, setSmsThreads] = useState<SmsThread[]>([]);
@@ -207,22 +207,19 @@ export default function AdminInbox({ userId }: { userId: string }) {
     setCollapsedMsgs(new Set());
   }, []);
 
-  // ─── Android back button / browser history handling ───
+  // ─── Back button: expose handler to parent via ref ───
   useEffect(() => {
-    if (selectedThread) {
-      window.history.pushState({ inboxThread: selectedThread }, "");
+    if (backRef) {
+      backRef.current = () => {
+        if (selectedThread) {
+          closeThread();
+          return true;
+        }
+        return false;
+      };
+      return () => { backRef.current = null; };
     }
-  }, [selectedThread]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (selectedThread) {
-        closeThread();
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [selectedThread, closeThread]);
+  }, [backRef, selectedThread, closeThread]);
 
   // ─── Data fetching ───
   const fetchThreads = useCallback(async (quiet = false) => {

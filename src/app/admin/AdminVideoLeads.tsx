@@ -104,7 +104,7 @@ function fileSize(bytes: number) {
 }
 
 // ─── Main Component ───
-export default function AdminVideoLeads({ userId }: { userId: string }) {
+export default function AdminVideoLeads({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
   const [leads, setLeads] = useState<VideoLead[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -282,24 +282,20 @@ export default function AdminVideoLeads({ userId }: { userId: string }) {
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
-  // Handle Android Back Button for Lead Detail
+  // ─── Back button: expose handler to parent via ref ───
   useEffect(() => {
-    if (selectedLead) {
-      window.history.pushState({ videoLeadId: selectedLead }, "");
+    if (backRef) {
+      backRef.current = () => {
+        if (selectedLead) {
+          setSelectedLead(null);
+          setLeadDetail(null);
+          return true;
+        }
+        return false;
+      };
+      return () => { backRef.current = null; };
     }
-  }, [selectedLead]);
-
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (selectedLead) {
-        // Stop default back behavior and close detail
-        setSelectedLead(null);
-        setLeadDetail(null);
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [selectedLead]);
+  }, [backRef, selectedLead]);
 
   // ─── RENDER: Lead Detail View ───
   if (selectedLead && leadDetail) {

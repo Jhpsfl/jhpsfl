@@ -487,8 +487,16 @@ export default function AdminDashboard() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   useEffect(() => {
-    if (showCustomerModal) window.history.pushState({ modal: "customer" }, "");
+    if (showCustomerModal) window.history.pushState({ modal: "customer", ts: Date.now() }, "");
   }, [showCustomerModal]);
+  useEffect(() => {
+    if (showJobModal) window.history.pushState({ modal: "job", ts: Date.now() }, "");
+  }, [showJobModal]);
+
+  // ─── Back-button refs for child components ───
+  const inboxBackRef = useRef<(() => boolean) | null>(null);
+  const videoLeadsBackRef = useRef<(() => boolean) | null>(null);
+  const invoicesBackRef = useRef<(() => boolean) | null>(null);
 
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
@@ -591,13 +599,15 @@ export default function AdminDashboard() {
       const res = await adminFetch("customer_detail", customerId);
       if (res) {
         setCustomerDetail(res);
+        setPrevTab(activeTab as Tab);
         setActiveTab("customer_detail");
+        window.history.pushState({ view: "customer_detail", ts: Date.now() }, "");
       }
     } catch (err) {
       console.error("Customer detail error:", err);
     }
     setLoading(false);
-  }, [adminFetch]);
+  }, [adminFetch, activeTab]);
 
   useEffect(() => {
     if (userId) loadTab("overview");
@@ -666,42 +676,75 @@ export default function AdminDashboard() {
     };
   }, [userId]);
 
-  // Handle Android Back Button globally for the dashboard
+  // ─── Seed history stack on mount (prevents TWA from closing on first back press) ───
+  useEffect(() => {
+    window.history.replaceState({ view: "overview", ts: Date.now() }, "");
+    window.history.pushState({ view: "overview", ts: Date.now() }, "");
+  }, []);
+
+  // Handle Android Back Button globally for the dashboard (single centralized handler)
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      // 1. Modals have highest priority
+      // Always push state after handling to prevent TWA history stack from emptying
+      const pushAfter = (view: string) => {
+        window.history.pushState({ view, ts: Date.now() }, "");
+      };
+
+      // Priority 1: Close modals
       if (showJobModal) {
         setShowJobModal(false);
         setEditingJob(null);
-        window.history.pushState({ view: activeTab, timestamp: Date.now() }, "");
+        pushAfter(activeTab);
         return;
       }
       if (showCustomerModal) {
         setShowCustomerModal(false);
-        window.history.pushState({ view: activeTab, timestamp: Date.now() }, "");
-        return;
-      }
-      
-      // 2. Customer detail view priority
-      if (activeTab === "customer_detail") {
-        setActiveTab("customers");
-        setCustomerDetail(null);
-        window.history.pushState({ view: "customers", timestamp: Date.now() }, "");
+        pushAfter(activeTab);
         return;
       }
 
-      // 3. Admin tab priority (fall back to previous tab)
+      // Priority 2: Let active child component handle back (thread view, lead detail, invoice detail)
+      if (activeTab === "messages" && inboxBackRef.current?.()) {
+        pushAfter("messages");
+        return;
+      }
+      if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) {
+        pushAfter("video_leads");
+        return;
+      }
+      if (activeTab === "invoices" && invoicesBackRef.current?.()) {
+        pushAfter("invoices");
+        return;
+      }
+
+      // Priority 3: Customer detail → customers tab
+      if (activeTab === "customer_detail") {
+        setActiveTab("customers");
+        setCustomerDetail(null);
+        pushAfter("customers");
+        return;
+      }
+
+      // Priority 4: Navigate to previous tab
       if (prevTab && prevTab !== activeTab) {
         const nextTab = prevTab;
         setPrevTab(null);
         setActiveTab(nextTab);
-        window.history.pushState({ view: nextTab, timestamp: Date.now() }, "");
-      } else if (activeTab !== "overview") {
-        setActiveTab("overview");
-        window.history.pushState({ view: "overview", timestamp: Date.now() }, "");
+        pushAfter(nextTab);
+        return;
       }
+
+      // Priority 5: Navigate to overview
+      if (activeTab !== "overview") {
+        setActiveTab("overview");
+        pushAfter("overview");
+        return;
+      }
+
+      // Priority 6: TRAP — already on overview, push state to prevent TWA from closing
+      pushAfter("overview");
     };
-    
+
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [activeTab, prevTab, showJobModal, showCustomerModal]);
@@ -766,9 +809,12 @@ export default function AdminDashboard() {
   });
 
   const switchTab = (tab: Tab) => {
+    setPrevTab(activeTab);
     setActiveTab(tab);
     setCustomerDetail(null);
     setSidebarOpen(false);
+    // Push history entry for every tab switch (Android back button support)
+    window.history.pushState({ view: tab, ts: Date.now() }, "");
     // Optimistically clear badge when user switches to that tab
     if (tab === "messages") {
       setBadgeCounts(prev => ({ ...prev, unreadEmail: 0 }));
@@ -1628,17 +1674,17 @@ export default function AdminDashboard() {
 
                     {/* ─── VIDEO LEADS TAB ─── */}
                     {activeTab === "video_leads" && userId && (
-                      <AdminVideoLeads userId={userId} />
+                      <AdminVideoLeads userId={userId} backRef={videoLeadsBackRef} />
                     )}
 
                     {/* ─── MESSAGES TAB ─── */}
                     {activeTab === "messages" && userId && (
-                      <AdminInbox userId={userId} />
+                      <AdminInbox userId={userId} backRef={inboxBackRef} />
                     )}
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} />
                     )}
                   </div>
                 )}

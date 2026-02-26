@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId }: { userId: string }) {
+export default function AdminInvoices({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -246,6 +246,25 @@ export default function AdminInvoices({ userId }: { userId: string }) {
   const [sendMethod, setSendMethod] = useState<"email" | "link">("email");
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // ─── Back button: expose handler to parent via ref ───
+  useEffect(() => {
+    if (backRef) {
+      backRef.current = () => {
+        if (showSendModal) {
+          setShowSendModal(false);
+          return true;
+        }
+        if (view !== "list") {
+          setView("list");
+          setSelectedInvoice(null);
+          return true;
+        }
+        return false;
+      };
+      return () => { backRef.current = null; };
+    }
+  }, [backRef, view, showSendModal]);
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
