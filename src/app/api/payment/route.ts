@@ -187,19 +187,24 @@ export async function POST(request: Request) {
             }
           }
 
-          // Mark invoice as paid if matched
+          // Mark invoice as paid + link customer if invoice had none
           if (invoiceNumber) {
             const { data: inv } = await supabase.from('invoices')
-              .select('id')
+              .select('id, customer_id')
               .eq('invoice_number', invoiceNumber)
               .limit(1)
               .single();
             if (inv) {
-              await supabase.from('invoices').update({
+              const invoiceUpdate: Record<string, unknown> = {
                 status: 'paid',
                 paid_date: new Date().toISOString().split('T')[0],
                 amount_paid: parseFloat(amount),
-              }).eq('id', inv.id);
+              };
+              // If invoice had no customer, link the newly-created one
+              if (!inv.customer_id && customerId) {
+                invoiceUpdate.customer_id = customerId;
+              }
+              await supabase.from('invoices').update(invoiceUpdate).eq('id', inv.id);
             }
           }
         }

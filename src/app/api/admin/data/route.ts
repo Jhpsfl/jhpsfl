@@ -285,7 +285,7 @@ export async function POST(request: NextRequest) {
             const { data, error } = await supabase
               .from("invoices")
               .insert({
-                customer_id: payload.customer_id,
+                customer_id: payload.customer_id || null,
                 invoice_number: payload.invoice_number,
                 status: payload.status || "draft",
                 amount: payload.total || payload.subtotal || 0,

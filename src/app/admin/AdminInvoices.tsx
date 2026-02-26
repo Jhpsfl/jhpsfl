@@ -32,7 +32,7 @@ interface InvoiceLineItem {
 
 interface Invoice {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   invoice_number: string;
   status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
   subtotal: number;
@@ -248,7 +248,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
   // Invoice form state
   const [form, setForm] = useState({
-    customer_id: "",
+    customer_id: null as string | null,
     invoice_number: generateInvoiceNumber(),
     due_date: getDefaultDueDate(),
     show_due_date: true,
@@ -315,7 +315,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const getPaymentLink = (invoice: Invoice | null): string => {
     if (!invoice) return "";
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const customer = customers.find(c => c.id === invoice.customer_id);
+    const customer = invoice.customer_id ? customers.find(c => c.id === invoice.customer_id) : null;
     const params = new URLSearchParams({
       invoice: invoice.invoice_number,
       amount: invoice.total.toFixed(2),
@@ -501,17 +501,13 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
   // ─── Save invoice ───
   const handleSaveInvoice = async (asDraft = true) => {
-    if (!form.customer_id) {
-      showToast("Please select a customer", "error");
-      return;
-    }
     if (!form.line_items.some(item => item.description && item.amount > 0)) {
       showToast("Add at least one line item", "error");
       return;
     }
 
     const payload: Record<string, unknown> = {
-      customer_id: form.customer_id,
+      customer_id: (form.customer_id && form.customer_id !== "__link_only__") ? form.customer_id : null,
       invoice_number: form.invoice_number,
       due_date: form.show_due_date ? form.due_date : null,
       tax_rate: form.tax_rate,
@@ -532,8 +528,23 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     const res = await adminPost("invoices", action, payload);
 
     if (res?.success || res?.data) {
-      showToast(view === "edit" ? "Invoice updated" : "Invoice created");
       await loadInvoices();
+
+      if (!asDraft && res?.data && (!form.customer_id || form.customer_id === "__link_only__")) {
+        // Link-only invoice: auto-copy payment link
+        const link = getPaymentLink(res.data);
+        navigator.clipboard.writeText(link).then(() => {
+          showToast("Invoice created — payment link copied to clipboard!");
+        }).catch(() => {
+          showToast("Invoice created! Copy the payment link from the invoice detail.");
+        });
+        setSelectedInvoice(res.data);
+        setView("detail");
+        resetForm();
+        return;
+      }
+
+      showToast(view === "edit" ? "Invoice updated" : "Invoice created");
 
       if (!asDraft && res?.data) {
         setSelectedInvoice(res.data);
@@ -552,7 +563,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     if (!invoice) return;
 
     setSendingInvoice(true);
-    const customer = customers.find(c => c.id === invoice.customer_id);
+    const customer = invoice.customer_id ? customers.find(c => c.id === invoice.customer_id) : null;
 
     if (sendMethod === "email" && customer?.email) {
       const paymentLink = getPaymentLink(invoice);
@@ -639,7 +650,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // ─── Reset form ───
   const resetForm = () => {
     setForm({
-      customer_id: "",
+      customer_id: null,
       invoice_number: generateInvoiceNumber(),
       due_date: getDefaultDueDate(),
       show_due_date: true,
@@ -654,7 +665,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     onNavigate?.(); // push sentinel during user gesture
     setSelectedInvoice(invoice);
     setForm({
-      customer_id: invoice.customer_id,
+      customer_id: invoice.customer_id || null,
       invoice_number: invoice.invoice_number,
       due_date: invoice.due_date || getDefaultDueDate(),
       show_due_date: !!invoice.due_date,
@@ -867,8 +878,8 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                         <td style={{ padding: "14px 12px", fontSize: 14, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, borderBottom: "1px solid #0d1a0d" }}>
                           {inv.invoice_number}
                         </td>
-                        <td style={{ padding: "14px 12px", fontSize: 14, color: "#c8e0c8", borderBottom: "1px solid #0d1a0d" }}>
-                          {customer?.name || customer?.email || "—"}
+                        <td style={{ padding: "14px 12px", fontSize: 14, color: inv.customer_id ? "#c8e0c8" : "#64b5f6", borderBottom: "1px solid #0d1a0d" }}>
+                          {inv.customer_id ? (customer?.name || customer?.email || "—") : "🔗 Link Only"}
                         </td>
                         <td style={{ padding: "14px 12px", borderBottom: "1px solid #0d1a0d" }}>
                           <StatusBadge status={inv.status} />
@@ -946,34 +957,51 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             </h1>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 24, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 24, alignItems: "start", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
             {/* ─── Left: Form ─── */}
             <div style={{
               background: "linear-gradient(160deg, #0d1f0d, #091409)",
               border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
+              overflow: "hidden", minWidth: 0, maxWidth: "100%", boxSizing: "border-box",
             }}>
               {/* Customer & Invoice Info */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
                 <div style={{ gridColumn: isMobile ? "1" : "1 / -1" }}>
-                  <label style={labelStyle}>Customer *</label>
+                  <label style={labelStyle}>Customer</label>
                   <select
-                    value={form.customer_id}
+                    value={form.customer_id ?? ""}
                     onChange={e => {
                       if (e.target.value === "__new__") {
                         setNewCustomerForm({ name: "", email: "", phone: "" });
                         setShowNewCustomer(true);
                       } else {
-                        setForm(prev => ({ ...prev, customer_id: e.target.value }));
+                        setForm(prev => ({ ...prev, customer_id: e.target.value || null }));
                       }
                     }}
                     style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
                   >
-                    <option value="">Select customer</option>
+                    <option value="">Select customer (optional)</option>
+                    <option value="__link_only__">🔗 No Customer — Link Only</option>
                     <option value="__new__">+ New Customer</option>
                     {customers.map(c => (
                       <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
                     ))}
                   </select>
+
+                  {/* Link-only mode banner */}
+                  {form.customer_id === "__link_only__" && (
+                    <div style={{
+                      marginTop: 8, padding: "12px 14px", borderRadius: 10,
+                      background: "rgba(33,150,243,0.06)", border: "1px solid rgba(33,150,243,0.2)",
+                    }}>
+                      <p style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600, marginBottom: 4 }}>
+                        🔗 Link-Only Invoice
+                      </p>
+                      <p style={{ fontSize: 12, color: "#5a8a8a", lineHeight: 1.5 }}>
+                        No customer assigned. Save, then copy the payment link and send it. The recipient will enter their own info when they pay.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Customer info card */}
                   {form.customer_id && (() => {
@@ -1166,7 +1194,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                 {form.line_items.map((item, idx) => (
                   isMobile ? (
                     /* Mobile: card layout */
-                    <div key={item.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+                    <div key={item.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 10, overflow: "hidden", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
                       <textarea
                         value={item.description}
                         onChange={e => updateLineItem(item.id, "description", e.target.value)}
@@ -1314,10 +1342,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
                 <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 12, marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>Bill To</div>
-                  <div style={{ fontSize: 13, color: "#c8e0c8" }}>
-                    {form.customer_id
+                  <div style={{ fontSize: 13, color: (form.customer_id && form.customer_id !== "__link_only__") ? "#c8e0c8" : "#64b5f6" }}>
+                    {(form.customer_id && form.customer_id !== "__link_only__")
                       ? (customers.find(c => c.id === form.customer_id)?.name || "Customer Selected")
-                      : "Select a customer..."
+                      : (form.customer_id === "__link_only__" ? "🔗 Link Only — no customer" : "Select a customer...")
                     }
                   </div>
                 </div>
@@ -1426,14 +1454,22 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
               {/* Bill To */}
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Bill To</div>
-                <div style={{ fontSize: 15, color: "#c8e0c8", fontWeight: 600 }}>
-                  {selectedInvoice.customers?.name || "—"}
-                </div>
-                {selectedInvoice.customers?.email && (
-                  <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.email}</div>
-                )}
-                {selectedInvoice.customers?.phone && (
-                  <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.phone}</div>
+                {selectedInvoice.customer_id ? (
+                  <>
+                    <div style={{ fontSize: 15, color: "#c8e0c8", fontWeight: 600 }}>
+                      {selectedInvoice.customers?.name || "—"}
+                    </div>
+                    {selectedInvoice.customers?.email && (
+                      <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.email}</div>
+                    )}
+                    {selectedInvoice.customers?.phone && (
+                      <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.phone}</div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600 }}>
+                    🔗 Link Only — recipient fills in their info at payment
+                  </div>
                 )}
               </div>
 
@@ -1532,20 +1568,29 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                   </button>
                 )}
 
-                {/* Copy payment link */}
+                {/* Copy payment link — prominent for link-only invoices */}
                 {selectedInvoice.status !== "paid" && (
                   <button
                     onClick={() => handleCopyLink(selectedInvoice)}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       padding: "12px", borderRadius: 12,
-                      border: "1px solid rgba(33,150,243,0.3)",
-                      background: "rgba(33,150,243,0.08)", color: "#42a5f5",
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                      border: !selectedInvoice.customer_id ? "none" : "1px solid rgba(33,150,243,0.3)",
+                      background: !selectedInvoice.customer_id ? "linear-gradient(135deg, #1e88e5, #1565c0)" : "rgba(33,150,243,0.08)",
+                      color: !selectedInvoice.customer_id ? "#fff" : "#42a5f5",
+                      fontSize: !selectedInvoice.customer_id ? 14 : 13,
+                      fontWeight: !selectedInvoice.customer_id ? 700 : 600,
+                      cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                      ...((!selectedInvoice.customer_id) ? { boxShadow: "0 4px 20px rgba(33,150,243,0.35)" } : {}),
                     }}
                   >
-                    <IconCopy /> {copiedLink ? "Copied!" : "Copy Payment Link (for SMS)"}
+                    <IconCopy /> {copiedLink ? "Copied!" : (!selectedInvoice.customer_id ? "Copy Payment Link" : "Copy Payment Link (for SMS)")}
                   </button>
+                )}
+                {!selectedInvoice.customer_id && selectedInvoice.status !== "paid" && (
+                  <p style={{ fontSize: 12, color: "#5a8a8a", textAlign: "center", lineHeight: 1.5 }}>
+                    Send this link to anyone — they&apos;ll enter their info and pay. A customer profile will be created automatically.
+                  </p>
                 )}
 
                 {/* Mark as paid */}
