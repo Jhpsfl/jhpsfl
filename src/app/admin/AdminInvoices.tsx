@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<(() => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void }) {
+export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<((preselectedCustomerId?: string) => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -265,7 +265,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
   // ─── Create trigger: called from dashboard "New Invoice" button ───
   if (createRef) {
-    createRef.current = () => {
+    createRef.current = (preselectedCustomerId?: string) => {
+      if (preselectedCustomerId) {
+        setForm(prev => ({ ...prev, customer_id: preselectedCustomerId }));
+      }
       setView("create");
       onNavigate?.();
     };

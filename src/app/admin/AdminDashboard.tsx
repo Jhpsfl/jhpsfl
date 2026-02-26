@@ -434,14 +434,18 @@ function CustomerModal({ onClose, onSave }: {
 }
 
 // ─── Record Cash Payment Modal ───
-function CashPaymentModal({ onClose, onSave, customers, jobs }: {
+function CashPaymentModal({ onClose, onSave, customers, jobs, preselectedCustomerId }: {
   onClose: () => void;
   onSave: (data: Record<string, unknown>) => void;
   customers: Customer[];
   jobs: Job[];
+  preselectedCustomerId?: string | null;
 }) {
-  const [form, setForm] = useState({ customer_id: "", amount: "", job_id: "", notes: "" });
+  const [form, setForm] = useState({ customer_id: preselectedCustomerId || "", amount: "", service: "", job_id: "", notes: "" });
+  const [sendReceipt, setSendReceipt] = useState(!!preselectedCustomerId);
   const isValid = !!(form.customer_id && form.amount && parseFloat(form.amount) > 0);
+  const selectedCustomer = customers.find(c => c.id === form.customer_id);
+  const hasEmail = !!selectedCustomer?.email;
 
   const filteredJobs = form.customer_id
     ? jobs.filter(j => j.customer_id === form.customer_id && ["scheduled", "in_progress", "completed"].includes(j.status))
@@ -480,14 +484,20 @@ function CashPaymentModal({ onClose, onSave, customers, jobs }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label style={labelStyle}>Customer *</label>
-            <select value={form.customer_id}
-              onChange={e => setForm(f => ({ ...f, customer_id: e.target.value, job_id: "" }))}
-              style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
-              <option value="">Select customer</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
-              ))}
-            </select>
+            {preselectedCustomerId ? (
+              <div style={{ ...inputStyle, color: "#4CAF50", fontWeight: 600, opacity: 0.8 }}>
+                {selectedCustomer?.name || selectedCustomer?.email || "Selected Customer"}
+              </div>
+            ) : (
+              <select value={form.customer_id}
+                onChange={e => setForm(f => ({ ...f, customer_id: e.target.value, job_id: "" }))}
+                style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
+                <option value="">Select customer</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label style={labelStyle}>Amount *</label>
@@ -497,6 +507,15 @@ function CashPaymentModal({ onClose, onSave, customers, jobs }: {
               value={form.amount}
               onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
               style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Service Description (optional)</label>
+            <input
+              placeholder="e.g. Lawn mowing, pressure washing..."
+              value={form.service}
+              onChange={e => setForm(f => ({ ...f, service: e.target.value }))}
+              style={inputStyle}
             />
           </div>
           <div>
@@ -515,11 +534,40 @@ function CashPaymentModal({ onClose, onSave, customers, jobs }: {
           <div>
             <label style={labelStyle}>Notes (optional)</label>
             <input
-              placeholder="e.g. Paid after mow, no receipt needed"
+              placeholder="e.g. Paid on site"
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               style={inputStyle}
             />
+          </div>
+          {/* Send receipt toggle */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 10, padding: "12px 14px",
+          }}>
+            <div>
+              <div style={{ fontSize: 13, color: "#c8e0c8", fontWeight: 600 }}>Send PDF receipt to customer</div>
+              {!hasEmail && form.customer_id && (
+                <div style={{ fontSize: 11, color: "#5a6a5a", marginTop: 2 }}>No email on file for this customer</div>
+              )}
+              {hasEmail && (
+                <div style={{ fontSize: 11, color: "#5a8a5a", marginTop: 2 }}>{selectedCustomer?.email}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSendReceipt(r => !r)}
+              disabled={!hasEmail}
+              style={{
+                background: sendReceipt && hasEmail ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${sendReceipt && hasEmail ? "rgba(76,175,80,0.4)" : "#1a3a1a"}`,
+                borderRadius: 8, padding: "6px 14px", fontSize: 12,
+                color: sendReceipt && hasEmail ? "#4CAF50" : "#3a5a3a",
+                cursor: hasEmail ? "pointer" : "not-allowed", fontWeight: 700,
+              }}
+            >
+              {sendReceipt && hasEmail ? "ON" : "OFF"}
+            </button>
           </div>
           <button onClick={() => {
             if (!isValid) return;
@@ -527,8 +575,10 @@ function CashPaymentModal({ onClose, onSave, customers, jobs }: {
               customer_id: form.customer_id,
               amount: parseFloat(parseFloat(form.amount).toFixed(2)),
               payment_method: "cash",
+              service: form.service || null,
               job_id: form.job_id || null,
               notes: form.notes || null,
+              send_receipt: sendReceipt && hasEmail,
             });
           }} style={{
             background: isValid ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
@@ -538,7 +588,7 @@ function CashPaymentModal({ onClose, onSave, customers, jobs }: {
             fontFamily: "'DM Sans', sans-serif",
             boxShadow: isValid ? "0 4px 20px rgba(76,175,80,0.35)" : "none", marginTop: 4,
           }}>
-            Record Cash Payment
+            {sendReceipt && hasEmail ? "Record & Send Receipt" : "Record Cash Payment"}
           </button>
         </div>
       </div>
@@ -603,12 +653,13 @@ export default function AdminDashboard() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showCashModal, setShowCashModal] = useState(false);
+  const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
 
   // ─── Back-button refs for child components ───
   const inboxBackRef = useRef<(() => boolean) | null>(null);
   const videoLeadsBackRef = useRef<(() => boolean) | null>(null);
   const invoicesBackRef = useRef<(() => boolean) | null>(null);
-  const invoiceCreateRef = useRef<(() => void) | null>(null);
+  const invoiceCreateRef = useRef<((preselectedCustomerId?: string) => void) | null>(null);
 
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
@@ -890,14 +941,33 @@ export default function AdminDashboard() {
   };
 
   const handleSaveCashPayment = async (data: Record<string, unknown>) => {
-    const res = await adminPost("payments", "create", data);
-    if (res?.success || res?.data) {
-      showToast("Cash payment recorded");
-      setShowCashModal(false);
-      loadTab("payments");
-      loadTab("overview");
+    if (data.send_receipt) {
+      // Use the cash-receipt route which records + generates + emails PDF
+      const res = await fetch("/api/cash-receipt/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: userId, ...data }),
+      }).then(r => r.json());
+      if (res?.success) {
+        showToast(res.receipt_sent ? "Cash payment recorded & receipt sent" : "Cash payment recorded (no email on file)");
+        setShowCashModal(false);
+        setCashModalPreselectedCustomer(null);
+        loadTab("payments");
+        loadTab("overview");
+      } else {
+        showToast(res?.error || "Failed to record payment", "error");
+      }
     } else {
-      showToast(res?.error || "Failed to record payment", "error");
+      const res = await adminPost("payments", "create", data);
+      if (res?.success || res?.data) {
+        showToast("Cash payment recorded");
+        setShowCashModal(false);
+        setCashModalPreselectedCustomer(null);
+        loadTab("payments");
+        loadTab("overview");
+      } else {
+        showToast(res?.error || "Failed to record payment", "error");
+      }
     }
   };
 
@@ -1727,9 +1797,25 @@ export default function AdminDashboard() {
                             </div>
                             <div style={{ color: "#3a5a3a", fontSize: 12, marginTop: 8 }}>Customer since {formatDate(customerDetail.customer.created_at)}</div>
                           </div>
-                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>
-                            + New Job
-                          </button>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>
+                              + New Job
+                            </button>
+                            <button className="action-btn action-btn-primary" onClick={() => {
+                              pushSentinel();
+                              invoiceCreateRef.current?.(customerDetail.customer.id);
+                              switchTab("invoices");
+                            }}>
+                              📄 Create Invoice
+                            </button>
+                            <button className="action-btn action-btn-primary" onClick={() => {
+                              pushSentinel();
+                              setCashModalPreselectedCustomer(customerDetail.customer.id);
+                              setShowCashModal(true);
+                            }}>
+                              💵 Cash Payment
+                            </button>
+                          </div>
                         </div>
 
                         {/* Job Sites */}
@@ -1976,10 +2062,11 @@ export default function AdminDashboard() {
             {/* ─── CASH PAYMENT MODAL ─── */}
             {showCashModal && (
               <CashPaymentModal
-                onClose={() => setShowCashModal(false)}
+                onClose={() => { setShowCashModal(false); setCashModalPreselectedCustomer(null); }}
                 onSave={handleSaveCashPayment}
                 customers={customers}
                 jobs={jobs}
+                preselectedCustomerId={cashModalPreselectedCustomer}
               />
             )}
           </>
