@@ -143,6 +143,30 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Build a /pay URL pre-filled with all customer info from the portal
+function buildPayUrl(
+  inv: Invoice,
+  customer: Customer | null,
+  jobSites: JobSite[],
+): string {
+  const params = new URLSearchParams();
+  params.set("invoice", inv.invoice_number);
+  params.set("amount", inv.total.toFixed(2));
+  if (customer?.name) params.set("name", customer.name);
+  if (customer?.email) params.set("email", customer.email);
+  if (customer?.phone) params.set("phone", customer.phone);
+  // Use primary job site address
+  const site = jobSites[0];
+  if (site?.address) params.set("address", site.address);
+  if (site?.city) params.set("city", site.city);
+  if (site?.zip) params.set("zip", site.zip);
+  // Line item descriptions
+  const lineDescs = (inv.line_items || []).map(l => l.description).filter(Boolean);
+  if (lineDescs[0]) params.set("service", lineDescs[0]);
+  if (lineDescs.length > 1) params.set("description", lineDescs.join(", "));
+  return `/pay?${params.toString()}`;
+}
+
 function DashboardView() {
   const { userId } = useAuth();
   const { user } = useUser();
@@ -327,16 +351,14 @@ function DashboardView() {
                           ))}
                         </div>
                       )}
-                      {inv.payment_link && (
-                        <a href={inv.payment_link} style={{
-                          display: "inline-block", marginTop: 10,
-                          background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                          padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                          textDecoration: "none",
-                        }}>
-                          Pay Now
-                        </a>
-                      )}
+                      <a href={buildPayUrl(inv, data?.customer ?? null, data?.jobSites ?? [])} style={{
+                        display: "inline-block", marginTop: 10,
+                        background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                        padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                        textDecoration: "none",
+                      }}>
+                        Pay Now
+                      </a>
                     </div>
                   ))}
                 </div>
@@ -597,7 +619,18 @@ function DashboardView() {
 
       {/* Quick Pay CTA */}
       <div style={{ textAlign: "center" }}>
-        <Link href="/pay" style={{
+        <Link href={(() => {
+          const params = new URLSearchParams();
+          if (data?.customer?.name) params.set("name", data.customer.name);
+          if (data?.customer?.email) params.set("email", data.customer.email);
+          if (data?.customer?.phone) params.set("phone", data.customer.phone);
+          const site = data?.jobSites?.[0];
+          if (site?.address) params.set("address", site.address);
+          if (site?.city) params.set("city", site.city);
+          if (site?.zip) params.set("zip", site.zip);
+          const q = params.toString();
+          return q ? `/pay?${q}` : "/pay";
+        })()} style={{
           background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
           padding: "16px 40px", borderRadius: 14, fontSize: 16, fontWeight: 700,
           textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
