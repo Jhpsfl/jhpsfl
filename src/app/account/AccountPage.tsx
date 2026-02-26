@@ -179,11 +179,33 @@ function DashboardView() {
   const [cardError, setCardError] = useState<string | null>(null);
   const [cardActionLoading, setCardActionLoading] = useState<string | null>(null);
 
+  // Profile editing
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  // Site editing
+  const [editingSite, setEditingSite] = useState<JobSite | null>(null);
+  const [showAddSite, setShowAddSite] = useState(false);
+  const [siteForm, setSiteForm] = useState({ address: "", city: "", state: "FL", zip: "", notes: "" });
+  const [siteSaving, setSiteSaving] = useState(false);
+  const [siteMsg, setSiteMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [siteActionLoading, setSiteActionLoading] = useState<string | null>(null);
+
   const fetchCards = () => {
     if (!userId) return;
     fetch(`/api/cards?clerk_user_id=${userId}`)
       .then((r) => r.json())
       .then((d) => setCards(d.cards || []))
+      .catch(() => {});
+  };
+
+  const refreshDashboard = () => {
+    if (!userId) return;
+    fetch(`/api/customer/dashboard?clerk_user_id=${userId}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
       .catch(() => {});
   };
 
@@ -195,6 +217,71 @@ function DashboardView() {
       .catch(() => setLoading(false));
     fetchCards();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const patchDashboard = async (action: string, payload: Record<string, unknown>) => {
+    return fetch("/api/customer/dashboard", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clerk_user_id: userId, action, payload }),
+    }).then(r => r.json());
+  };
+
+  const openEditProfile = () => {
+    setProfileForm({ name: data?.customer?.name || "", phone: data?.customer?.phone || "" });
+    setProfileMsg(null);
+    setShowProfile(true);
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileMsg(null);
+    const res = await patchDashboard("update_profile", profileForm);
+    if (res.success) {
+      setProfileMsg({ text: "Profile updated!", ok: true });
+      refreshDashboard();
+      setTimeout(() => { setShowProfile(false); setProfileMsg(null); }, 1500);
+    } else {
+      setProfileMsg({ text: res.error || "Failed to save", ok: false });
+    }
+    setProfileSaving(false);
+  };
+
+  const openAddSite = () => {
+    setSiteForm({ address: "", city: "", state: "FL", zip: "", notes: "" });
+    setEditingSite(null);
+    setSiteMsg(null);
+    setShowAddSite(true);
+  };
+
+  const openEditSite = (site: JobSite) => {
+    setSiteForm({ address: site.address, city: site.city || "", state: site.state || "FL", zip: site.zip || "", notes: site.notes || "" });
+    setEditingSite(site);
+    setSiteMsg(null);
+    setShowAddSite(true);
+  };
+
+  const handleSaveSite = async () => {
+    setSiteSaving(true);
+    setSiteMsg(null);
+    const action = editingSite ? "update_site" : "add_site";
+    const payload = editingSite ? { id: editingSite.id, ...siteForm } : siteForm;
+    const res = await patchDashboard(action, payload);
+    if (res.success) {
+      setSiteMsg({ text: editingSite ? "Address updated!" : "Address added!", ok: true });
+      refreshDashboard();
+      setTimeout(() => { setShowAddSite(false); setSiteMsg(null); setEditingSite(null); }, 1500);
+    } else {
+      setSiteMsg({ text: res.error || "Failed to save", ok: false });
+    }
+    setSiteSaving(false);
+  };
+
+  const handleDeleteSite = async (siteId: string) => {
+    setSiteActionLoading(siteId);
+    const res = await patchDashboard("delete_site", { id: siteId });
+    if (res.success) refreshDashboard();
+    setSiteActionLoading(null);
+  };
 
   const handleAddCard = async () => {
     if (!cardFormCard || cardSaving || !userId) return;
@@ -274,7 +361,7 @@ function DashboardView() {
       <div style={{
         background: "linear-gradient(160deg, #0d1f0d, #091409)",
         border: "1px solid #1a3a1a", borderRadius: 20,
-        padding: "28px 32px", marginBottom: 24,
+        padding: "28px 32px", marginBottom: 16,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap", gap: 16,
       }}>
@@ -285,8 +372,188 @@ function DashboardView() {
           </h2>
           <p style={{ color: "#5a8a5a", fontSize: 14 }}>{user?.emailAddresses[0]?.emailAddress}</p>
         </div>
-        <UserButton appearance={{ elements: { avatarBox: { width: 52, height: 52 } } }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => showProfile ? setShowProfile(false) : openEditProfile()} style={{
+            background: showProfile ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.05)",
+            border: `1px solid ${showProfile ? "rgba(76,175,80,0.4)" : "#1a3a1a"}`,
+            borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600,
+            color: showProfile ? "#4CAF50" : "#8aba8a", cursor: "pointer", fontFamily: "inherit",
+          }}>
+            {showProfile ? "✕ Close" : "✏️ Edit Profile"}
+          </button>
+          <UserButton appearance={{ elements: { avatarBox: { width: 52, height: 52 } } }} />
+        </div>
       </div>
+
+      {/* Profile Edit Panel */}
+      {showProfile && (
+        <div style={{
+          background: "linear-gradient(160deg, #0d1f0d, #091409)",
+          border: "1px solid rgba(76,175,80,0.25)", borderRadius: 20,
+          padding: "24px", marginBottom: 24, animation: "slideUp 0.3s ease",
+        }}>
+          <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 20 }}>EDIT PROFILE</h3>
+
+          {/* Contact info */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
+            <div>
+              <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, display: "block", marginBottom: 6 }}>FULL NAME</label>
+              <input
+                value={profileForm.name}
+                onChange={e => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Your name"
+                style={{ width: "100%", padding: "11px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, display: "block", marginBottom: 6 }}>PHONE</label>
+              <input
+                value={profileForm.phone}
+                onChange={e => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone number"
+                type="tel"
+                style={{ width: "100%", padding: "11px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 11, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1, display: "block", marginBottom: 6 }}>EMAIL (managed by your account login)</label>
+              <input
+                value={user?.emailAddresses[0]?.emailAddress || ""}
+                disabled
+                style={{ width: "100%", padding: "11px 14px", background: "#080e08", border: "1px solid #0f250f", borderRadius: 10, color: "#3a5a3a", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box", cursor: "not-allowed" }}
+              />
+            </div>
+          </div>
+
+          {profileMsg && (
+            <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, background: profileMsg.ok ? "rgba(76,175,80,0.1)" : "rgba(239,83,80,0.1)", border: `1px solid ${profileMsg.ok ? "rgba(76,175,80,0.3)" : "rgba(239,83,80,0.3)"}`, fontSize: 13, color: profileMsg.ok ? "#66bb6a" : "#ef9a9a" }}>
+              {profileMsg.text}
+            </div>
+          )}
+
+          <button onClick={handleSaveProfile} disabled={profileSaving} style={{
+            padding: "12px 28px", background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+            border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700,
+            cursor: profileSaving ? "not-allowed" : "pointer", opacity: profileSaving ? 0.7 : 1, fontFamily: "inherit",
+          }}>
+            {profileSaving ? "Saving…" : "Save Changes"}
+          </button>
+
+          {/* Service Addresses */}
+          <div style={{ marginTop: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <h4 style={{ fontSize: 12, letterSpacing: 2, color: "#4CAF50", fontWeight: 700 }}>SERVICE ADDRESSES</h4>
+              {!showAddSite && (
+                <button onClick={openAddSite} style={{
+                  background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.3)",
+                  borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600,
+                  color: "#4CAF50", cursor: "pointer", fontFamily: "inherit",
+                }}>+ Add Address</button>
+              )}
+            </div>
+
+            {/* Existing sites */}
+            {(data?.jobSites || []).map(site => (
+              <div key={site.id} style={{
+                background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a",
+                borderRadius: 12, padding: "14px 16px", marginBottom: 10,
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+              }}>
+                {editingSite?.id === site.id && showAddSite ? (
+                  <span style={{ fontSize: 13, color: "#5a8a5a" }}>Editing below…</span>
+                ) : (
+                  <div>
+                    <p style={{ color: "#e8f5e8", fontWeight: 600, fontSize: 14 }}>{site.address}</p>
+                    <p style={{ color: "#5a8a5a", fontSize: 13 }}>{[site.city, site.state, site.zip].filter(Boolean).join(", ")}</p>
+                    {site.notes && <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 2 }}>{site.notes}</p>}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => openEditSite(site)} style={{
+                    background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+                    borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600,
+                    color: "#4CAF50", cursor: "pointer", fontFamily: "inherit",
+                  }}>Edit</button>
+                  <button onClick={() => handleDeleteSite(site.id)} disabled={siteActionLoading === site.id} style={{
+                    background: "rgba(239,83,80,0.07)", border: "1px solid rgba(239,83,80,0.2)",
+                    borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 600,
+                    color: "#ef5350", cursor: "pointer", fontFamily: "inherit",
+                    opacity: siteActionLoading === site.id ? 0.5 : 1,
+                  }}>Remove</button>
+                </div>
+              </div>
+            ))}
+
+            {/* Add / Edit site form */}
+            {showAddSite && (
+              <div style={{
+                background: "rgba(76,175,80,0.04)", border: "1px solid rgba(76,175,80,0.2)",
+                borderRadius: 12, padding: "16px", marginTop: 8,
+              }}>
+                <p style={{ fontSize: 12, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>
+                  {editingSite ? "EDIT ADDRESS" : "NEW ADDRESS"}
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 10 }}>
+                  <input
+                    value={siteForm.address}
+                    onChange={e => setSiteForm(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Street address *"
+                    style={{ padding: "10px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 9, color: "#e8f5e8", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px", gap: 10 }}>
+                    <input
+                      value={siteForm.city}
+                      onChange={e => setSiteForm(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="City"
+                      style={{ padding: "10px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 9, color: "#e8f5e8", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                    />
+                    <input
+                      value={siteForm.state}
+                      onChange={e => setSiteForm(prev => ({ ...prev, state: e.target.value }))}
+                      placeholder="State"
+                      maxLength={2}
+                      style={{ padding: "10px 8px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 9, color: "#e8f5e8", fontSize: 13, outline: "none", fontFamily: "inherit", textTransform: "uppercase" }}
+                    />
+                    <input
+                      value={siteForm.zip}
+                      onChange={e => setSiteForm(prev => ({ ...prev, zip: e.target.value }))}
+                      placeholder="ZIP"
+                      style={{ padding: "10px 8px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 9, color: "#e8f5e8", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                    />
+                  </div>
+                  <input
+                    value={siteForm.notes}
+                    onChange={e => setSiteForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Notes (gate code, access instructions…)"
+                    style={{ padding: "10px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 9, color: "#e8f5e8", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                  />
+                </div>
+
+                {siteMsg && (
+                  <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 7, background: siteMsg.ok ? "rgba(76,175,80,0.1)" : "rgba(239,83,80,0.1)", fontSize: 12, color: siteMsg.ok ? "#66bb6a" : "#ef9a9a" }}>
+                    {siteMsg.text}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={handleSaveSite} disabled={siteSaving} style={{
+                    padding: "9px 22px", background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                    border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700,
+                    cursor: siteSaving ? "not-allowed" : "pointer", opacity: siteSaving ? 0.7 : 1, fontFamily: "inherit",
+                  }}>
+                    {siteSaving ? "Saving…" : editingSite ? "Update Address" : "Add Address"}
+                  </button>
+                  <button onClick={() => { setShowAddSite(false); setEditingSite(null); setSiteMsg(null); }} style={{
+                    padding: "9px 18px", background: "transparent", border: "1px solid #1a3a1a",
+                    borderRadius: 8, color: "#5a8a5a", fontSize: 13, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Subscriptions */}
       {data?.subscriptions && data.subscriptions.length > 0 && (
