@@ -310,7 +310,14 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
 
   useEffect(() => { fetchThreads(); fetchSmsThreads(); }, [fetchThreads, fetchSmsThreads]);
   // Scroll to top when opening a thread (email reads top-to-bottom, not chat-style)
-  useEffect(() => { messagesContainerRef.current?.scrollTo({ top: 0 }); }, [messages]);
+  // Use requestAnimationFrame to ensure DOM layout is complete before scrolling
+  useEffect(() => {
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      });
+    }
+  }, [messages]);
 
   const filteredThreads = threads.filter(t => {
     if (!searchQuery) return true;
