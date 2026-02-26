@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId, backRef, onNavigate, createRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<(() => void) | null> }) {
+export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<(() => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -368,6 +368,18 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef }
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  // ─── Auto-open a specific invoice (e.g. navigated from Payments tab) ───
+  useEffect(() => {
+    if (!initialInvoiceId || loading) return;
+    const inv = invoices.find(i => i.id === initialInvoiceId);
+    if (inv) {
+      setSelectedInvoice(inv);
+      setView("detail");
+      onNavigate?.();
+      onInitialInvoiceConsumed?.();
+    }
+  }, [initialInvoiceId, invoices, loading, onNavigate, onInitialInvoiceConsumed]);
 
   // ─── Line item calculations ───
   const updateLineItem = (id: string, field: keyof InvoiceLineItem, value: string | number) => {

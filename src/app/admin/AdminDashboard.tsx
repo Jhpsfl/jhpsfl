@@ -592,9 +592,11 @@ export default function AdminDashboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paidInvoices, setPaidInvoices] = useState<Invoice[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
 
   // Modals
   const [showJobModal, setShowJobModal] = useState(false);
@@ -716,8 +718,12 @@ export default function AdminDashboard() {
           break;
         }
         case "payments": {
-          const res = await adminFetch("payments");
-          if (res?.data) setPayments(res.data);
+          const [payRes, invRes] = await Promise.all([
+            adminFetch("payments"),
+            fetch(`/api/admin/data?${new URLSearchParams({ clerk_user_id: userId!, resource: "invoices", status: "paid" })}`).then(r => r.json()),
+          ]);
+          if (payRes?.data) setPayments(payRes.data);
+          if (invRes?.data) setPaidInvoices(invRes.data);
           break;
         }
         case "subscriptions": {
@@ -1789,34 +1795,64 @@ export default function AdminDashboard() {
                     )}
 
                     {/* ─── PAYMENTS TAB ─── */}
-                    {activeTab === "payments" && (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
-                            Payments
-                          </h1>
-                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setShowCashModal(true); }}>
-                            💵 Record Cash
-                          </button>
-                        </div>
-                        <DataTable headers={["Customer", "Amount", "Status", "Method", "Date", "Receipt"]} emptyMessage="No payments recorded yet">
-                          {payments.map((p) => (
-                            <TableRow key={p.id}>
-                              <Td>{p.customers?.name || "—"}</Td>
-                              <Td mono accent>{formatCurrency(p.amount)}</Td>
-                              <Td><StatusBadge status={p.status} /></Td>
-                              <Td>{p.payment_method || "—"}</Td>
-                              <Td>{formatDate(p.paid_at || p.created_at)}</Td>
-                              <Td>
-                                {p.square_receipt_url ? (
-                                  <a href={p.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>View ↗</a>
-                                ) : "—"}
-                              </Td>
-                            </TableRow>
-                          ))}
-                        </DataTable>
-                      </>
-                    )}
+                    {activeTab === "payments" && (() => {
+                      // Merge card/cash payments + paid invoices into one sorted list
+                      type PayEntry = { key: string; customer: string; amount: number; type: string; date: string; invoiceId?: string; invoiceNumber?: string; receiptUrl?: string; };
+                      const entries: PayEntry[] = [
+                        ...payments.map(p => ({
+                          key: `pay-${p.id}`,
+                          customer: p.customers?.name || "—",
+                          amount: p.amount,
+                          type: p.payment_method === "cash" ? "💵 Cash" : p.payment_method === "card" ? "💳 Card" : p.payment_method || "—",
+                          date: p.paid_at || p.created_at,
+                          receiptUrl: p.square_receipt_url || undefined,
+                        })),
+                        ...paidInvoices.map(inv => ({
+                          key: `inv-${inv.id}`,
+                          customer: (inv as Invoice & { customers?: { name: string | null } }).customers?.name || "—",
+                          amount: inv.amount,
+                          type: "🧾 Invoice",
+                          date: inv.paid_date || inv.created_at,
+                          invoiceId: inv.id,
+                          invoiceNumber: inv.invoice_number || undefined,
+                        })),
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                      return (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
+                              Payments
+                            </h1>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setShowCashModal(true); }}>
+                              💵 Record Cash
+                            </button>
+                          </div>
+                          <DataTable headers={["Customer", "Amount", "Type", "Date", "Action"]} emptyMessage="No payments recorded yet">
+                            {entries.map(e => (
+                              <TableRow key={e.key}>
+                                <Td>{e.customer}</Td>
+                                <Td mono accent>{formatCurrency(e.amount)}</Td>
+                                <Td>{e.type}</Td>
+                                <Td>{formatDate(e.date)}</Td>
+                                <Td>
+                                  {e.invoiceId ? (
+                                    <button
+                                      onClick={() => { pushSentinel(); setPendingInvoiceId(e.invoiceId!); switchTab("invoices"); }}
+                                      style={{ background: "none", border: "none", color: "#4CAF50", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                                    >
+                                      {e.invoiceNumber || "Open"} ↗
+                                    </button>
+                                  ) : e.receiptUrl ? (
+                                    <a href={e.receiptUrl} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Receipt ↗</a>
+                                  ) : "—"}
+                                </Td>
+                              </TableRow>
+                            ))}
+                          </DataTable>
+                        </>
+                      );
+                    })()}
 
                     {/* ─── SUBSCRIPTIONS TAB ─── */}
                     {activeTab === "subscriptions" && (
@@ -1852,7 +1888,7 @@ export default function AdminDashboard() {
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} initialInvoiceId={pendingInvoiceId} onInitialInvoiceConsumed={() => setPendingInvoiceId(null)} />
                     )}
                   </div>
                 )}
