@@ -468,7 +468,8 @@ export default function AdminDashboard() {
   const { userId } = useAuth();
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [prevTab, setPrevTab] = useState<Tab | null>(null);
+  // Full navigation stack — used by back button handler; ref avoids stale closure
+  const tabHistoryRef = useRef<Tab[]>(["overview"]);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -486,12 +487,6 @@ export default function AdminDashboard() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  useEffect(() => {
-    if (showCustomerModal) window.history.pushState({ modal: "customer", ts: Date.now() }, "");
-  }, [showCustomerModal]);
-  useEffect(() => {
-    if (showJobModal) window.history.pushState({ modal: "job", ts: Date.now() }, "");
-  }, [showJobModal]);
 
   // ─── Back-button refs for child components ───
   const inboxBackRef = useRef<(() => boolean) | null>(null);
@@ -599,15 +594,14 @@ export default function AdminDashboard() {
       const res = await adminFetch("customer_detail", customerId);
       if (res) {
         setCustomerDetail(res);
-        setPrevTab(activeTab as Tab);
+        tabHistoryRef.current = [...tabHistoryRef.current, "customer_detail"];
         setActiveTab("customer_detail");
-        window.history.pushState({ view: "customer_detail", ts: Date.now() }, "");
       }
     } catch (err) {
       console.error("Customer detail error:", err);
     }
     setLoading(false);
-  }, [adminFetch, activeTab]);
+  }, [adminFetch]);
 
   useEffect(() => {
     if (userId) loadTab("overview");
@@ -676,78 +670,48 @@ export default function AdminDashboard() {
     };
   }, [userId]);
 
-  // ─── Seed history stack on mount (prevents TWA from closing on first back press) ───
+  // ─── Push one sentinel entry on mount ───
+  // The browser history API is only used as a trigger for popstate events.
+  // All actual navigation is tracked in tabHistoryRef (React state).
   useEffect(() => {
-    window.history.replaceState({ view: "overview", ts: Date.now() }, "");
-    window.history.pushState({ view: "overview", ts: Date.now() }, "");
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
   }, []);
 
-  // Handle Android Back Button globally for the dashboard (single centralized handler)
+  // Handle Android Back Button — sentinel approach
+  // The history stack stays at 1 entry at all times. Every popstate immediately
+  // repushes a sentinel so the TWA never sees an empty stack (which would close the app).
+  // Real navigation state lives in tabHistoryRef, not in browser history.
   useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      // Always push state after handling to prevent TWA history stack from emptying
-      const pushAfter = (view: string) => {
-        window.history.pushState({ view, ts: Date.now() }, "");
-      };
+    const handlePopState = () => {
+      // Immediately repush sentinel to keep TWA alive
+      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
 
-      // Priority 1: Close modals
-      if (showJobModal) {
-        setShowJobModal(false);
-        setEditingJob(null);
-        pushAfter(activeTab);
-        return;
-      }
-      if (showCustomerModal) {
-        setShowCustomerModal(false);
-        pushAfter(activeTab);
-        return;
-      }
+      // Priority 1: Close modals (overlays on current tab — don't pop tab history)
+      if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
+      if (showCustomerModal) { setShowCustomerModal(false); return; }
 
-      // Priority 2: Let active child component handle back (thread view, lead detail, invoice detail)
-      if (activeTab === "messages" && inboxBackRef.current?.()) {
-        pushAfter("messages");
-        return;
-      }
-      if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) {
-        pushAfter("video_leads");
-        return;
-      }
-      if (activeTab === "invoices" && invoicesBackRef.current?.()) {
-        pushAfter("invoices");
+      // Priority 2: Let active child handle its own detail/thread view
+      if (activeTab === "messages" && inboxBackRef.current?.()) return;
+      if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
+      if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
+
+      // Priority 3: Pop tab history to navigate one level back
+      const history = tabHistoryRef.current;
+      if (history.length > 1) {
+        const newHistory = history.slice(0, -1);
+        const prevTab = newHistory[newHistory.length - 1];
+        tabHistoryRef.current = newHistory;
+        setActiveTab(prevTab);
+        if (prevTab !== "customer_detail") setCustomerDetail(null);
         return;
       }
 
-      // Priority 3: Customer detail → customers tab
-      if (activeTab === "customer_detail") {
-        setActiveTab("customers");
-        setCustomerDetail(null);
-        pushAfter("customers");
-        return;
-      }
-
-      // Priority 4: Navigate to previous tab
-      if (prevTab && prevTab !== activeTab) {
-        const nextTab = prevTab;
-        setPrevTab(null);
-        setActiveTab(nextTab);
-        pushAfter(nextTab);
-        return;
-      }
-
-      // Priority 5: Navigate to overview
-      if (activeTab !== "overview") {
-        setActiveTab("overview");
-        pushAfter("overview");
-        return;
-      }
-
-      // Priority 6: TRAP — already on overview, push state to prevent TWA from closing
-      pushAfter("overview");
+      // Priority 4: Already at root (overview) — trap, do nothing (sentinel already pushed)
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [activeTab, prevTab, showJobModal, showCustomerModal]);
+  }, [activeTab, showJobModal, showCustomerModal]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
@@ -809,12 +773,10 @@ export default function AdminDashboard() {
   });
 
   const switchTab = (tab: Tab) => {
-    setPrevTab(activeTab);
+    tabHistoryRef.current = [...tabHistoryRef.current, tab];
     setActiveTab(tab);
     setCustomerDetail(null);
     setSidebarOpen(false);
-    // Push history entry for every tab switch (Android back button support)
-    window.history.pushState({ view: tab, ts: Date.now() }, "");
     // Optimistically clear badge when user switches to that tab
     if (tab === "messages") {
       setBadgeCounts(prev => ({ ...prev, unreadEmail: 0 }));
