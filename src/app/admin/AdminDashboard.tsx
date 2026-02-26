@@ -670,20 +670,22 @@ export default function AdminDashboard() {
     };
   }, [userId]);
 
-  // ─── Push one sentinel entry on mount ───
-  // The browser history API is only used as a trigger for popstate events.
-  // All actual navigation is tracked in tabHistoryRef (React state).
+  // ─── Push sentinel buffer on mount ───
+  // Browser history is only a trigger mechanism — real nav state lives in tabHistoryRef.
+  // We maintain a MINIMUM of 2 sentinel entries so the TWA runtime never sees
+  // history.length drop to 1 (which causes Android to close the activity).
   useEffect(() => {
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
     window.history.pushState({ sentinel: true, ts: Date.now() }, "");
   }, []);
 
   // Handle Android Back Button — sentinel approach
-  // The history stack stays at 1 entry at all times. Every popstate immediately
-  // repushes a sentinel so the TWA never sees an empty stack (which would close the app).
-  // Real navigation state lives in tabHistoryRef, not in browser history.
   useEffect(() => {
     const handlePopState = () => {
-      // Immediately repush sentinel to keep TWA alive
+      // Repush 3 sentinels so length never risks hitting 1 between presses
+      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
       window.history.pushState({ sentinel: true, ts: Date.now() }, "");
 
       // Priority 1: Close modals (overlays on current tab — don't pop tab history)
