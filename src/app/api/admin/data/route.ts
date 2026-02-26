@@ -36,16 +36,19 @@ export async function GET(request: NextRequest) {
 
     switch (resource) {
       case "overview": {
-        const [customersRes, activeJobsRes, completedJobsRes, subsRes, paymentsRes, recentPaymentsRes] = await Promise.all([
+        const [customersRes, activeJobsRes, completedJobsRes, subsRes, paymentsRes, recentPaymentsRes, paidInvoicesRes] = await Promise.all([
           supabase.from("customers").select("id", { count: "exact", head: true }),
           supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
           supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "completed"),
           supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
           supabase.from("payments").select("amount").eq("status", "completed"),
           supabase.from("payments").select("*").order("created_at", { ascending: false }).limit(5),
+          supabase.from("invoices").select("amount_paid").eq("status", "paid"),
         ]);
 
-        const recentRevenue = (paymentsRes.data || []).reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
+        const revenueFromPayments = (paymentsRes.data || []).reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
+        const revenueFromInvoices = (paidInvoicesRes.data || []).reduce((sum: number, i: { amount_paid: number }) => sum + (i.amount_paid || 0), 0);
+        const recentRevenue = revenueFromPayments + revenueFromInvoices;
 
         return NextResponse.json({
           totalCustomers: customersRes.count || 0,
