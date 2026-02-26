@@ -71,7 +71,7 @@ export interface ReceiptData extends BaseDocumentData {
 export interface InvoiceData extends BaseDocumentData {
   invoiceNumber: string;
   invoiceDate: Date;
-  dueDate: Date;
+  dueDate?: Date;
   invoiceStatus: 'DUE' | 'OVERDUE' | 'SENT';
   paymentLink?: string;
   jobAddress?: string;
@@ -126,7 +126,7 @@ const C = {
   black: '#1A1A1A', dark: '#333333', mid: '#666666', light: '#999999',
   border: '#E0E0E0', bg: '#F5F5F5', white: '#FFFFFF',
   paidGreen: '#2E7D32', paidBg: '#E8F5E9',
-  dueAmber: '#E65100', dueBg: '#FFF3E0',
+  dueBlue: '#1565C0', dueBg: '#E3F2FD',
   overdueRed: '#C62828', overdueBg: '#FFEBEE',
 };
 
@@ -146,8 +146,8 @@ const s = StyleSheet.create({
   docTitle: { fontSize: 24, fontFamily: 'Helvetica-Bold', color: C.primary, marginBottom: 6, letterSpacing: 1 },
   badgePaid: { backgroundColor: C.paidBg, borderWidth: 1.5, borderColor: C.paidGreen, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 14 },
   badgePaidText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.paidGreen, letterSpacing: 2 },
-  badgeDue: { backgroundColor: C.dueBg, borderWidth: 1.5, borderColor: C.dueAmber, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 14 },
-  badgeDueText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.dueAmber, letterSpacing: 2 },
+  badgeDue: { backgroundColor: C.dueBg, borderWidth: 1.5, borderColor: C.dueBlue, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 14 },
+  badgeDueText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.dueBlue, letterSpacing: 2 },
   badgeOverdue: { backgroundColor: C.overdueBg, borderWidth: 1.5, borderColor: C.overdueRed, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 14 },
   badgeOverdueText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.overdueRed, letterSpacing: 2 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22 },
@@ -343,7 +343,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   const badge = isOverdue ? s.badgeOverdue : s.badgeDue;
   const badgeText = isOverdue ? s.badgeOverdueText : s.badgeDueText;
   const label = isOverdue ? 'OVERDUE' : 'DUE';
-  const color = isOverdue ? C.overdueRed : C.dueAmber;
+  const color = isOverdue ? C.overdueRed : C.dueBlue;
 
   return (
     <Document title={`JHPS Invoice - ${data.invoiceNumber}`} author={BRAND.name} subject="Service Invoice">
@@ -373,7 +373,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             <Text style={s.metaLabel}>Invoice Details</Text>
             <Text style={s.metaVal}>Invoice #: {data.invoiceNumber}</Text>
             <Text style={s.metaVal}>Issued: {formatDateShort(data.invoiceDate)}</Text>
-            <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text>
+            {data.dueDate && <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text>}
             {data.orderId && <Text style={s.metaVal}>Order: {data.orderId}</Text>}
           </View>
         </View>
@@ -391,7 +391,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
-          <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>
+          {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
         </View>
         {data.notes && <NotesSection text={data.notes} />}
         <Footer />

@@ -241,6 +241,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     customer_id: "",
     invoice_number: generateInvoiceNumber(),
     due_date: getDefaultDueDate(),
+    show_due_date: true,
     tax_rate: 0,
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as InvoiceLineItem[],
@@ -440,7 +441,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     const payload: Record<string, unknown> = {
       customer_id: form.customer_id,
       invoice_number: form.invoice_number,
-      due_date: form.due_date,
+      due_date: form.show_due_date ? form.due_date : null,
       tax_rate: form.tax_rate,
       tax_amount: taxAmount,
       subtotal,
@@ -563,6 +564,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       customer_id: "",
       invoice_number: generateInvoiceNumber(),
       due_date: getDefaultDueDate(),
+      show_due_date: true,
       tax_rate: 0,
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
@@ -577,6 +579,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       customer_id: invoice.customer_id,
       invoice_number: invoice.invoice_number,
       due_date: invoice.due_date || getDefaultDueDate(),
+      show_due_date: !!invoice.due_date,
       tax_rate: invoice.tax_rate || 0,
       notes: invoice.notes || "",
       line_items: invoice.line_items?.length
@@ -938,13 +941,34 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Due Date</label>
-                  <input
-                    type="date"
-                    value={form.due_date}
-                    onChange={e => setForm(prev => ({ ...prev, due_date: e.target.value }))}
-                    style={{ ...inputStyle, colorScheme: "dark" }}
-                  />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>Due Date</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, show_due_date: !prev.show_due_date }))}
+                      style={{
+                        background: form.show_due_date ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.05)",
+                        border: `1px solid ${form.show_due_date ? "rgba(76,175,80,0.4)" : "rgba(255,255,255,0.1)"}`,
+                        borderRadius: 6,
+                        padding: "3px 10px",
+                        fontSize: 11,
+                        color: form.show_due_date ? "#4CAF50" : "#5a7a5a",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      {form.show_due_date ? "ON" : "OFF"}
+                    </button>
+                  </div>
+                  {form.show_due_date && (
+                    <input
+                      type="date"
+                      value={form.due_date}
+                      onChange={e => setForm(prev => ({ ...prev, due_date: e.target.value }))}
+                      style={{ ...inputStyle, colorScheme: "dark" }}
+                    />
+                  )}
                 </div>
                 <div>
                   <label style={labelStyle}>Tax Rate (%)</label>
@@ -1199,9 +1223,11 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                 </div>
               </div>
 
-              <div style={{ fontSize: 11, color: "#3a5a3a", textAlign: "center" }}>
-                Due: {form.due_date ? formatDate(form.due_date) : "Not set"}
-              </div>
+              {form.show_due_date && form.due_date && (
+                <div style={{ fontSize: 11, color: "#3a5a3a", textAlign: "center" }}>
+                  Due: {formatDate(form.due_date)}
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -1255,8 +1281,8 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                     {selectedInvoice.invoice_number}
                   </div>
                   <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 8 }}>
-                    Date: {formatDate(selectedInvoice.created_at)}<br />
-                    Due: {formatDate(selectedInvoice.due_date)}
+                    Date: {formatDate(selectedInvoice.created_at)}
+                    {selectedInvoice.due_date && <><br />Due: {formatDate(selectedInvoice.due_date)}</>}
                   </div>
                 </div>
               </div>

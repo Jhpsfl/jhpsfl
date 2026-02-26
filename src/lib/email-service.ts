@@ -78,7 +78,7 @@ export async function sendInvoiceEmail(
 ): Promise<void> {
   const filename = getInvoiceFilename(data);
   const isOverdue = data.invoiceStatus === 'OVERDUE';
-  const statusColor = isOverdue ? '#C62828' : '#E65100';
+  const statusColor = isOverdue ? '#C62828' : '#1565C0';
   const statusLabel = isOverdue ? 'OVERDUE' : 'DUE';
 
   const dueDateStr = new Intl.DateTimeFormat('en-US', {

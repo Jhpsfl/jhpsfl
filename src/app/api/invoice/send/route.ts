@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const invoiceData: InvoiceData = {
     invoiceNumber: invoice.invoice_number,
     invoiceDate: new Date(invoice.created_at),
-    dueDate: invoice.due_date ? new Date(invoice.due_date) : new Date(),
+    dueDate: invoice.due_date ? new Date(invoice.due_date) : undefined,
     invoiceStatus: invoice.status === 'overdue' ? 'OVERDUE' : 'DUE',
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   const fmt = (n: number) => `$${(n / 100).toFixed(2)}`;
 
   const isOverdue = invoiceData.invoiceStatus === 'OVERDUE';
-  const statusColor = isOverdue ? '#C62828' : '#E65100';
+  const statusColor = isOverdue ? '#C62828' : '#1565C0';
 
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         <div style="background:${isOverdue ? '#FFEBEE' : '#FFF3E0'};border:1px solid ${statusColor};border-radius:8px;padding:16px;margin-bottom:24px;">
           <p style="margin:4px 0;font-size:14px;"><strong>Invoice #:</strong> ${invoiceData.invoiceNumber}</p>
           <p style="margin:4px 0;font-size:14px;"><strong>Amount Due:</strong> ${fmt(totalCents)}</p>
-          <p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>
+          ${invoiceData.dueDate ? `<p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>` : ''}
         </div>
         ${payment_link ? `
           <div style="text-align:center;margin:24px 0;">
