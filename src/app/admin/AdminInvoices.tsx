@@ -10,6 +10,18 @@ interface Customer {
   phone: string | null;
 }
 
+interface CustomerJob {
+  id: string;
+  service_type: string;
+  description: string | null;
+  status: string;
+  scheduled_date: string | null;
+  completed_date: string | null;
+  amount: number | null;
+  crew_notes: string | null;
+  admin_notes: string | null;
+}
+
 interface InvoiceLineItem {
   id: string;
   description: string;
@@ -254,6 +266,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // Confirm delete modal
   const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<Invoice | null>(null);
 
+  // Jobs for the currently selected customer
+  const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
   // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
   if (backRef) {
     backRef.current = () => {
@@ -374,6 +390,48 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  // ─── Fetch jobs when customer changes ───
+  useEffect(() => {
+    const cid = form.customer_id;
+    if (!cid || !userId) { setCustomerJobs([]); return; }
+    setLoadingJobs(true);
+    const params = new URLSearchParams({ clerk_user_id: userId, resource: "customer_detail", customer_id: cid });
+    fetch(`/api/admin/data?${params}`)
+      .then(r => r.json())
+      .then(d => { setCustomerJobs(d?.jobs || []); })
+      .catch(() => setCustomerJobs([]))
+      .finally(() => setLoadingJobs(false));
+  }, [form.customer_id, userId]);
+
+  // ─── Auto-fill line items from a job ───
+  const handleJobAutoFill = (job: CustomerJob) => {
+    const lines: InvoiceLineItem[] = [];
+    if (job.amount && job.amount > 0) {
+      lines.push({
+        id: createLineItemId(),
+        description: job.service_type,
+        quantity: 1,
+        unit_price: job.amount,
+        amount: job.amount,
+      });
+    } else {
+      lines.push({
+        id: createLineItemId(),
+        description: job.service_type,
+        quantity: 1,
+        unit_price: 0,
+        amount: 0,
+      });
+    }
+    const notes = [job.description, job.crew_notes, job.admin_notes]
+      .filter(Boolean).join(" — ");
+    setForm(prev => ({
+      ...prev,
+      line_items: lines,
+      notes: notes || prev.notes,
+    }));
+  };
 
   // ─── Auto-open a specific invoice (e.g. navigated from Payments tab) ───
   useEffect(() => {
@@ -896,7 +954,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             }}>
               {/* Customer & Invoice Info */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                <div>
+                <div style={{ gridColumn: isMobile ? "1" : "1 / -1" }}>
                   <label style={labelStyle}>Customer *</label>
                   <select
                     value={form.customer_id}
@@ -916,6 +974,54 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                       <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
                     ))}
                   </select>
+
+                  {/* Customer info card */}
+                  {form.customer_id && (() => {
+                    const sel = customers.find(c => c.id === form.customer_id);
+                    if (!sel) return null;
+                    return (
+                      <div style={{
+                        marginTop: 8, padding: "10px 14px", borderRadius: 10,
+                        background: "rgba(76,175,80,0.04)", border: "1px solid rgba(76,175,80,0.15)",
+                        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
+                      }}>
+                        <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>{sel.name || "—"}</span>
+                        {sel.email && <span style={{ fontSize: 12, color: "#5a8a5a" }}>✉ {sel.email}</span>}
+                        {sel.phone && <span style={{ fontSize: 12, color: "#5a8a5a" }}>📞 {sel.phone}</span>}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Job selector — shown when customer has jobs */}
+                  {form.customer_id && (
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ ...labelStyle, color: "#42a5f5" }}>
+                        Link to Job {loadingJobs && <span style={{ fontWeight: 400, letterSpacing: 0 }}>— loading…</span>}
+                      </label>
+                      {customerJobs.length > 0 ? (
+                        <select
+                          defaultValue=""
+                          onChange={e => {
+                            const job = customerJobs.find(j => j.id === e.target.value);
+                            if (job) handleJobAutoFill(job);
+                          }}
+                          style={{ ...inputStyle, appearance: "none", cursor: "pointer", borderColor: "rgba(33,150,243,0.3)", color: "#c8e0c8" }}
+                        >
+                          <option value="">— Select a job to auto-fill —</option>
+                          {customerJobs.map(j => (
+                            <option key={j.id} value={j.id}>
+                              {j.service_type}
+                              {j.scheduled_date ? ` · ${new Date(j.scheduled_date).toLocaleDateString()}` : ""}
+                              {j.amount ? ` · $${j.amount}` : ""}
+                              {" "}[{j.status}]
+                            </option>
+                          ))}
+                        </select>
+                      ) : !loadingJobs ? (
+                        <p style={{ fontSize: 12, color: "#3a5a3a", margin: "4px 0 0" }}>No jobs on file for this customer.</p>
+                      ) : null}
+                    </div>
+                  )}
 
                   {/* Inline new-customer mini-modal */}
                   {showNewCustomer && (
