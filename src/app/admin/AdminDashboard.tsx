@@ -1454,7 +1454,7 @@ export default function AdminDashboard() {
                         <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
                           {[
                             { label: "New Job", onClick: () => { pushSentinel(); setEditingJob(null); setShowJobModal(true); } },
-                            { label: "New Invoice", onClick: () => { pushSentinel(); switchTab("invoices"); setTimeout(() => invoiceCreateRef.current?.(), 80); } },
+                            { label: "Invoices", onClick: () => { pushSentinel(); switchTab("invoices"); } },
                             { label: "New Customer", onClick: () => { pushSentinel(); setShowCustomerModal(true); } },
                           ].map((btn, i) => (
                             <button
