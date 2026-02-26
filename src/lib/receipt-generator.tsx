@@ -62,9 +62,20 @@ interface BaseDocumentData {
 /** Receipt-specific data (post-payment) */
 export interface ReceiptData extends BaseDocumentData {
   paymentId: string;
+  receiptNumber?: string;  // short human-readable ref e.g. REC-260226-4821
   paymentDate: Date;
   paymentMethod?: string;
   paymentStatus: 'COMPLETED' | 'APPROVED';
+}
+
+/** Generate a short human-readable receipt number: REC-YYMMDD-XXXX */
+export function generateReceiptNumber(date?: Date): string {
+  const d = date || new Date();
+  const yy = d.getFullYear().toString().slice(-2);
+  const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+  const dd = d.getDate().toString().padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `REC-${yy}${mm}${dd}-${rand}`;
 }
 
 /** Invoice-specific data (pre-payment) */
@@ -291,8 +302,10 @@ const Footer: React.FC = () => (
 // RECEIPT DOCUMENT
 // ═══════════════════════════════════════════════════════════════
 
-const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, logoUrl }) => (
-  <Document title={`JHPS Receipt - ${data.paymentId}`} author={BRAND.name} subject="Payment Receipt">
+const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, logoUrl }) => {
+  const refNum = data.receiptNumber || data.paymentId.slice(-8).toUpperCase();
+  return (
+  <Document title={`JHPS Receipt - ${refNum}`} author={BRAND.name} subject="Payment Receipt">
     <Page size="LETTER" style={s.page}>
       <View style={s.header}>
         <CompanyHeader logoUrl={logoUrl} />
@@ -311,7 +324,7 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
         </View>
         <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
           <Text style={s.metaLabel}>Receipt Details</Text>
-          <Text style={s.metaVal}>Ref #: {data.paymentId}</Text>
+          <Text style={s.metaValBold}>Ref #: {refNum}</Text>
           <Text style={s.metaVal}>Date: {formatDate(data.paymentDate)}</Text>
           {data.orderId && <Text style={s.metaVal}>Order: {data.orderId}</Text>}
         </View>
@@ -325,14 +338,16 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
           <Text style={[s.infoVal, { color: C.paidGreen, fontFamily: 'Helvetica-Bold' }]}>{data.paymentStatus}</Text>
         </View>
         {data.paymentMethod && <View style={s.infoRow}><Text style={s.infoLabel}>Method</Text><Text style={s.infoVal}>{data.paymentMethod}</Text></View>}
-        <View style={s.infoRow}><Text style={s.infoLabel}>Payment Reference</Text><Text style={s.infoVal}>{data.paymentId}</Text></View>
+        <View style={s.infoRow}><Text style={s.infoLabel}>Receipt #</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>{refNum}</Text></View>
         <View style={s.infoRow}><Text style={s.infoLabel}>Date</Text><Text style={s.infoVal}>{formatDate(data.paymentDate)}</Text></View>
+        {data.receiptNumber && <View style={s.infoRow}><Text style={[s.infoLabel, { fontSize: 7 }]}>Transaction ID</Text><Text style={[s.infoVal, { fontSize: 7, color: C.light }]}>{data.paymentId}</Text></View>}
       </View>
       {data.notes && <NotesSection text={data.notes} />}
       <Footer />
     </Page>
   </Document>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════
 // INVOICE DOCUMENT

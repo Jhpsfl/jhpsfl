@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { generateReceiptPDF, getReceiptFilename } from '@/lib/receipt-generator';
+import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -58,8 +58,10 @@ export async function POST(req: NextRequest) {
 
   // Build receipt PDF
   const amountCents = Math.round(parseFloat(amount) * 100);
+  const receiptNum = generateReceiptNumber();
   const receiptData: ReceiptData = {
     paymentId: payment.id,
+    receiptNumber: receiptNum,
     paymentDate: new Date(),
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
@@ -97,6 +99,7 @@ export async function POST(req: NextRequest) {
         </p>
         <div style="background:#E8F5E9;border:1px solid #2E7D32;border-radius:8px;padding:16px;margin-bottom:24px;">
           <p style="margin:4px 0;font-size:14px;"><strong>Amount:</strong> ${fmt(amountCents)}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Receipt #:</strong> <span style="font-family:monospace;font-weight:bold;">${receiptNum}</span></p>
           <p style="margin:4px 0;font-size:14px;"><strong>Method:</strong> <span style="color:#2E7D32;font-weight:bold;">💵 Cash</span></p>
           ${service ? `<p style="margin:4px 0;font-size:14px;"><strong>Service:</strong> ${service}</p>` : ''}
           <p style="margin:4px 0;font-size:14px;"><strong>Status:</strong> <span style="color:#2E7D32;font-weight:bold;">PAID</span></p>

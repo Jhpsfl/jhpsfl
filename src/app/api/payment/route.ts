@@ -2,7 +2,7 @@ import { SquareClient, SquareEnvironment, Currency, type OrderLineItem } from 's
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Resend } from 'resend';
-import { generateReceiptPDF, getReceiptFilename } from '@/lib/receipt-generator';
+import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 
 const squareClient = new SquareClient({
@@ -203,8 +203,10 @@ export async function POST(request: Request) {
             const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
             const subtotalCents = paymentAmountCents - taxCents;
 
+            const receiptNum = generateReceiptNumber();
             const receiptData: ReceiptData = {
               paymentId: result.payment.id || 'N/A',
+              receiptNumber: receiptNum,
               paymentDate: new Date(),
               customerName: customerName || 'Valued Customer',
               customerEmail,
@@ -222,7 +224,7 @@ export async function POST(request: Request) {
             const pdfBuffer = await generateReceiptPDF(receiptData);
             const pdfFilename = getReceiptFilename(receiptData);
 
-            const receiptHtml = buildReceiptHtml({
+            const receiptHtml = buildReceiptHtml({ receiptNumber: receiptNum,
               customerName: customerName || 'Valued Customer',
               amount: parseFloat(amount),
               service: service || 'JHPS Service',
@@ -289,12 +291,13 @@ function buildReceiptHtml(params: {
   service: string;
   invoiceNumber: string | null;
   paymentId: string | null;
+  receiptNumber?: string;
   receiptUrl: string | null;
   date: Date;
   lineItems: Array<{ description: string; quantity: number; amount: number }> | null;
   taxRate: number;
 }): string {
-  const { customerName, amount, service, invoiceNumber, paymentId, receiptUrl, date, lineItems, taxRate } = params;
+  const { customerName, amount, service, invoiceNumber, paymentId, receiptNumber, receiptUrl, date, lineItems, taxRate } = params;
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const formattedDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -348,9 +351,13 @@ function buildReceiptHtml(params: {
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Date</div>
               <div style="color:#333;font-size:15px;">${formattedDate} at ${formattedTime}</div>
             </td></tr>
-            ${paymentId ? `<tr><td style="padding:16px 24px;">
-              <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Transaction ID</div>
-              <div style="color:#666;font-size:12px;font-family:monospace;">${paymentId}</div>
+            ${receiptNumber ? `<tr><td style="padding:16px 24px;border-bottom:1px solid #e0e8e0;">
+              <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Receipt #</div>
+              <div style="color:#333;font-size:15px;font-weight:700;font-family:monospace;">${receiptNumber}</div>
+            </td></tr>` : ''}
+            ${paymentId ? `<tr><td style="padding:12px 24px;">
+              <div style="color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Transaction ID</div>
+              <div style="color:#bbb;font-size:11px;font-family:monospace;">${paymentId}</div>
             </td></tr>` : ''}
           </table>
           ${itemsHtml}
