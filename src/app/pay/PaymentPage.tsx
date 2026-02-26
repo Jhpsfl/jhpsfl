@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 
 // Square Web Payments SDK type shim
 declare global {
@@ -199,6 +200,8 @@ export default function PaymentPage() {
   const [invoiceData, setInvoiceData] = useState<InvoicePublicData | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [saveCard, setSaveCard] = useState(false);
+  const { userId: clerkUserId } = useAuth();
   const searchParams = useSearchParams();
 
   // Auto-fill from invoice payment link params
@@ -338,6 +341,8 @@ export default function PaymentPage() {
           invoiceNumber: formData.invoiceNumber,
           note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
             .filter(Boolean).join(" — "),
+          saveCard: saveCard && !!clerkUserId,
+          clerkUserId: clerkUserId || undefined,
         }),
       });
 
@@ -1036,6 +1041,25 @@ export default function PaymentPage() {
                           🔒 Secured by Square. Your card details are encrypted and never stored on our servers.
                         </div>
                       </div>
+
+                      {/* Save card checkbox — only for signed-in users */}
+                      {clerkUserId && (
+                        <label style={{
+                          display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                          padding: "14px 16px", background: "rgba(76,175,80,0.05)",
+                          border: "1px solid rgba(76,175,80,0.15)", borderRadius: 12, marginBottom: 20,
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={saveCard}
+                            onChange={(e) => setSaveCard(e.target.checked)}
+                            style={{ width: 18, height: 18, accentColor: "#4CAF50", cursor: "pointer" }}
+                          />
+                          <span style={{ fontSize: 14, color: "#8aba8a", fontWeight: 500 }}>
+                            Save this card for future payments
+                          </span>
+                        </label>
+                      )}
 
                       <button className="cta-pay" onClick={handlePayment} disabled={!squareCard || isProcessing}>
                         {isProcessing ? (

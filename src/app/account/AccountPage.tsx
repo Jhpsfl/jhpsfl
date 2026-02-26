@@ -9,6 +9,7 @@ import {
   useUser,
   useAuth,
 } from "@clerk/nextjs";
+import SquareCardForm, { type SquareCard } from "@/app/components/SquareCardForm";
 
 // ─── Types ───
 interface Customer {
@@ -50,6 +51,15 @@ interface Subscription {
   status: string;
   next_billing_date: string | null;
 }
+interface StoredCard {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
+  is_default: boolean;
+}
+
 interface DashboardData {
   customer: Customer | null;
   jobSites: JobSite[];
@@ -120,6 +130,20 @@ function DashboardView() {
   const { user } = useUser();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cards, setCards] = useState<StoredCard[]>([]);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [cardFormCard, setCardFormCard] = useState<SquareCard | null>(null);
+  const [cardSaving, setCardSaving] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [cardActionLoading, setCardActionLoading] = useState<string | null>(null);
+
+  const fetchCards = () => {
+    if (!userId) return;
+    fetch(`/api/cards?clerk_user_id=${userId}`)
+      .then((r) => r.json())
+      .then((d) => setCards(d.cards || []))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -127,7 +151,69 @@ function DashboardView() {
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [userId]);
+    fetchCards();
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddCard = async () => {
+    if (!cardFormCard || cardSaving || !userId) return;
+    setCardSaving(true);
+    setCardError(null);
+    try {
+      const tokenResult = await cardFormCard.tokenize();
+      if (tokenResult.status !== "OK") {
+        setCardError(tokenResult.errors?.map(e => e.message).join(", ") || "Card verification failed");
+        setCardSaving(false);
+        return;
+      }
+      const res = await fetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: userId, cardToken: tokenResult.token }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        fetchCards();
+        setShowAddCard(false);
+        setCardFormCard(null);
+      } else {
+        setCardError(result.error || "Failed to save card");
+      }
+    } catch {
+      setCardError("An unexpected error occurred");
+    } finally {
+      setCardSaving(false);
+    }
+  };
+
+  const handleRemoveCard = async (cardId: string) => {
+    if (!userId) return;
+    setCardActionLoading(cardId);
+    try {
+      const res = await fetch("/api/cards", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: userId, cardId }),
+      });
+      const result = await res.json();
+      if (result.success) fetchCards();
+    } catch { /* ignore */ }
+    setCardActionLoading(null);
+  };
+
+  const handleSetDefault = async (cardId: string) => {
+    if (!userId) return;
+    setCardActionLoading(cardId);
+    try {
+      const res = await fetch("/api/cards", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: userId, cardId }),
+      });
+      const result = await res.json();
+      if (result.success) fetchCards();
+    } catch { /* ignore */ }
+    setCardActionLoading(null);
+  };
 
   const displayName = data?.customer?.name || user?.fullName || "Customer";
 
@@ -184,6 +270,129 @@ function DashboardView() {
           </div>
         </div>
       )}
+
+      {/* Payment Methods */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700 }}>PAYMENT METHODS</h3>
+          {!showAddCard && (
+            <button onClick={() => { setShowAddCard(true); setCardError(null); }} style={{
+              background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.3)",
+              borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600,
+              color: "#4CAF50", cursor: "pointer", fontFamily: "inherit",
+            }}>+ Add Card</button>
+          )}
+        </div>
+
+        {cards.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {cards.map((card) => (
+              <div key={card.id} style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 22 }}>💳</span>
+                  <div>
+                    <p style={{ color: "#e8f5e8", fontWeight: 600, marginBottom: 2 }}>
+                      {card.brand || "Card"} ····{card.last4 || "????"}
+                      {card.is_default && (
+                        <span style={{
+                          marginLeft: 8, padding: "2px 8px", background: "rgba(76,175,80,0.15)",
+                          borderRadius: 10, fontSize: 10, fontWeight: 700, color: "#66bb6a", letterSpacing: 0.5,
+                        }}>DEFAULT</span>
+                      )}
+                    </p>
+                    <p style={{ color: "#5a8a5a", fontSize: 12 }}>
+                      Expires {card.exp_month ? `${String(card.exp_month).padStart(2, "0")}/${card.exp_year}` : "—"}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {!card.is_default && (
+                    <button
+                      onClick={() => handleSetDefault(card.id)}
+                      disabled={cardActionLoading === card.id}
+                      style={{
+                        background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
+                        borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 600,
+                        color: "#4CAF50", cursor: "pointer", fontFamily: "inherit",
+                        opacity: cardActionLoading === card.id ? 0.5 : 1,
+                      }}
+                    >Set Default</button>
+                  )}
+                  <button
+                    onClick={() => handleRemoveCard(card.id)}
+                    disabled={cardActionLoading === card.id}
+                    style={{
+                      background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)",
+                      borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 600,
+                      color: "#ef5350", cursor: "pointer", fontFamily: "inherit",
+                      opacity: cardActionLoading === card.id ? 0.5 : 1,
+                    }}
+                  >Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !showAddCard ? (
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 14, padding: "24px",
+            textAlign: "center", color: "#3a5a3a",
+          }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>💳</p>
+            <p style={{ fontSize: 14 }}>No cards on file. Add a card for faster payments.</p>
+          </div>
+        ) : null}
+
+        {showAddCard && (
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 16, padding: "24px",
+            marginTop: cards.length > 0 ? 12 : 0,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#8aba8a" }}>Add New Card</span>
+              <button onClick={() => { setShowAddCard(false); setCardError(null); setCardFormCard(null); }} style={{
+                background: "none", border: "none", color: "#5a8a5a", fontSize: 18, cursor: "pointer",
+              }}>✕</button>
+            </div>
+
+            <SquareCardForm
+              containerId="sq-card-portal"
+              onReady={(card) => setCardFormCard(card)}
+              onError={(msg) => setCardError(msg)}
+            />
+
+            {cardError && (
+              <div style={{
+                marginTop: 12, padding: "10px 14px", background: "rgba(244,67,54,0.08)",
+                borderRadius: 8, border: "1px solid rgba(244,67,54,0.2)",
+                fontSize: 12, color: "#ef9a9a",
+              }}>
+                {cardError}
+              </div>
+            )}
+
+            <button
+              onClick={handleAddCard}
+              disabled={!cardFormCard || cardSaving}
+              style={{
+                marginTop: 16, width: "100%", padding: "14px",
+                background: cardFormCard && !cardSaving ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
+                color: cardFormCard && !cardSaving ? "#fff" : "#5a8a5a",
+                border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
+                cursor: cardFormCard && !cardSaving ? "pointer" : "not-allowed",
+                fontFamily: "inherit",
+              }}
+            >
+              {cardSaving ? "Saving..." : "Save Card"}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Job Sites */}
       {data?.jobSites && data.jobSites.length > 0 && (

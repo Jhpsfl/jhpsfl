@@ -1,20 +1,16 @@
-import { SquareClient, SquareEnvironment, Currency, type OrderLineItem } from 'square';
+import { Currency, type OrderLineItem } from 'square';
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { squareClient, locationId as sqLocationId, ensureSquareCustomer, storeCardOnFile } from '@/lib/square';
 import { Resend } from 'resend';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
-
-const squareClient = new SquareClient({
-  token: process.env.SQUARE_ACCESS_TOKEN?.trim()!,
-  environment: SquareEnvironment.Production,
-});
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
-    const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note } =
+    const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note, saveCard, clerkUserId } =
       await request.json();
 
     if (!token || !amount) {
@@ -26,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payment amount' }, { status: 400 });
     }
 
-    const locationId = process.env.SQUARE_LOCATION_ID?.trim();
+    const locationId = sqLocationId;
     const supabase = createSupabaseAdmin();
     const paymentNote =
       note || [service, invoiceNumber ? 'INV#' + invoiceNumber : ''].filter(Boolean).join(' - ') || 'JHPS Payment';
@@ -165,6 +161,31 @@ export async function POST(request: Request) {
             notes: paymentNote,
             paid_at: new Date().toISOString(),
           });
+
+          // ─── Save card on file if requested ───
+          if (saveCard && clerkUserId && customerId && result.payment?.id) {
+            try {
+              // Look up customer details for Square
+              const { data: custData } = await supabase.from('customers').select('name, email, phone').eq('id', customerId).single();
+              const sqCustId = await ensureSquareCustomer(customerId, custData?.name, custData?.email, custData?.phone);
+              const cardInfo = await storeCardOnFile(sqCustId, result.payment.id);
+
+              // Check if this is the first card (make it default)
+              const { count } = await supabase.from('stored_cards').select('id', { count: 'exact', head: true }).eq('customer_id', customerId);
+              await supabase.from('stored_cards').insert({
+                customer_id: customerId,
+                square_card_id: cardInfo.cardId,
+                brand: cardInfo.brand || null,
+                last4: cardInfo.last4 || null,
+                exp_month: cardInfo.expMonth || null,
+                exp_year: cardInfo.expYear || null,
+                is_default: (count || 0) === 0,
+              });
+            } catch (cardErr) {
+              // Card save failure should NOT affect the successful payment
+              console.error('CARD_SAVE_ERROR:', cardErr);
+            }
+          }
 
           // Mark invoice as paid if matched
           if (invoiceNumber) {

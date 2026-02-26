@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
+import { chargeStoredCard, advanceBillingDate } from "@/lib/square";
+import { Resend } from "resend";
+import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from "@/lib/receipt-generator";
+import type { ReceiptData } from "@/lib/receipt-generator";
 
 // ─── Auth check ───
 async function verifyAdmin(clerkUserId: string) {
@@ -73,13 +77,14 @@ export async function GET(request: NextRequest) {
       case "customer_detail": {
         if (!customerId) return NextResponse.json({ error: "customer_id required" }, { status: 400 });
 
-        const [customerRes, sitesRes, jobsRes, paymentsRes, subsRes, invoicesRes] = await Promise.all([
+        const [customerRes, sitesRes, jobsRes, paymentsRes, subsRes, invoicesRes, cardsRes] = await Promise.all([
           supabase.from("customers").select("*").eq("id", customerId).single(),
           supabase.from("job_sites").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("jobs").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("payments").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("subscriptions").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+          supabase.from("stored_cards").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
         ]);
 
         if (customerRes.error) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
@@ -91,7 +96,19 @@ export async function GET(request: NextRequest) {
           payments: paymentsRes.data || [],
           subscriptions: subsRes.data || [],
           invoices: invoicesRes.data || [],
+          storedCards: cardsRes.data || [],
         });
+      }
+
+      case "stored_cards": {
+        if (!customerId) return NextResponse.json({ error: "customer_id required" }, { status: 400 });
+        const { data, error } = await supabase
+          .from("stored_cards")
+          .select("*")
+          .eq("customer_id", customerId)
+          .order("created_at", { ascending: false });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ data });
       }
 
       case "jobs": {
@@ -278,13 +295,15 @@ export async function POST(request: NextRequest) {
 
       case "subscriptions": {
         if (action === "create") {
-          const { customer_id, plan_name, service_type, frequency, amount, job_site_id, notes } = payload;
+          const { customer_id, plan_name, service_type, frequency, amount, job_site_id, notes, billing_mode, next_billing_date } = payload;
           if (!customer_id || !plan_name || !service_type || !frequency || !amount) {
             return NextResponse.json({ error: "Missing required subscription fields" }, { status: 400 });
           }
           const { data, error } = await supabase.from("subscriptions").insert({
             customer_id, plan_name, service_type, frequency, amount, status: "active",
             job_site_id: job_site_id || null, notes: notes || null,
+            billing_mode: billing_mode || "manual",
+            next_billing_date: next_billing_date || null,
           }).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });
@@ -302,6 +321,126 @@ export async function POST(request: NextRequest) {
           const { error } = await supabase.from("subscriptions").delete().eq("id", id);
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true });
+        }
+        if (action === "charge_now") {
+          const { id } = payload;
+          if (!id) return NextResponse.json({ error: "Subscription ID required" }, { status: 400 });
+
+          // Look up subscription
+          const { data: sub, error: subErr } = await supabase
+            .from("subscriptions")
+            .select("*, customers(id, name, email, phone)")
+            .eq("id", id)
+            .single();
+          if (subErr || !sub) return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+
+          // Look up default stored card
+          const { data: card } = await supabase
+            .from("stored_cards")
+            .select("square_card_id")
+            .eq("customer_id", sub.customer_id)
+            .eq("is_default", true)
+            .single();
+
+          if (!card) {
+            // Log no_card
+            await supabase.from("billing_log").insert({
+              subscription_id: id,
+              customer_id: sub.customer_id,
+              amount: sub.amount,
+              status: "no_card",
+              error_message: "No stored card on file",
+            });
+            return NextResponse.json({ error: "No stored card on file for this customer" }, { status: 400 });
+          }
+
+          const amountCents = Math.round(sub.amount * 100);
+          const note = `${sub.plan_name} — ${sub.service_type} (${sub.frequency})`;
+
+          try {
+            const payResult = await chargeStoredCard(
+              card.square_card_id,
+              amountCents,
+              note,
+              sub.customers?.email || undefined,
+            );
+
+            // Record payment in payments table
+            await supabase.from("payments").insert({
+              customer_id: sub.customer_id,
+              subscription_id: id,
+              amount: sub.amount,
+              status: "completed",
+              square_payment_id: payResult.paymentId,
+              square_receipt_url: payResult.receiptUrl,
+              payment_method: "card",
+              notes: note,
+              paid_at: new Date().toISOString(),
+            });
+
+            // Log success
+            await supabase.from("billing_log").insert({
+              subscription_id: id,
+              customer_id: sub.customer_id,
+              amount: sub.amount,
+              status: "success",
+              square_payment_id: payResult.paymentId,
+            });
+
+            // Advance billing date
+            const currentDate = sub.next_billing_date || new Date().toISOString().split("T")[0];
+            const nextDate = advanceBillingDate(currentDate, sub.frequency);
+            await supabase.from("subscriptions").update({ next_billing_date: nextDate }).eq("id", id);
+
+            // Send receipt email
+            if (sub.customers?.email) {
+              try {
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                const receiptNum = generateReceiptNumber();
+                const receiptData: ReceiptData = {
+                  paymentId: payResult.paymentId,
+                  receiptNumber: receiptNum,
+                  paymentDate: new Date(),
+                  customerName: sub.customers.name || "Valued Customer",
+                  customerEmail: sub.customers.email,
+                  lineItems: [{ name: note, quantity: 1, unitPrice: amountCents, totalPrice: amountCents }],
+                  subtotal: amountCents,
+                  taxAmount: 0,
+                  totalAmount: amountCents,
+                  paymentStatus: "COMPLETED",
+                };
+                const pdfBuffer = await generateReceiptPDF(receiptData);
+                const pdfFilename = getReceiptFilename(receiptData);
+
+                await resend.emails.send({
+                  from: "JHPS Florida <info@jhpsfl.com>",
+                  to: [sub.customers.email],
+                  subject: `Payment Confirmation — $${sub.amount.toFixed(2)} — Jenkins Home & Property Solutions`,
+                  html: `<p>Hi ${sub.customers.name || "Valued Customer"},</p><p>Your recurring payment of <strong>$${sub.amount.toFixed(2)}</strong> for <strong>${note}</strong> has been processed successfully.</p><p>Receipt #${receiptNum}</p><p>Thank you,<br/>Jenkins Home & Property Solutions</p>`,
+                  attachments: [{ filename: pdfFilename, content: pdfBuffer.toString("base64") }],
+                });
+              } catch (emailErr) {
+                console.error("CHARGE_RECEIPT_EMAIL_ERROR:", emailErr);
+              }
+            }
+
+            return NextResponse.json({
+              success: true,
+              paymentId: payResult.paymentId,
+              nextBillingDate: nextDate,
+            });
+          } catch (chargeErr) {
+            const errMsg = chargeErr instanceof Error ? chargeErr.message : "Charge failed";
+            // Log failure
+            await supabase.from("billing_log").insert({
+              subscription_id: id,
+              customer_id: sub.customer_id,
+              amount: sub.amount,
+              status: "failed",
+              error_message: errMsg,
+            });
+            return NextResponse.json({ error: `Charge failed: ${errMsg}` }, { status: 400 });
+          }
         }
         break;
       }

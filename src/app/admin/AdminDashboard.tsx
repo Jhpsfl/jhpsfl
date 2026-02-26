@@ -77,8 +77,19 @@ interface Subscription {
   frequency: string;
   amount: number;
   status: string;
+  billing_mode: string;
   next_billing_date: string | null;
   customers?: { name: string; phone: string; email: string };
+}
+
+interface StoredCard {
+  id: string;
+  customer_id: string;
+  brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
+  is_default: boolean;
 }
 
 interface Invoice {
@@ -110,6 +121,7 @@ interface CustomerDetail {
   payments: Payment[];
   subscriptions: Subscription[];
   invoices: Invoice[];
+  storedCards: StoredCard[];
 }
 
 type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices";
@@ -434,6 +446,143 @@ function CustomerModal({ onClose, onSave }: {
 }
 
 // ─── Record Cash Payment Modal ───
+function SubscriptionModal({ onClose, onSave, customers, subscription }: {
+  onClose: () => void;
+  onSave: (data: Record<string, unknown>) => void;
+  customers: Customer[];
+  subscription: Subscription | null;
+}) {
+  const [form, setForm] = useState({
+    customer_id: subscription?.customer_id || "",
+    plan_name: subscription?.plan_name || "",
+    service_type: subscription?.service_type || "",
+    frequency: subscription?.frequency || "monthly",
+    amount: subscription ? String(subscription.amount) : "",
+    billing_mode: subscription?.billing_mode || "manual",
+    next_billing_date: subscription?.next_billing_date || "",
+    notes: "",
+  });
+
+  const isValid = !!(form.customer_id && form.plan_name && form.service_type && form.frequency && form.amount && parseFloat(form.amount) > 0);
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "12px 14px", background: "#0d1a0d",
+    border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
+    fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
+    boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, color: "#5a8a5a", fontWeight: 700,
+    letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6,
+  };
+
+  return (
+    <div className="JobModal" onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20, backdropFilter: "blur(8px)", animation: "fadeIn 0.2s ease",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "linear-gradient(160deg, #0d1f0d, #091409)",
+        border: "1px solid #1a3a1a", borderRadius: 20, padding: "32px 28px",
+        maxWidth: 480, width: "100%", boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
+        animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
+        maxHeight: "90vh", overflowY: "auto",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#e8f5e8", fontWeight: 700 }}>
+            {subscription ? "Edit Subscription" : "New Subscription"}
+          </h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
+          <div>
+            <label style={labelStyle}>Customer *</label>
+            <select value={form.customer_id}
+              onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}
+              disabled={!!subscription}
+              style={{ ...inputStyle, appearance: "none", cursor: subscription ? "not-allowed" : "pointer", opacity: subscription ? 0.7 : 1 }}>
+              <option value="">Select customer</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Plan Name *</label>
+            <input placeholder="e.g. Weekly Lawn Care" value={form.plan_name}
+              onChange={e => setForm(f => ({ ...f, plan_name: e.target.value }))} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Service Type *</label>
+            <input placeholder="e.g. Lawn Mowing" value={form.service_type}
+              onChange={e => setForm(f => ({ ...f, service_type: e.target.value }))} style={inputStyle} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Frequency *</label>
+              <select value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency: e.target.value }))}
+                style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Bi-weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Amount *</label>
+              <input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
+                value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Billing Mode</label>
+              <select value={form.billing_mode} onChange={e => setForm(f => ({ ...f, billing_mode: e.target.value }))}
+                style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
+                <option value="manual">Manual</option>
+                <option value="auto">Auto</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Next Billing Date</label>
+              <input type="date" value={form.next_billing_date}
+                onChange={e => setForm(f => ({ ...f, next_billing_date: e.target.value }))}
+                style={inputStyle} />
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (!isValid) return;
+              onSave({
+                customer_id: form.customer_id,
+                plan_name: form.plan_name,
+                service_type: form.service_type,
+                frequency: form.frequency,
+                amount: parseFloat(form.amount),
+                billing_mode: form.billing_mode,
+                next_billing_date: form.next_billing_date || null,
+              });
+            }}
+            disabled={!isValid}
+            style={{
+              background: isValid ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
+              color: isValid ? "#fff" : "#5a8a5a",
+              border: "none", borderRadius: 12, padding: "14px",
+              fontSize: 15, fontWeight: 700, cursor: isValid ? "pointer" : "not-allowed",
+              fontFamily: "'DM Sans', sans-serif", marginTop: 4,
+            }}
+          >
+            {subscription ? "Update Subscription" : "Create Subscription"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CashPaymentModal({ onClose, onSave, customers, jobs, preselectedCustomerId }: {
   onClose: () => void;
   onSave: (data: Record<string, unknown>) => void;
@@ -648,6 +797,11 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
   const [pendingInvoiceCustomerId, setPendingInvoiceCustomerId] = useState<string | null>(null);
+
+  // Subscription modal
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+  const [chargingSubId, setChargingSubId] = useState<string | null>(null);
 
   // Modals
   const [showJobModal, setShowJobModal] = useState(false);
@@ -952,6 +1106,63 @@ export default function AdminDashboard() {
       if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
     } else {
       showToast(res?.error || "Failed to delete subscription", "error");
+    }
+  };
+
+  const handleChargeNow = async (subId: string) => {
+    setChargingSubId(subId);
+    try {
+      const res = await adminPost("subscriptions", "charge_now", { id: subId });
+      if (res?.success) {
+        showToast(`Payment processed! Next billing: ${res.nextBillingDate}`);
+        loadTab("subscriptions");
+        if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+        loadTab("overview");
+      } else {
+        showToast(res?.error || "Charge failed", "error");
+      }
+    } catch {
+      showToast("Charge failed unexpectedly", "error");
+    }
+    setChargingSubId(null);
+  };
+
+  const handleToggleBillingMode = async (sub: Subscription) => {
+    const newMode = sub.billing_mode === "auto" ? "manual" : "auto";
+    const res = await adminPost("subscriptions", "update", { id: sub.id, billing_mode: newMode });
+    if (res?.success) {
+      showToast(`Billing mode set to ${newMode}`);
+      loadTab("subscriptions");
+      if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+    } else {
+      showToast(res?.error || "Failed to update billing mode", "error");
+    }
+  };
+
+  const handleToggleSubStatus = async (sub: Subscription) => {
+    const newStatus = sub.status === "active" ? "paused" : "active";
+    const res = await adminPost("subscriptions", "update", { id: sub.id, status: newStatus });
+    if (res?.success) {
+      showToast(`Subscription ${newStatus}`);
+      loadTab("subscriptions");
+      if (customerDetail) loadCustomerDetail(customerDetail.customer.id);
+    } else {
+      showToast(res?.error || "Failed to update status", "error");
+    }
+  };
+
+  const handleSaveSubscription = async (data: Record<string, unknown>) => {
+    const action = editingSub ? "update" : "create";
+    const payload = editingSub ? { id: editingSub.id, ...data } : data;
+    const res = await adminPost("subscriptions", action, payload);
+    if (res?.success || res?.data) {
+      showToast(editingSub ? "Subscription updated" : "Subscription created");
+      setShowSubModal(false);
+      setEditingSub(null);
+      loadTab("subscriptions");
+      loadTab("overview");
+    } else {
+      showToast(res?.error || `Failed to ${action} subscription`, "error");
     }
   };
 
@@ -1943,21 +2154,65 @@ export default function AdminDashboard() {
                         {customerDetail.subscriptions.length > 0 && (
                           <div>
                             <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Subscriptions</h3>
-                            <DataTable headers={["Plan", "Service", "Frequency", "Amount", "Status", "Next Billing", ""]}>
+                            <DataTable headers={["Plan", "Service", "Frequency", "Amount", "Mode", "Status", "Next Billing", ""]}>
                               {customerDetail.subscriptions.map((s) => (
                                 <TableRow key={s.id}>
                                   <Td>{s.plan_name}</Td>
                                   <Td>{s.service_type}</Td>
                                   <Td>{s.frequency}</Td>
                                   <Td mono accent>{formatCurrency(s.amount)}</Td>
+                                  <Td>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                                      color: s.billing_mode === "auto" ? "#66bb6a" : "#888",
+                                    }}>{s.billing_mode || "manual"}</span>
+                                  </Td>
                                   <Td><StatusBadge status={s.status} /></Td>
                                   <Td>{formatDate(s.next_billing_date)}</Td>
                                   <Td>
-                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteSubscription(s.id)}>Delete</button>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                      {s.status === "active" && (
+                                        <button className="quick-action" onClick={() => handleChargeNow(s.id)} disabled={chargingSubId === s.id}>
+                                          {chargingSubId === s.id ? "..." : "Charge"}
+                                        </button>
+                                      )}
+                                      <button className="quick-action" onClick={() => { setEditingSub(s); setShowSubModal(true); }}>Edit</button>
+                                      <button className="quick-action quick-action-danger" onClick={() => handleDeleteSubscription(s.id)}>Delete</button>
+                                    </div>
                                   </Td>
                                 </TableRow>
                               ))}
                             </DataTable>
+                          </div>
+                        )}
+
+                        {/* Stored Cards */}
+                        {customerDetail.storedCards && customerDetail.storedCards.length > 0 && (
+                          <div>
+                            <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Cards on File</h3>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {customerDetail.storedCards.map((card) => (
+                                <div key={card.id} style={{
+                                  background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a",
+                                  borderRadius: 10, padding: "12px 16px",
+                                  display: "flex", alignItems: "center", gap: 12,
+                                }}>
+                                  <span style={{ fontSize: 18 }}>💳</span>
+                                  <span style={{ color: "#e8f5e8", fontWeight: 600, fontSize: 14 }}>
+                                    {card.brand || "Card"} ····{card.last4 || "????"}
+                                  </span>
+                                  <span style={{ color: "#5a8a5a", fontSize: 12 }}>
+                                    {card.exp_month ? `${String(card.exp_month).padStart(2, "0")}/${card.exp_year}` : ""}
+                                  </span>
+                                  {card.is_default && (
+                                    <span style={{
+                                      padding: "2px 8px", background: "rgba(76,175,80,0.15)",
+                                      borderRadius: 8, fontSize: 10, fontWeight: 700, color: "#66bb6a",
+                                    }}>DEFAULT</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </>
@@ -2068,19 +2323,69 @@ export default function AdminDashboard() {
                     {/* ─── SUBSCRIPTIONS TAB ─── */}
                     {activeTab === "subscriptions" && (
                       <>
-                        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800, marginBottom: 24 }}>
-                          Subscriptions
-                        </h1>
-                        <DataTable headers={["Customer", "Plan", "Service", "Frequency", "Amount", "Status", "Next Billing"]} emptyMessage="No active subscriptions">
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+                          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
+                            Subscriptions
+                          </h1>
+                          <button onClick={() => { setEditingSub(null); setShowSubModal(true); }} style={{
+                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                            border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 14, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "inherit",
+                          }}>+ New Subscription</button>
+                        </div>
+                        <DataTable headers={["Customer", "Plan", "Freq", "Amount", "Mode", "Status", "Next Billing", "Actions"]} emptyMessage="No subscriptions">
                           {subscriptions.map((s) => (
                             <TableRow key={s.id}>
                               <Td>{s.customers?.name || "—"}</Td>
-                              <Td>{s.plan_name}</Td>
-                              <Td>{s.service_type}</Td>
+                              <Td>
+                                <span style={{ fontWeight: 600 }}>{s.plan_name}</span>
+                                <br/><span style={{ fontSize: 11, color: "#5a8a5a" }}>{s.service_type}</span>
+                              </Td>
                               <Td>{s.frequency}</Td>
                               <Td mono accent>{formatCurrency(s.amount)}</Td>
-                              <Td><StatusBadge status={s.status} /></Td>
+                              <Td>
+                                <button onClick={() => handleToggleBillingMode(s)} style={{
+                                  background: s.billing_mode === "auto" ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.05)",
+                                  border: `1px solid ${s.billing_mode === "auto" ? "rgba(76,175,80,0.3)" : "#2a2a2a"}`,
+                                  borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+                                  color: s.billing_mode === "auto" ? "#66bb6a" : "#888",
+                                  cursor: "pointer", fontFamily: "inherit", textTransform: "uppercase",
+                                }}>{s.billing_mode || "manual"}</button>
+                              </Td>
+                              <Td>
+                                <button onClick={() => handleToggleSubStatus(s)} style={{
+                                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                                }}>
+                                  <StatusBadge status={s.status} />
+                                </button>
+                              </Td>
                               <Td>{formatDate(s.next_billing_date)}</Td>
+                              <Td>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  {s.status === "active" && (
+                                    <button
+                                      onClick={() => handleChargeNow(s.id)}
+                                      disabled={chargingSubId === s.id}
+                                      style={{
+                                        background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                                        border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+                                        cursor: chargingSubId === s.id ? "not-allowed" : "pointer", fontFamily: "inherit",
+                                        opacity: chargingSubId === s.id ? 0.5 : 1,
+                                      }}
+                                    >{chargingSubId === s.id ? "..." : "Charge"}</button>
+                                  )}
+                                  <button onClick={() => { setEditingSub(s); setShowSubModal(true); }} style={{
+                                    background: "rgba(255,255,255,0.05)", border: "1px solid #2a2a2a",
+                                    borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600,
+                                    color: "#8aba8a", cursor: "pointer", fontFamily: "inherit",
+                                  }}>Edit</button>
+                                  <button onClick={() => handleDeleteSubscription(s.id)} style={{
+                                    background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)",
+                                    borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600,
+                                    color: "#ef5350", cursor: "pointer", fontFamily: "inherit",
+                                  }}>Del</button>
+                                </div>
+                              </Td>
                             </TableRow>
                           ))}
                         </DataTable>
@@ -2177,6 +2482,16 @@ export default function AdminDashboard() {
                 customers={customers}
                 jobs={jobs}
                 preselectedCustomerId={cashModalPreselectedCustomer}
+              />
+            )}
+
+            {/* ─── SUBSCRIPTION MODAL ─── */}
+            {showSubModal && (
+              <SubscriptionModal
+                onClose={() => { setShowSubModal(false); setEditingSub(null); }}
+                onSave={handleSaveSubscription}
+                customers={customers}
+                subscription={editingSub}
               />
             )}
           </>
