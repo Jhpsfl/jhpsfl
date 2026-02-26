@@ -931,6 +931,25 @@ export default function AdminDashboard() {
     }
   };
 
+  // ─── Soft back — called from the on-screen back button (iOS / no hardware back) ───
+  // Same logic as the popstate handler but: called from a user gesture, no exit toast.
+  const handleSoftBack = () => {
+    if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
+    if (showCustomerModal) { setShowCustomerModal(false); return; }
+    if (showCashModal) { setShowCashModal(false); return; }
+    if (activeTab === "messages" && inboxBackRef.current?.()) return;
+    if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
+    if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
+    if (tabHistoryRef.current.length > 1) {
+      const newHistory = tabHistoryRef.current.slice(0, -1);
+      const dest = newHistory[newHistory.length - 1];
+      tabHistoryRef.current = newHistory;
+      setActiveTab(dest);
+      if (dest !== "customer_detail") setCustomerDetail(null);
+    }
+  };
+  const canSoftBack = activeTab !== "overview" || showJobModal || showCustomerModal || showCashModal;
+
   // ─── Update popstate handler every render (always fresh, never stale) ───
   popstateHandlerRef.current = () => {
     // NOTE: Do NOT push sentinels here. This handler runs inside a popstate event,
@@ -1050,6 +1069,26 @@ export default function AdminDashboard() {
           border-radius: 10px; padding: 10px 14px; cursor: pointer;
           color: #4CAF50; font-size: 20px;
         }
+        .mobile-back-btn {
+          display: none; position: fixed;
+          top: calc(env(safe-area-inset-top, 0px) + 14px);
+          left: 78px; z-index: 200;
+          background: rgba(5,14,5,0.85);
+          border: 1px solid rgba(76,175,80,0.3);
+          border-radius: 20px; padding: 7px 14px 7px 10px;
+          cursor: pointer; color: #4CAF50;
+          font-size: 13px; font-weight: 600;
+          font-family: 'DM Sans', sans-serif;
+          align-items: center; gap: 5px;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          transition: all 0.2s;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+        }
+        .mobile-back-btn:active {
+          transform: scale(0.95);
+          background: rgba(76,175,80,0.12);
+        }
         .mobile-overlay {
           display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
           z-index: 99;
@@ -1070,6 +1109,7 @@ export default function AdminDashboard() {
             padding-top: calc(env(safe-area-inset-top, 0px) + 68px) !important;
           }
           .mobile-toggle { display: flex; }
+          .mobile-back-btn { display: flex; }
           .mobile-overlay.open { display: block; }
           
           /* Compact tables */
@@ -1262,8 +1302,22 @@ export default function AdminDashboard() {
                 }}>☰</span>
               )}
             </button>
-            <div 
-              className={`mobile-overlay ${sidebarOpen ? "open" : ""}`} 
+            {/* Soft Back Button — iOS / no hardware back */}
+            {canSoftBack && (
+              <button
+                className="mobile-back-btn"
+                onClick={handleSoftBack}
+                aria-label="Go back"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M9 2L4 7L9 12" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Back
+              </button>
+            )}
+
+            <div
+              className={`mobile-overlay ${sidebarOpen ? "open" : ""}`}
               onClick={() => setSidebarOpen(false)}
               role="button"
               tabIndex={0}
