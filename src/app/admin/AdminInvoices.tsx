@@ -231,6 +231,11 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef }
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // New-customer mini-modal (inline in create/edit form)
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: "", email: "", phone: "" });
+  const [savingNewCustomer, setSavingNewCustomer] = useState(false);
+
   // Invoice form state
   const [form, setForm] = useState({
     customer_id: "",
@@ -250,6 +255,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef }
   // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
   if (backRef) {
     backRef.current = () => {
+      if (showNewCustomer) { setShowNewCustomer(false); return true; }
       if (showSendModal) { setShowSendModal(false); return true; }
       if (view !== "list") { setView("list"); setSelectedInvoice(null); return true; }
       return false;
@@ -318,6 +324,30 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef }
     });
     return res.json();
   }, [userId]);
+
+  // ─── Create new customer inline ───
+  const handleCreateNewCustomer = async () => {
+    if (!newCustomerForm.name.trim()) { showToast("Name is required", "error"); return; }
+    setSavingNewCustomer(true);
+    const res = await adminPost("customers", "create", {
+      name: newCustomerForm.name.trim(),
+      email: newCustomerForm.email.trim() || null,
+      phone: newCustomerForm.phone.trim() || null,
+    });
+    setSavingNewCustomer(false);
+    if (res?.data?.id || res?.success) {
+      const newId = res.data?.id || res.id;
+      // refresh customer list then auto-select
+      const custRes = await adminFetch("customers");
+      if (custRes?.data) setCustomers(custRes.data);
+      if (newId) setForm(prev => ({ ...prev, customer_id: newId }));
+      setShowNewCustomer(false);
+      setNewCustomerForm({ name: "", email: "", phone: "" });
+      showToast("Customer created");
+    } else {
+      showToast(res?.error || "Failed to create customer", "error");
+    }
+  };
 
   // ─── Load data ───
   const loadInvoices = useCallback(async () => {
@@ -854,14 +884,65 @@ Jenkins Home & Property Solutions
                   <label style={labelStyle}>Customer *</label>
                   <select
                     value={form.customer_id}
-                    onChange={e => setForm(prev => ({ ...prev, customer_id: e.target.value }))}
+                    onChange={e => {
+                      if (e.target.value === "__new__") {
+                        setNewCustomerForm({ name: "", email: "", phone: "" });
+                        setShowNewCustomer(true);
+                      } else {
+                        setForm(prev => ({ ...prev, customer_id: e.target.value }));
+                      }
+                    }}
                     style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
                   >
                     <option value="">Select customer</option>
+                    <option value="__new__">+ New Customer</option>
                     {customers.map(c => (
                       <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
                     ))}
                   </select>
+
+                  {/* Inline new-customer mini-modal */}
+                  {showNewCustomer && (
+                    <div style={{
+                      marginTop: 10, padding: 14, borderRadius: 10,
+                      background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.2)",
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#5a8a5a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>New Customer</div>
+                      {[
+                        { key: "name", placeholder: "Full Name *", type: "text" },
+                        { key: "email", placeholder: "Email", type: "email" },
+                        { key: "phone", placeholder: "Phone", type: "tel" },
+                      ].map(f => (
+                        <input
+                          key={f.key}
+                          type={f.type}
+                          placeholder={f.placeholder}
+                          value={newCustomerForm[f.key as keyof typeof newCustomerForm]}
+                          onChange={e => setNewCustomerForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                          style={{ ...inputStyle, marginBottom: 8 }}
+                        />
+                      ))}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={handleCreateNewCustomer}
+                          disabled={savingNewCustomer}
+                          style={{
+                            flex: 1, padding: "8px 0", borderRadius: 6,
+                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                            border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          }}
+                        >{savingNewCustomer ? "Saving..." : "Save Customer"}</button>
+                        <button
+                          onClick={() => { setShowNewCustomer(false); }}
+                          style={{
+                            padding: "8px 14px", borderRadius: 6,
+                            background: "rgba(255,255,255,0.05)", border: "1px solid #1a3a1a",
+                            color: "#5a8a5a", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                          }}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={labelStyle}>Invoice #</label>
