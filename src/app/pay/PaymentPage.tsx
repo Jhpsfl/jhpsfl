@@ -562,30 +562,37 @@ export default function PaymentPage() {
         .mobile-menu a { color: #e8f5e8; font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: 'Playfair Display', serif; }
         .mobile-menu a:hover { color: #4CAF50; }
 
-        .billing-expand {
+        /* Outer clip: only max-height + opacity, no transform (avoids horizontal bleed) */
+        .billing-clip {
+          width: 100%;
           overflow: hidden;
-          transform-origin: center;
-          transition: max-height 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-                      opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-                      transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: max-height 0.44s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .billing-expand.open {
-          max-height: 400px;
-          opacity: 1;
-          transform: scaleY(1);
+        .billing-clip.open  { max-height: 500px; opacity: 1; }
+        .billing-clip.closed { max-height: 0; opacity: 0; }
+
+        /* Inner card: scaleY for the "pop from center" feel */
+        .billing-inner {
+          transform-origin: center top;
+          transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+          padding-top: 4px;
         }
-        .billing-expand.closed {
-          max-height: 0;
-          opacity: 0;
-          transform: scaleY(0.85);
+        .billing-clip.open  .billing-inner { transform: scaleY(1); }
+        .billing-clip.closed .billing-inner { transform: scaleY(0.6); }
+
+        .billing-city-zip {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 14px;
         }
 
         .same-billing-toggle {
-          display: flex; align-items: center; gap: 10; cursor: pointer;
+          display: flex; align-items: center; gap: 12px; cursor: pointer;
           padding: 12px 16px; border-radius: 10px;
           border: 1px solid #1a3a1a; background: rgba(76,175,80,0.04);
           transition: border-color 0.2s, background 0.2s;
-          user-select: none;
+          user-select: none; width: 100%; box-sizing: border-box;
         }
         .same-billing-toggle:hover {
           border-color: rgba(76,175,80,0.3);
@@ -594,6 +601,10 @@ export default function PaymentPage() {
         .same-billing-toggle.checked {
           border-color: rgba(76,175,80,0.35);
           background: rgba(76,175,80,0.08);
+        }
+
+        @media (max-width: 768px) {
+          .billing-city-zip { grid-template-columns: 1fr; }
         }
 
         .noise-overlay {
@@ -1046,34 +1057,44 @@ export default function PaymentPage() {
                             </div>
                           </div>
 
-                          {/* Animated billing address */}
-                          <div className={`billing-expand${sameBilling ? " closed" : " open"}`}>
-                            <div style={{
-                              background: "rgba(33,150,243,0.04)", border: "1px solid rgba(33,150,243,0.15)",
-                              borderRadius: 14, padding: "20px 18px",
-                              display: "flex", flexDirection: "column", gap: 14,
-                            }}>
-                              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: "#42a5f5", textTransform: "uppercase" }}>
-                                Billing Address
-                              </p>
-                              <div>
-                                <label style={{ ...labelStyle, color: "#5a8a9a" }}>Street Address</label>
-                                <input className="pay-input" placeholder="123 Billing Street" value={formData.billingAddress}
-                                  onChange={(e) => updateField("billingAddress", e.target.value)}
-                                  style={{ borderColor: "rgba(33,150,243,0.2)" }} />
-                              </div>
-                              <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
-                                <div>
-                                  <label style={{ ...labelStyle, color: "#5a8a9a" }}>City</label>
-                                  <input className="pay-input" placeholder="Deltona" value={formData.billingCity}
-                                    onChange={(e) => updateField("billingCity", e.target.value)}
-                                    style={{ borderColor: "rgba(33,150,243,0.2)" }} />
+                          {/* Animated billing address — outer clips height, inner scales for pop effect */}
+                          <div className={`billing-clip${sameBilling ? " closed" : " open"}`}>
+                            <div className="billing-inner">
+                              <div style={{
+                                background: "rgba(33,150,243,0.05)",
+                                border: "1px solid rgba(33,150,243,0.2)",
+                                borderRadius: 14, padding: "20px 18px",
+                                display: "flex", flexDirection: "column", gap: 14,
+                                boxSizing: "border-box", width: "100%",
+                              }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div style={{ width: 3, height: 16, borderRadius: 2, background: "#42a5f5", flexShrink: 0 }} />
+                                  <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, color: "#42a5f5" }}>
+                                    Billing Address
+                                  </p>
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, color: "#5a8a9a" }}>Zip Code</label>
-                                  <input className="pay-input" placeholder="32725" value={formData.billingZip}
-                                    onChange={(e) => updateField("billingZip", e.target.value)}
-                                    style={{ borderColor: "rgba(33,150,243,0.2)" }} />
+                                  <label style={labelStyle}>Street Address</label>
+                                  <input className="pay-input" placeholder="123 Billing Street"
+                                    value={formData.billingAddress}
+                                    onChange={(e) => updateField("billingAddress", e.target.value)}
+                                    style={{ borderColor: "rgba(33,150,243,0.25)" }} />
+                                </div>
+                                <div className="billing-city-zip">
+                                  <div>
+                                    <label style={labelStyle}>City</label>
+                                    <input className="pay-input" placeholder="Deltona"
+                                      value={formData.billingCity}
+                                      onChange={(e) => updateField("billingCity", e.target.value)}
+                                      style={{ borderColor: "rgba(33,150,243,0.25)" }} />
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Zip</label>
+                                    <input className="pay-input" placeholder="32725"
+                                      value={formData.billingZip}
+                                      onChange={(e) => updateField("billingZip", e.target.value)}
+                                      style={{ borderColor: "rgba(33,150,243,0.25)" }} />
+                                  </div>
                                 </div>
                               </div>
                             </div>
