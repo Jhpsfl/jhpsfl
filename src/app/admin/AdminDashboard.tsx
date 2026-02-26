@@ -1000,6 +1000,7 @@ export default function AdminDashboard() {
           background: linear-gradient(180deg, #071207 0%, #050e05 100%);
           border-right: 1px solid #1a3a1a;
           padding: 24px 16px;
+          padding-top: max(24px, calc(env(safe-area-inset-top, 0px) + 16px));
           position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
           display: flex; flex-direction: column; z-index: 100;
           overflow-y: auto;
@@ -1042,7 +1043,9 @@ export default function AdminDashboard() {
         .quick-action-danger:hover { background: rgba(239,83,80,0.1) !important; color: "#ef5350" !important; border-color: "#ef5350" !important; }
 
         .mobile-toggle {
-          display: none; position: fixed; top: 16px; left: 16px; z-index: 200;
+          display: none; position: fixed;
+          top: calc(env(safe-area-inset-top, 0px) + 12px);
+          left: 16px; z-index: 200;
           background: rgba(5,14,5,0.95); border: 1px solid #1a3a1a;
           border-radius: 10px; padding: 10px 14px; cursor: pointer;
           color: #4CAF50; font-size: 20px;
@@ -1055,13 +1058,17 @@ export default function AdminDashboard() {
         /* ── High-Density Mobile Styles ── */
         @media (max-width: 900px) {
           .admin-layout { grid-template-columns: 1fr; }
-          .admin-sidebar { 
-            transform: translateX(-100%); 
-            width: 280px; 
+          .admin-sidebar {
+            transform: translateX(-100%);
+            width: 280px;
           }
           .admin-sidebar.open { transform: translateX(0); }
           .admin-main { margin-left: 0; }
-          .admin-content-inner { padding: 16px; }
+          .admin-content-inner {
+            padding: 16px;
+            /* Push content below hamburger button + iOS safe area */
+            padding-top: calc(env(safe-area-inset-top, 0px) + 68px) !important;
+          }
           .mobile-toggle { display: flex; }
           .mobile-overlay.open { display: block; }
           
