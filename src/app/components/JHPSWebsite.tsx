@@ -1,20 +1,25 @@
 "use client";
 
-import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { urlFor } from "@/sanity/lib/image";
 
-// ─── Types ───
-interface GalleryItemLocal {
-  src: string;
-  caption: string;
-  tag: string;
-  imageFit?: CSSProperties['objectFit'];
-  imagePosition?: string;
-  fullSrc?: string;
-}
+// ─── Extracted sub-components ───
+import { FadeIn, AnimatedCounter } from "./website/animations";
+import Lightbox from "./website/Lightbox";
+import EstimateModal from "./website/EstimateModal";
+import {
+  type GalleryItemLocal,
+  FALLBACK_SERVICES, FALLBACK_GALLERY, FALLBACK_STEPS, FALLBACK_STATS, FALLBACK_TRUST,
+  FALLBACK_SERVICE_IMAGES, FALLBACK_GALLERY_IMAGES,
+  HERO_STOCK, PROMO_FEATURED_STOCK, PROMO_SECONDARY_STOCK,
+} from "./website/fallbackData";
+import { getSanityImageSrc, getLogoSrc } from "./website/sanityImageHelpers";
+import Navigation from "./website/Navigation";
+import VideoQuoteSection from "./website/VideoQuoteSection";
+import Footer from "./website/Footer";
 
+// ─── Types ───
 interface SanityGalleryItem {
   _id: string;
   caption?: string;
@@ -115,275 +120,6 @@ interface Props {
   gallery: SanityGalleryItem[] | null;
 }
 
-// ─── Animation Hook ───
-function useInView<T extends HTMLElement = HTMLDivElement>(threshold = 0.15) {
-  const ref = useRef<T>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); obs.disconnect(); } },
-      { threshold }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
-  return [ref, isVisible] as const;
-}
-
-// ─── Animated Section Wrapper ───
-function FadeIn({ children, delay = 0, direction = "up", className = "" }: {
-  children: ReactNode;
-  delay?: number;
-  direction?: "up" | "down" | "left" | "right" | "none";
-  className?: string;
-}) {
-  const [ref, isVisible] = useInView(0.1);
-  const transforms: Record<string, string> = {
-    up: "translateY(60px)", down: "translateY(-60px)",
-    left: "translateX(60px)", right: "translateX(-60px)", none: "none",
-  };
-  return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "none" : transforms[direction],
-        transition: `opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// ─── Counter Animation ───
-function AnimatedCounter({ end, suffix = "", duration = 2000 }: {
-  end: number;
-  suffix?: string;
-  duration?: number;
-}) {
-  const [count, setCount] = useState(0);
-  const [ref, isVisible] = useInView<HTMLSpanElement>(0.3);
-  useEffect(() => {
-    if (!isVisible) return;
-    let start = 0;
-    const step = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setCount(end); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [isVisible, end, duration]);
-  return <span ref={ref}>{count}{suffix}</span>;
-}
-
-// ─── Image Modal / Lightbox ───
-function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.92)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        animation: "fadeIn 0.3s ease", cursor: "zoom-out", padding: "20px",
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} style={{ maxWidth: "95%", maxHeight: "90vh", borderRadius: "12px", boxShadow: "0 25px 80px rgba(0,0,0,0.5)" }} />
-      <button onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: "#fff", fontSize: 36, cursor: "pointer", lineHeight: 1 }}>✕</button>
-    </div>
-  );
-}
-
-// ─── Estimate Modal ───
-function EstimateModal({ onClose, email }: { onClose: () => void; email: string }) {
-  const [formData, setFormData] = useState({ name: "", email: "", phone: "", zip: "", service: "", notes: "" });
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  const handleSubmit = async () => {
-    if (!formData.name || !formData.email || !formData.phone) {
-      setErrorMsg("Please fill in your name, email, and phone number.");
-      return;
-    }
-    setErrorMsg("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/estimate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Submission failed");
-      setSubmitted(true);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Please call us directly.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, []);
-
-  const inputStyle: CSSProperties = {
-    width: "100%", padding: "14px 16px", background: "#1a2a1a", border: "1px solid #2a4a2a",
-    borderRadius: 10, color: "#e8f5e8", fontSize: 15, outline: "none", fontFamily: "inherit",
-    transition: "border-color 0.3s",
-  };
-
-  return (
-    <div onClick={onClose} style={{
-      position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.85)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      animation: "fadeIn 0.3s ease", padding: 20, backdropFilter: "blur(8px)",
-    }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: "linear-gradient(160deg, #0d1f0d 0%, #132913 50%, #0a1a0a 100%)",
-        borderRadius: 20, padding: "40px 32px", maxWidth: 480, width: "100%",
-        border: "1px solid #1a3a1a", boxShadow: "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(76,175,80,0.1)",
-        animation: "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-        maxHeight: "90vh", overflowY: "auto", position: "relative",
-      }}>
-        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 20, background: "none", border: "none", color: "#6a9a6a", fontSize: 24, cursor: "pointer" }}>✕</button>
-        {submitted ? (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <div style={{ fontSize: 64, marginBottom: 16 }}>✓</div>
-            <h3 style={{ color: "var(--color-primary)", fontSize: 24, marginBottom: 8 }}>Request Received!</h3>
-            <p style={{ color: "#8aba8a", lineHeight: 1.6, marginBottom: 16 }}>
-              We&apos;re reviewing your information and will reach out within 24–48 hours. Check your email for a confirmation.
-            </p>
-            <p style={{ color: "#5a8a5a", fontSize: 14 }}>
-              Need us sooner? Call or text:{" "}
-              <a href={`tel:4076869817`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>407-686-9817</a>
-            </p>
-          </div>
-        ) : (
-          <>
-            <div style={{ textAlign: "center", marginBottom: 28 }}>
-              <div style={{ fontSize: 13, letterSpacing: 3, color: "var(--color-primary)", marginBottom: 8, fontWeight: 600 }}>FREE ESTIMATE</div>
-              <h3 style={{ color: "#e8f5e8", fontSize: 26, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>Get Your Property Looking Its Best</h3>
-              <p style={{ color: "#7a9a7a", fontSize: 14, marginTop: 8 }}>Fill out the form and we&apos;ll get back to you fast.</p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <input placeholder="Your Name *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={inputStyle} />
-              <input placeholder="Email Address *" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} style={inputStyle} />
-              <input placeholder="Phone Number *" type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} style={inputStyle} />
-              <input placeholder="Zip Code" value={formData.zip} onChange={(e) => setFormData({ ...formData, zip: e.target.value })} style={inputStyle} />
-              <select value={formData.service} onChange={(e) => setFormData({ ...formData, service: e.target.value })} style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
-                <option value="">Select a Service</option>
-                <option value="Lawn Care">Lawn Care</option>
-                <option value="Pressure Washing">Pressure Washing / Soft Wash</option>
-                <option value="Junk Removal">Junk Removal</option>
-                <option value="Land Clearing">Land Clearing</option>
-                <option value="Property Cleanup">Property Cleanups</option>
-                <option value="Other">Other</option>
-              </select>
-              <textarea placeholder="Tell us about your project..." rows={3} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} style={{ ...inputStyle, resize: "vertical" }} />
-              {errorMsg && (
-                <p style={{ color: "#ef5350", fontSize: 13, margin: 0, textAlign: "center" }}>{errorMsg}</p>
-              )}
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
-                style={{
-                  background: loading ? "#2a4a2a" : "linear-gradient(135deg, var(--color-primary) 0%, var(--color-dark) 100%)",
-                  color: "#fff", border: "none", padding: "16px", borderRadius: 12, fontSize: 17,
-                  fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", letterSpacing: 0.5,
-                  boxShadow: "0 4px 20px rgba(76,175,80,0.4)", transition: "transform 0.2s, box-shadow 0.2s",
-                  width: "100%", opacity: loading ? 0.7 : 1,
-                }}
-                onMouseOver={(e) => { if (!loading) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(76,175,80,0.5)"; } }}
-                onMouseOut={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(76,175,80,0.4)"; }}
-              >
-                {loading ? "Sending..." : "Request Free Estimate"}
-              </button>
-              <p style={{ textAlign: "center", color: "#5a8a5a", fontSize: 13, margin: 0 }}>
-                Or call/text directly:{" "}
-                <a href="tel:4076869817" style={{ color: "var(--color-primary)", fontWeight: 600 }}>407-686-9817</a>
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Fallback Service Data ───
-const FALLBACK_SERVICES = [
-  { title: "Lawn Care", desc: "Mowing, edging, trimming, blowing & seasonal cleanups. Your yard, perfected every visit.", icon: "🌿", image: "https://images.pexels.com/photos/1453499/pexels-photo-1453499.jpeg?auto=compress&cs=tinysrgb&w=600&h=400&fit=crop", imageFit: "cover" as const, imagePosition: "center" },
-  { title: "Pressure Washing", desc: "High-pressure & soft wash for driveways, buildings, sidewalks & commercial properties.", icon: "💧", image: "https://images.pexels.com/photos/9681671/pexels-photo-9681671.jpeg?auto=compress&cs=tinysrgb&w=600&h=400&fit=crop", imageFit: "cover" as const, imagePosition: "center" },
-  { title: "Junk Removal", desc: "Fast, affordable haul-away for furniture, debris, appliances & construction waste.", icon: "🚛", image: "https://images.pexels.com/photos/4108715/pexels-photo-4108715.jpeg?auto=compress&cs=tinysrgb&w=600&h=400&fit=crop", imageFit: "cover" as const, imagePosition: "center" },
-  { title: "Land Clearing", desc: "Brush removal, lot clearing & grading for residential and commercial properties.", icon: "🌲", image: "https://images.pexels.com/photos/296234/pexels-photo-296234.jpeg?auto=compress&cs=tinysrgb&w=600&h=400&fit=crop", imageFit: "cover" as const, imagePosition: "center" },
-  { title: "Property Cleanups", desc: "Vacant house cleanup, overgrown yards, plant removal & full property restoration.", icon: "🏠", image: "https://images.pexels.com/photos/186077/pexels-photo-186077.jpeg?auto=compress&cs=tinysrgb&w=600&h=400&fit=crop", imageFit: "cover" as const, imagePosition: "center" },
-];
-
-// ─── Fallback Gallery Data ───
-const FALLBACK_GALLERY: GalleryItemLocal[] = [
-  { src: "https://images.pexels.com/photos/9681671/pexels-photo-9681671.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Commercial Pressure Washing", tag: "Pressure Wash", imageFit: "cover", imagePosition: "center" },
-  { src: "https://images.pexels.com/photos/1453499/pexels-photo-1453499.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Professional Lawn Maintenance", tag: "Lawn Care", imageFit: "cover", imagePosition: "center" },
-  { src: "https://images.pexels.com/photos/186077/pexels-photo-186077.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Full Property Restoration", tag: "Property Cleanup", imageFit: "cover", imagePosition: "center" },
-  { src: "https://images.pexels.com/photos/296234/pexels-photo-296234.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Land Clearing & Grading", tag: "Land Clearing", imageFit: "cover", imagePosition: "center" },
-  { src: "https://images.pexels.com/photos/7587924/pexels-photo-7587924.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Residential Exterior Cleaning", tag: "Pressure Wash", imageFit: "cover", imagePosition: "center" },
-  { src: "https://images.pexels.com/photos/1301856/pexels-photo-1301856.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop", caption: "Garden & Yard Cleanup", tag: "Lawn Care", imageFit: "cover", imagePosition: "center" },
-];
-
-const FALLBACK_STEPS = [
-  { num: "01", title: "Call or Text", desc: "Reach us at 407-686-9817. We respond fast.", icon: "📱" },
-  { num: "02", title: "Free Estimate", desc: "We assess your property and give you an honest quote.", icon: "📋" },
-  { num: "03", title: "We Do The Work", desc: "Our crew shows up on time and gets it done right.", icon: "💪" },
-  { num: "04", title: "You Enjoy", desc: "Sit back and enjoy your clean, beautiful property.", icon: "✨" },
-];
-
-const FALLBACK_STATS = [
-  { value: 500, suffix: "+", label: "Jobs Completed" },
-  { value: 100, suffix: "%", label: "Satisfaction Rate" },
-  { value: 24, suffix: "hr", label: "Fast Response" },
-  { value: 5, suffix: "+", label: "Services Offered" },
-];
-
-const FALLBACK_TRUST = [
-  { icon: "✓", title: "Free Estimates", description: "No obligation quotes for all services" },
-  { icon: "⚡", title: "Fast Scheduling", description: "Quick turnaround, flexible availability" },
-  { icon: "📍", title: "Locally Owned", description: "Based in the Deltona / Orlando area" },
-  { icon: "🛡️", title: "Reliable & Insured", description: "Professional service you can trust" },
-];
-
-// ─── Helper: get image src (cropped) ───
-function getSanityImageSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 800, height = 600, fit: string = "crop"): string | null {
-  if (!img?.asset) return null;
-  try {
-    const sanityFit = fit === "contain" ? "max" : fit === "fill" ? "scale" : "crop";
-    return urlFor(img).width(width).height(height).fit(sanityFit as "crop" | "clip" | "fill" | "max" | "min" | "scale").url();
-  } catch {
-    return null;
-  }
-}
-
-// ─── Helper: get logo src (no crop, preserves aspect ratio) ───
-function getLogoSrc(img: { asset?: { _ref?: string; url?: string } } | undefined, width = 320): string | null {
-  if (!img?.asset) return null;
-  try {
-    return urlFor(img).width(width).fit("max").url();
-  } catch {
-    return null;
-  }
-}
-
 // ─── Main Component ───
 export default function JHPSWebsite({ settings, homePage, services, gallery }: Props) {
   const [showEstimate, setShowEstimate] = useState(false);
@@ -422,29 +158,17 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const bigCtaHeadline = homePage?.bigCtaHeadline || "Ready to Transform Your Property?";
   const bigCtaDescription = homePage?.bigCtaDescription || `One call is all it takes. Get a free estimate today and see why Central Florida trusts ${companyName}.`;
 
-  // ─── Resolve steps ───
   const steps = (homePage?.steps?.length ? homePage.steps : FALLBACK_STEPS).map((s) => ({
     num: s.num || "01", title: s.title || "", desc: s.desc || "", icon: s.icon || "⭐",
   }));
 
-  // ─── Resolve stats ───
   const stats = (settings?.stats?.length ? settings.stats : FALLBACK_STATS).map((s) => ({
     value: s.value ?? 0, suffix: s.suffix || "", label: s.label || "",
   }));
 
-  // ─── Resolve trust items ───
   const trustItems = (settings?.trustItems?.length ? settings.trustItems : FALLBACK_TRUST).map((t) => ({
     icon: t.icon || "✓", title: t.title || "", description: t.description || "",
   }));
-
-  // ─── Resolve services ───
-  const FALLBACK_SERVICE_IMAGES = [
-    'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1530587191325-3db32d826c18?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&h=400&fit=crop',
-  ];
 
   const resolvedServices = (services?.length ? services : []).map((s, i) => ({
     title: s.title || '',
@@ -455,16 +179,6 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
     imagePosition: s.imagePosition || 'center',
   }));
   const displayServices = resolvedServices.length ? resolvedServices : FALLBACK_SERVICES;
-
-  // ─── Resolve gallery ───
-  const FALLBACK_GALLERY_IMAGES = [
-    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop',
-  ];
 
   const resolvedGallery: GalleryItemLocal[] = (gallery?.length ? gallery : []).map((g, i) => {
     const fallback = FALLBACK_GALLERY_IMAGES[i % FALLBACK_GALLERY_IMAGES.length];
@@ -479,11 +193,6 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
     };
   });
   const displayGallery = resolvedGallery.length ? resolvedGallery : FALLBACK_GALLERY;
-
-  // ─── Hero / promo images ───
-  const HERO_STOCK = 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=700&h=500&fit=crop';
-  const PROMO_FEATURED_STOCK = 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=400&fit=crop';
-  const PROMO_SECONDARY_STOCK = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=400&fit=crop';
 
   const heroImageSrc = homePage?.heroImage
     ? (getLogoSrc(homePage.heroImage, 900) || homePage?.heroUrl || HERO_STOCK)
@@ -506,7 +215,6 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const promoSecondaryFit = (homePage?.promoSecondaryFit || 'cover') as CSSProperties['objectFit'];
   const promoSecondaryPosition = homePage?.promoSecondaryPosition || 'center';
 
-  // ─── Logo ───
   const logoSrc = settings?.logo ? getLogoSrc(settings.logo, logoMaxWidth * 2) : null;
 
   useEffect(() => {
@@ -658,122 +366,12 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       <div className="noise-overlay" />
 
       {/* ─── NAVIGATION ─── */}
-      <nav
-        className="nav-blur"
-        style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 9996,
-          background: scrollY > 50 ? "rgba(5,14,5,0.92)" : "transparent",
-          borderBottom: scrollY > 50 ? "1px solid rgba(76,175,80,0.15)" : "1px solid transparent",
-          transition: "all 0.4s", padding: "0 24px",
-        }}
-      >
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {logoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 32 }} className="desktop-nav">
-            {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
-              <button key={id} onClick={() => scrollTo(id!)} style={{
-                background: "none", border: "none", color: "#8aba8a", fontSize: 14, fontWeight: 500,
-                cursor: "pointer", fontFamily: "inherit", transition: "color 0.3s", letterSpacing: 0.5,
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.color = primaryHex; }}
-              onMouseOut={(e) => { e.currentTarget.style.color = "#8aba8a"; }}
-              >{label}</button>
-            ))}
-            <Link href="/pay" style={{
-              color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
-              padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
-              transition: "all 0.3s",
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(76,175,80,0.1)"; e.currentTarget.style.borderColor = "#4CAF50"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#2a5a2a"; }}>
-              💳 Pay
-            </Link>
-            <button className="cta-primary" onClick={() => setShowEstimate(true)} style={{ padding: "10px 24px", fontSize: 14 }}>
-              Free Estimate
-            </button>
-            <Link href="/get-quote" style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              background: "linear-gradient(135deg, #b8860b, #ffd700, #b8860b)",
-              backgroundSize: "200% 100%",
-              color: "#0a0a00", fontWeight: 800, fontSize: 13,
-              padding: "10px 22px", borderRadius: 30, textDecoration: "none",
-              letterSpacing: 0.3, whiteSpace: "nowrap",
-              boxShadow: "0 4px 20px rgba(184,134,11,0.4)",
-              transition: "transform 0.2s, box-shadow 0.2s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 30px rgba(184,134,11,0.6)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 4px 20px rgba(184,134,11,0.4)"; }}>
-              📹 Video Quote
-            </Link>
-          </div>
-
-          {/* Mobile: gold quote button + hamburger */}
-          <div style={{ display: "none", alignItems: "center", gap: 10 }} className="mobile-header-right">
-            <Link href="/get-quote" style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "linear-gradient(135deg, #b8860b, #ffd700)",
-              color: "#0a0a00", fontWeight: 800, fontSize: 12,
-              padding: "8px 14px", borderRadius: 24, textDecoration: "none",
-              letterSpacing: 0.2, whiteSpace: "nowrap",
-              boxShadow: "0 3px 14px rgba(184,134,11,0.45)",
-            }}>
-              📹 Quote
-            </Link>
-          </div>
-
-          <button onClick={() => setMenuOpen(!menuOpen)} style={{
-            display: "none", background: "none", border: "none", cursor: "pointer",
-            flexDirection: "column", gap: 5, padding: 8,
-          }} className="mobile-hamburger">
-            <span style={{ width: 24, height: 2, background: primaryHex, borderRadius: 2, transition: "all 0.3s", transform: menuOpen ? "rotate(45deg) translateY(7px)" : "none", display: "block" }} />
-            <span style={{ width: 24, height: 2, background: primaryHex, borderRadius: 2, transition: "all 0.3s", opacity: menuOpen ? 0 : 1, display: "block" }} />
-            <span style={{ width: 24, height: 2, background: primaryHex, borderRadius: 2, transition: "all 0.3s", transform: menuOpen ? "rotate(-45deg) translateY(-7px)" : "none", display: "block" }} />
-          </button>
-        </div>
-      </nav>
-
-      {menuOpen && (
-        <div className="mobile-menu">
-          <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: primaryHex, fontSize: 32, cursor: "pointer" }}>✕</button>
-
-          {/* Featured quote CTA at top of menu */}
-          <Link href="/get-quote" onClick={() => setMenuOpen(false)} style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            background: "linear-gradient(135deg, #b8860b 0%, #ffd700 50%, #b8860b 100%)",
-            color: "#0a0a00", fontWeight: 800, fontSize: 18,
-            padding: "18px 32px", borderRadius: 16, textDecoration: "none",
-            letterSpacing: 0.3, width: "100%", boxSizing: "border-box",
-            boxShadow: "0 6px 30px rgba(184,134,11,0.5)",
-            marginBottom: 8,
-          }}>
-            <span style={{ fontSize: 22 }}>📹</span>
-            Get Your Free Video Quote
-            <span style={{ opacity: 0.7 }}>→</span>
-          </Link>
-          <div style={{ fontSize: 11, color: "#7a6a3a", letterSpacing: 2, textAlign: "center", marginBottom: 24 }}>
-            SNAP PHOTOS · WE REVIEW · QUOTE DELIVERED
-          </div>
-
-          {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
-            <a key={id} href={`#${id}`} onClick={() => { scrollTo(id!); setMenuOpen(false); }}>{label}</a>
-          ))}
-          <Link href="/pay" onClick={() => setMenuOpen(false)} style={{ color: "#e8f5e8", fontSize: 28, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
-            Make Payment
-          </Link>
-          <button className="cta-primary" onClick={() => { setMenuOpen(false); setShowEstimate(true); }} style={{ marginTop: 16 }}>
-            Get Free Estimate
-          </button>
-        </div>
-      )}
+      <Navigation
+        scrollY={scrollY} menuOpen={menuOpen} setMenuOpen={setMenuOpen}
+        logoSrc={logoSrc} companyName={companyName} logoMaxWidth={logoMaxWidth}
+        logoMaxHeight={logoMaxHeight} logoFit={logoFit as string} logoPadding={logoPadding}
+        primaryHex={primaryHex} setShowEstimate={setShowEstimate} scrollTo={scrollTo}
+      />
 
       {/* ─── HERO SECTION ─── */}
       <section className="hero-gradient" style={{ minHeight: "100vh", display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
@@ -896,111 +494,7 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       </section>
 
       {/* ─── VIDEO QUOTE FEATURE SECTION ─── */}
-      <section style={{ padding: "80px 24px", background: "#060f06", position: "relative", overflow: "hidden" }}>
-        {/* Gold top accent line */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, transparent, #ffd700, #b8860b, #ffd700, transparent)" }} />
-        {/* Subtle background glow */}
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 400, background: "radial-gradient(ellipse, rgba(184,134,11,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
-
-        <div style={{ maxWidth: 1100, margin: "0 auto", position: "relative" }}>
-          <FadeIn>
-            <div style={{ textAlign: "center", marginBottom: 56 }}>
-              {/* Introducing tag */}
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                fontSize: 11, letterSpacing: 4, color: "#ffd700", fontWeight: 700,
-                marginBottom: 20, padding: "6px 18px",
-                border: "1px solid rgba(255,215,0,0.3)", borderRadius: 30,
-                background: "rgba(184,134,11,0.08)",
-              }}>
-                <span style={{ fontSize: 8, color: "#ffd700" }}>✦</span>
-                INTRODUCING
-                <span style={{ fontSize: 8, color: "#ffd700" }}>✦</span>
-              </div>
-
-              <h2 style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: "clamp(30px, 5vw, 52px)",
-                fontWeight: 700, color: "#f0ead0",
-                lineHeight: 1.2, marginBottom: 20,
-              }}>
-                Get a Quote Without<br />
-                <span style={{
-                  background: "linear-gradient(135deg, #ffd700 0%, #f0a500 50%, #b8860b 100%)",
-                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                }}>Ever Leaving Your Couch</span>
-              </h2>
-
-              <p style={{
-                fontSize: 18, lineHeight: 1.75, color: "#8a9a7a",
-                maxWidth: 620, margin: "0 auto 40px",
-              }}>
-                Snap a few photos or a short video of your property, upload them right here,
-                and we&apos;ll review everything and send back a detailed quote — usually within hours.
-                No phone tag. No appointments. No guessing.
-              </p>
-            </div>
-          </FadeIn>
-
-          {/* 3-step cards */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20,
-            marginBottom: 48,
-          }} className="quote-steps-grid">
-            {[
-              { icon: "📸", step: "01", title: "Snap & Upload", desc: "Take photos or a quick video of your property straight from your phone — no special equipment needed." },
-              { icon: "🔍", step: "02", title: "We Review", desc: "Our team reviews your media, assesses the scope of work, and prices out the job accurately." },
-              { icon: "📋", step: "03", title: "Quote Delivered", desc: "A detailed quote lands in your inbox fast — usually the same day. Approve it and we schedule the work." },
-            ].map(({ icon, step, title, desc }, i) => (
-              <FadeIn key={i} delay={i * 0.12}>
-                <div style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,215,0,0.12)",
-                  borderRadius: 16, padding: "32px 28px",
-                  transition: "border-color 0.3s, transform 0.3s",
-                  height: "100%",
-                }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,215,0,0.4)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-4px)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,215,0,0.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
-                >
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-                    <span style={{ fontSize: 36 }}>{icon}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,215,0,0.3)", letterSpacing: 2 }}>{step}</span>
-                  </div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#e8d8a0", marginBottom: 10, fontFamily: "'Playfair Display', serif" }}>{title}</div>
-                  <div style={{ fontSize: 14, color: "#7a8a6a", lineHeight: 1.65 }}>{desc}</div>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <FadeIn delay={0.4}>
-            <div style={{ textAlign: "center" }}>
-              <Link href="/get-quote" style={{
-                display: "inline-flex", alignItems: "center", gap: 12,
-                background: "linear-gradient(135deg, #b8860b 0%, #ffd700 50%, #b8860b 100%)",
-                backgroundSize: "200% 100%",
-                color: "#0a0a00", fontWeight: 800, fontSize: 17,
-                padding: "18px 44px", borderRadius: 60,
-                textDecoration: "none", letterSpacing: 0.3,
-                boxShadow: "0 8px 40px rgba(184,134,11,0.35), 0 0 80px rgba(255,215,0,0.08)",
-                transition: "transform 0.2s, box-shadow 0.2s, background-position 0.4s",
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 14px 50px rgba(184,134,11,0.55), 0 0 100px rgba(255,215,0,0.12)"; (e.currentTarget as HTMLAnchorElement).style.backgroundPosition = "100% 0"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 40px rgba(184,134,11,0.35), 0 0 80px rgba(255,215,0,0.08)"; (e.currentTarget as HTMLAnchorElement).style.backgroundPosition = "0% 0"; }}
-              >
-                <span style={{ fontSize: 20 }}>📹</span>
-                Try Our Video Quote System
-                <span style={{ fontSize: 18, opacity: 0.8 }}>→</span>
-              </Link>
-              <p style={{ marginTop: 14, fontSize: 13, color: "#5a6a4a", letterSpacing: 0.5 }}>
-                Free · No commitment · Results in hours
-              </p>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
+      <VideoQuoteSection />
 
       {/* ─── PROMOTIONAL BANNERS ─── */}
       <section className="section-darker" style={{ padding: "80px 24px" }}>
@@ -1308,84 +802,13 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer id="contact" className="section-darker" style={{ padding: "64px 24px 100px", borderTop: "1px solid #1a3a1a" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div className="footer-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 48, marginBottom: 48 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-                {logoSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoSrc} alt={companyName} style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }} />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 220, height: "auto", maxHeight: 48 }} />
-                )}
-              </div>
-              <p style={{ color: "#6a9a6a", fontSize: 14, lineHeight: 1.8, maxWidth: 400, marginBottom: 20 }}>
-                {footerAbout}
-              </p>
-              <div style={{ display: "flex", gap: 16 }}>
-                <a href={phoneHref} style={{ color: primaryHex, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>📞 {phoneDisplay}</a>
-                <a href={emailHref} style={{ color: primaryHex, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>✉️ Email Us</a>
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: "#e8f5e8", fontSize: 15, fontWeight: 700, marginBottom: 16, letterSpacing: 1 }}>SERVICES</h4>
-              {displayServices.map((s) => (
-                <div key={s.title} style={{ color: "#6a9a6a", fontSize: 14, marginBottom: 10, cursor: "pointer", transition: "color 0.3s" }}
-                  onMouseOver={(e) => { e.currentTarget.style.color = primaryHex; }}
-                  onMouseOut={(e) => { e.currentTarget.style.color = "#6a9a6a"; }}
-                >{s.title}</div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#e8f5e8", fontSize: 15, fontWeight: 700, marginBottom: 16, letterSpacing: 1 }}>QUICK LINKS</h4>
-              {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
-                <div key={id} style={{ color: "#6a9a6a", fontSize: 14, marginBottom: 10, cursor: "pointer", transition: "color 0.3s" }}
-                  onClick={() => scrollTo(id!)}
-                  onMouseOver={(e) => { e.currentTarget.style.color = primaryHex; }}
-                  onMouseOut={(e) => { e.currentTarget.style.color = "#6a9a6a"; }}
-                >{label}</div>
-              ))}
-              <Link href="/pay" style={{ color: "#6a9a6a", fontSize: 14, marginBottom: 10, display: "block", textDecoration: "none", transition: "color 0.3s" }}
-                onMouseOver={(e) => { e.currentTarget.style.color = primaryHex; }}
-                onMouseOut={(e) => { e.currentTarget.style.color = "#6a9a6a"; }}>
-                Make Payment
-              </Link>
-            </div>
-          </div>
-          <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-            <div style={{ color: "#3a5a3a", fontSize: 13 }}>© 2025 {companyName}. All rights reserved.</div>
-            <div style={{ color: "#3a5a3a", fontSize: 13 }}>Serving Central Florida — {serviceAreas.slice(0, 4).join(" • ")}</div>
-          </div>
-        </div>
-      </footer>
-
-      {/* ─── STICKY MOBILE BAR ─── */}
-      <div className="sticky-bar">
-        <a href={phoneHref} style={{
-          flex: 1, background: `linear-gradient(135deg, ${primaryHex}, ${darkHex})`, color: "#fff",
-          border: "none", padding: "9px 6px", borderRadius: 12, fontSize: 13, fontWeight: 700,
-          textAlign: "center", textDecoration: "none", display: "block",
-        }}>
-          📞 Call
-        </a>
-        <Link href="/get-quote" style={{
-          flex: 1.4, background: "linear-gradient(135deg, #b8860b, #ffd700, #b8860b)",
-          color: "#0a0a00", padding: "9px 6px", borderRadius: 12,
-          fontSize: 13, fontWeight: 800, textAlign: "center", textDecoration: "none", display: "block",
-          boxShadow: "0 2px 16px rgba(184,134,11,0.5)",
-        }}>
-          📹 Video Quote
-        </Link>
-        <a href={`sms:${phone}`} style={{
-          flex: 1, background: "transparent", color: primaryHex,
-          border: "2px solid #2a5a2a", padding: "7px 6px", borderRadius: 12,
-          fontSize: 14, fontWeight: 700, textAlign: "center", textDecoration: "none", display: "block",
-        }}>
-          💬 Text
-        </a>
-      </div>
+      <Footer
+        logoSrc={logoSrc} companyName={companyName} logoMaxWidth={logoMaxWidth}
+        logoMaxHeight={logoMaxHeight} logoFit={logoFit as string} logoPadding={logoPadding}
+        primaryHex={primaryHex} darkHex={darkHex} phone={phone} phoneDisplay={phoneDisplay}
+        phoneHref={phoneHref} emailHref={emailHref} footerAbout={footerAbout}
+        serviceAreas={serviceAreas} displayServices={displayServices} scrollTo={scrollTo}
+      />
 
       {/* ─── MODALS ─── */}
       {showEstimate && <EstimateModal onClose={() => setShowEstimate(false)} email={email} />}

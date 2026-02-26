@@ -1,230 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
+import { generateInvoiceNumber, formatCurrency, getDefaultDueDate, createLineItemId } from "./components/invoices/invoiceHelpers";
+import InvoiceListView from "./components/invoices/InvoiceListView";
+import InvoiceForm from "./components/invoices/InvoiceForm";
+import InvoiceDetailView from "./components/invoices/InvoiceDetailView";
+import SendInvoiceModal from "./components/invoices/SendInvoiceModal";
+import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
+import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 
-// ─── Types ───
-interface Customer {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-}
-
-interface CustomerJob {
-  id: string;
-  service_type: string;
-  description: string | null;
-  status: string;
-  scheduled_date: string | null;
-  completed_date: string | null;
-  amount: number | null;
-  crew_notes: string | null;
-  admin_notes: string | null;
-}
-
-interface InvoiceLineItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  amount: number;
-}
-
-interface Invoice {
-  id: string;
-  customer_id: string | null;
-  invoice_number: string;
-  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
-  subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
-  total: number;
-  amount_paid: number;
-  due_date: string | null;
-  paid_date: string | null;
-  notes: string | null;
-  line_items: InvoiceLineItem[];
-  payment_link: string | null;
-  sent_at: string | null;
-  created_at: string;
-  updated_at: string;
-  customers?: { name: string | null; email: string | null; phone: string | null };
-}
-
-// ─── Predefined Services ───
-const SERVICE_PRESETS: { category: string; items: { description: string; unit_price: number }[] }[] = [
-  {
-    category: "Lawn Care",
-    items: [
-      { description: "Standard Lawn Mowing (up to 1/4 acre)", unit_price: 45 },
-      { description: "Large Lawn Mowing (1/4 - 1/2 acre)", unit_price: 75 },
-      { description: "XL Lawn Mowing (1/2 - 1 acre)", unit_price: 120 },
-      { description: "Edging & Trimming", unit_price: 25 },
-      { description: "Leaf Blowing / Cleanup", unit_price: 35 },
-      { description: "Hedge Trimming", unit_price: 50 },
-      { description: "Full Lawn Service Package", unit_price: 95 },
-    ],
-  },
-  {
-    category: "Pressure Washing",
-    items: [
-      { description: "Driveway Pressure Wash", unit_price: 150 },
-      { description: "House Exterior Soft Wash", unit_price: 250 },
-      { description: "Patio / Pool Deck Wash", unit_price: 125 },
-      { description: "Fence Pressure Wash", unit_price: 100 },
-      { description: "Roof Soft Wash", unit_price: 350 },
-      { description: "Sidewalk / Walkway Wash", unit_price: 75 },
-      { description: "Full Property Wash Package", unit_price: 450 },
-    ],
-  },
-  {
-    category: "Junk Removal",
-    items: [
-      { description: "Small Load (pickup truck)", unit_price: 150 },
-      { description: "Half Load (dump trailer)", unit_price: 275 },
-      { description: "Full Load (dump trailer)", unit_price: 450 },
-      { description: "Appliance Removal (each)", unit_price: 75 },
-      { description: "Furniture Removal (each)", unit_price: 50 },
-      { description: "Yard Debris Removal", unit_price: 200 },
-    ],
-  },
-  {
-    category: "Land Clearing",
-    items: [
-      { description: "Brush Clearing (per 1/4 acre)", unit_price: 500 },
-      { description: "Small Tree Removal (under 6\")", unit_price: 150 },
-      { description: "Medium Tree Removal (6-12\")", unit_price: 350 },
-      { description: "Stump Grinding (per stump)", unit_price: 100 },
-      { description: "Lot Clearing (full)", unit_price: 1500 },
-    ],
-  },
-  {
-    category: "Property Cleanup",
-    items: [
-      { description: "General Property Cleanup", unit_price: 200 },
-      { description: "Post-Construction Cleanup", unit_price: 400 },
-      { description: "Foreclosure / Estate Cleanout", unit_price: 600 },
-      { description: "Storm Damage Cleanup", unit_price: 300 },
-    ],
-  },
-];
-
-// ─── Helpers ───
-function generateInvoiceNumber(): string {
-  const now = new Date();
-  const y = now.getFullYear().toString().slice(-2);
-  const m = (now.getMonth() + 1).toString().padStart(2, "0");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${y}${m}-${rand}`;
-}
-
-function formatCurrency(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
-
-function formatDate(d: string | null): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function timeAgo(d: string): string {
-  const diff = Date.now() - new Date(d).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return formatDate(d);
-}
-
-function getDefaultDueDate(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-function createLineItemId(): string {
-  return `li_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-}
-
-// ─── Status Badge ───
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { bg: string; text: string; glow: string }> = {
-    draft: { bg: "rgba(158,158,158,0.1)", text: "#9e9e9e", glow: "rgba(158,158,158,0.1)" },
-    sent: { bg: "rgba(33,150,243,0.12)", text: "#42a5f5", glow: "rgba(33,150,243,0.2)" },
-    paid: { bg: "rgba(76,175,80,0.12)", text: "#66bb6a", glow: "rgba(76,175,80,0.2)" },
-    overdue: { bg: "rgba(239,83,80,0.08)", text: "#ef5350", glow: "rgba(239,83,80,0.15)" },
-    cancelled: { bg: "rgba(239,83,80,0.08)", text: "#ef5350", glow: "rgba(239,83,80,0.15)" },
-  };
-  const c = colors[status] || { bg: "rgba(255,255,255,0.06)", text: "#888", glow: "transparent" };
-  return (
-    <span style={{
-      padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-      letterSpacing: 0.8, textTransform: "uppercase",
-      background: c.bg, color: c.text, boxShadow: `0 0 8px ${c.glow}`,
-      whiteSpace: "nowrap",
-    }}>
-      {status}
-    </span>
-  );
-}
-
-// ─── Icon SVGs ───
-const IconPlus = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const IconSend = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="22" y1="2" x2="11" y2="13" />
-    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-  </svg>
-);
-
-const IconLink = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <path d="M10 11v6M14 11v6" />
-  </svg>
-);
-
-const IconEdit = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const IconCopy = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-
-const IconEye = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const IconBack = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="19" y1="12" x2="5" y2="12" />
-    <polyline points="12 19 5 12 12 5" />
-  </svg>
-);
+// Re-export types for external consumers
+export type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
 
 // ─── Main Export ───
 export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed, initialCustomerId, onInitialCustomerConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<((preselectedCustomerId?: string) => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void; initialCustomerId?: string | null; onInitialCustomerConsumed?: () => void }) {
@@ -270,7 +57,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
 
-  // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
+  // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
       if (confirmDeleteInvoice) { setConfirmDeleteInvoice(null); return true; }
@@ -281,7 +68,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     };
   }
 
-  // ─── Create trigger: called from dashboard "New Invoice" button ───
+  // ─── Create trigger ───
   if (createRef) {
     createRef.current = (preselectedCustomerId?: string) => {
       if (preselectedCustomerId) {
@@ -359,7 +146,6 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     setSavingNewCustomer(false);
     if (res?.data?.id || res?.success) {
       const newId = res.data?.id || res.id;
-      // refresh customer list then auto-select
       const custRes = await adminFetch("customers");
       if (custRes?.data) setCustomers(custRes.data);
       if (newId) setForm(prev => ({ ...prev, customer_id: newId }));
@@ -408,32 +194,15 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const handleJobAutoFill = (job: CustomerJob) => {
     const lines: InvoiceLineItem[] = [];
     if (job.amount && job.amount > 0) {
-      lines.push({
-        id: createLineItemId(),
-        description: job.service_type,
-        quantity: 1,
-        unit_price: job.amount,
-        amount: job.amount,
-      });
+      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit_price: job.amount, amount: job.amount });
     } else {
-      lines.push({
-        id: createLineItemId(),
-        description: job.service_type,
-        quantity: 1,
-        unit_price: 0,
-        amount: 0,
-      });
+      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit_price: 0, amount: 0 });
     }
-    const notes = [job.description, job.crew_notes, job.admin_notes]
-      .filter(Boolean).join(" — ");
-    setForm(prev => ({
-      ...prev,
-      line_items: lines,
-      notes: notes || prev.notes,
-    }));
+    const notes = [job.description, job.crew_notes, job.admin_notes].filter(Boolean).join(" — ");
+    setForm(prev => ({ ...prev, line_items: lines, notes: notes || prev.notes }));
   };
 
-  // ─── Auto-open a specific invoice (e.g. navigated from Payments tab) ───
+  // ─── Auto-open a specific invoice ───
   useEffect(() => {
     if (!initialInvoiceId || loading) return;
     const inv = invoices.find(i => i.id === initialInvoiceId);
@@ -445,7 +214,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     }
   }, [initialInvoiceId, invoices, loading, onNavigate, onInitialInvoiceConsumed]);
 
-  // ─── Auto-open create form pre-filled with customer (e.g. "Create Invoice" from customer detail) ───
+  // ─── Auto-open create form pre-filled with customer ───
   useEffect(() => {
     if (!initialCustomerId) return;
     setForm(prev => ({ ...prev, customer_id: initialCustomerId }));
@@ -477,10 +246,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   };
 
   const removeLineItem = (id: string) => {
-    setForm(prev => ({
-      ...prev,
-      line_items: prev.line_items.filter(item => item.id !== id),
-    }));
+    setForm(prev => ({ ...prev, line_items: prev.line_items.filter(item => item.id !== id) }));
   };
 
   const addPresetItem = (description: string, unit_price: number) => {
@@ -531,7 +297,6 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       await loadInvoices();
 
       if (!asDraft && res?.data && (!form.customer_id || form.customer_id === "__link_only__")) {
-        // Link-only invoice: auto-copy payment link
         const link = getPaymentLink(res.data);
         navigator.clipboard.writeText(link).then(() => {
           showToast("Invoice created — payment link copied to clipboard!");
@@ -580,7 +345,6 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       });
 
       if (res.ok) {
-        // Update invoice status to "sent"
         await adminPost("invoices", "update", {
           id: invoice.id,
           status: "sent",
@@ -662,7 +426,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
   // ─── Edit invoice ───
   const startEditInvoice = (invoice: Invoice) => {
-    onNavigate?.(); // push sentinel during user gesture
+    onNavigate?.();
     setSelectedInvoice(invoice);
     setForm({
       customer_id: invoice.customer_id || null,
@@ -703,23 +467,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     totalPaid: invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.total, 0),
   };
 
-  // ─── Styles ───
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "12px 14px", background: "#0d1a0d",
-    border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
-    fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
-    transition: "border-color 0.2s",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5,
-    textTransform: "uppercase", display: "block", marginBottom: 6,
-  };
-
   // ─── RENDER ───
   return (
     <div style={{ animation: "fadeIn 0.3s ease", overflowX: "hidden", maxWidth: "100%" }}>
-      {/* ─── Toast ─── */}
+      {/* Toast */}
       {toast && (
         <div style={{
           position: "fixed", top: 20, right: 20, zIndex: 10000,
@@ -734,1252 +485,107 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
         </div>
       )}
 
-      {/* ════════════════════════════════════════════
-           INVOICE LIST VIEW
-         ════════════════════════════════════════════ */}
       {view === "list" && (
-        <>
-          {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 700 }}>
-                Invoices
-              </h1>
-              <p style={{ color: "#5a8a5a", fontSize: 13, marginTop: 4 }}>
-                Create, send, and track invoices
-              </p>
-            </div>
-            <button
-              onClick={() => { onNavigate?.(); resetForm(); setView("create"); }}
-              className="action-btn action-btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px" }}
-            >
-              <IconPlus /> New Invoice
-            </button>
-          </div>
-
-          {/* Stats Row */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 12, marginBottom: 24,
-          }}>
-            {[
-              { label: "Outstanding", value: formatCurrency(stats.totalOwed), color: "#42a5f5", icon: "📄" },
-              { label: "Paid (Total)", value: formatCurrency(stats.totalPaid), color: "#66bb6a", icon: "✓" },
-              { label: "Draft", value: stats.draft.toString(), color: "#9e9e9e", icon: "✏️" },
-              { label: "Sent", value: stats.sent.toString(), color: "#42a5f5", icon: "📨" },
-              { label: "Overdue", value: stats.overdue.toString(), color: "#ef5350", icon: "⚠" },
-            ].map(stat => (
-              <div key={stat.label} style={{
-                background: "linear-gradient(160deg, #0d1f0d, #091409)",
-                border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 18px",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 16 }}>{stat.icon}</span>
-                  <span style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>{stat.label}</span>
-                </div>
-                <div style={{
-                  fontSize: 22, fontWeight: 800, color: stat.color,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>{stat.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Filters */}
-          <div style={{
-            display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center",
-          }}>
-            <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3a5a3a", fontSize: 14 }}>🔍</span>
-              <input
-                className="search-input"
-                placeholder="Search invoices..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: 36 }}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["all", "draft", "sent", "paid", "overdue"].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  style={{
-                    padding: "6px 14px", borderRadius: 8, border: "1px solid #1a3a1a",
-                    background: filterStatus === status ? "rgba(76,175,80,0.15)" : "transparent",
-                    color: filterStatus === status ? "#4CAF50" : "#5a8a5a",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif", textTransform: "capitalize",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Invoice Table */}
-          {loading ? (
-            <div style={{ textAlign: "center", padding: 60, color: "#5a8a5a" }}>
-              <div style={{ display: "inline-block", width: 20, height: 20, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              <div style={{ marginTop: 12, fontSize: 13 }}>Loading invoices...</div>
-            </div>
-          ) : filteredInvoices.length === 0 ? (
-            <div style={{
-              textAlign: "center", padding: "60px 20px",
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20,
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
-              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#e8f5e8", fontWeight: 700, marginBottom: 8 }}>
-                {searchQuery || filterStatus !== "all" ? "No matching invoices" : "No invoices yet"}
-              </h3>
-              <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 24 }}>
-                {searchQuery || filterStatus !== "all" ? "Try adjusting your filters." : "Create your first invoice to get started."}
-              </p>
-              {!searchQuery && filterStatus === "all" && (
-                <button
-                  onClick={() => { onNavigate?.(); resetForm(); setView("create"); }}
-                  className="action-btn action-btn-primary"
-                  style={{ padding: "10px 24px" }}
-                >
-                  <IconPlus /> Create Invoice
-                </button>
-              )}
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #1a3a1a" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'DM Sans', sans-serif" }}>
-                <thead>
-                  <tr style={{ background: "#0a160a" }}>
-                    {["Invoice #", "Customer", "Status", "Amount", "Due Date", "Created", "Actions"].map(h => (
-                      <th key={h} style={{
-                        padding: "14px 12px", textAlign: "left", fontSize: 11,
-                        color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5,
-                        textTransform: "uppercase", borderBottom: "1px solid #1a3a1a",
-                        whiteSpace: "nowrap",
-                      }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvoices.map(inv => {
-                    const customer = inv.customers || customers.find(c => c.id === inv.customer_id);
-                    return (
-                      <tr
-                        key={inv.id}
-                        style={{ cursor: "pointer", transition: "background 0.2s" }}
-                        onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "rgba(76,175,80,0.04)"; }}
-                        onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => { onNavigate?.(); setSelectedInvoice(inv); setView("detail"); }}
-                      >
-                        <td style={{ padding: "14px 12px", fontSize: 14, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, borderBottom: "1px solid #0d1a0d" }}>
-                          {inv.invoice_number}
-                        </td>
-                        <td style={{ padding: "14px 12px", fontSize: 14, color: inv.customer_id ? "#c8e0c8" : "#64b5f6", borderBottom: "1px solid #0d1a0d" }}>
-                          {inv.customer_id ? (customer?.name || customer?.email || "—") : "🔗 Link Only"}
-                        </td>
-                        <td style={{ padding: "14px 12px", borderBottom: "1px solid #0d1a0d" }}>
-                          <StatusBadge status={inv.status} />
-                        </td>
-                        <td style={{ padding: "14px 12px", fontSize: 14, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, borderBottom: "1px solid #0d1a0d" }}>
-                          {formatCurrency(inv.total)}
-                        </td>
-                        <td style={{ padding: "14px 12px", fontSize: 13, color: "#8aba8a", borderBottom: "1px solid #0d1a0d" }}>
-                          {formatDate(inv.due_date)}
-                        </td>
-                        <td style={{ padding: "14px 12px", fontSize: 12, color: "#5a8a5a", borderBottom: "1px solid #0d1a0d" }}>
-                          {timeAgo(inv.created_at)}
-                        </td>
-                        <td style={{ padding: "14px 12px", borderBottom: "1px solid #0d1a0d" }} onClick={e => e.stopPropagation()}>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            {inv.status !== "paid" && (
-                              <button
-                                onClick={() => handleCopyLink(inv)}
-                                title="Copy payment link"
-                                className="quick-action"
-                                style={{ display: "flex", alignItems: "center", gap: 4 }}
-                              >
-                                <IconLink /> Link
-                              </button>
-                            )}
-                            {["draft", "sent", "overdue"].includes(inv.status) && (
-                              <button
-                                onClick={() => { onNavigate?.(); setSelectedInvoice(inv); setShowSendModal(true); }}
-                                title="Send invoice"
-                                className="quick-action"
-                                style={{ display: "flex", alignItems: "center", gap: 4 }}
-                              >
-                                <IconSend /> Send
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteInvoice(inv)}
-                              title="Delete invoice"
-                              className="quick-action quick-action-danger"
-                              style={{ display: "flex", alignItems: "center", gap: 4 }}
-                            >
-                              <IconTrash /> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+        <InvoiceListView
+          invoices={invoices}
+          customers={customers}
+          filteredInvoices={filteredInvoices}
+          stats={stats}
+          loading={loading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+          onCreateNew={() => { onNavigate?.(); resetForm(); setView("create"); }}
+          onViewDetail={(inv) => { onNavigate?.(); setSelectedInvoice(inv); setView("detail"); }}
+          onCopyLink={handleCopyLink}
+          onSend={(inv) => { onNavigate?.(); setSelectedInvoice(inv); setShowSendModal(true); }}
+          onDelete={handleDeleteInvoice}
+          onNavigate={onNavigate}
+        />
       )}
 
-      {/* ════════════════════════════════════════════
-           CREATE / EDIT VIEW
-         ════════════════════════════════════════════ */}
       {(view === "create" || view === "edit") && (
-        <>
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-            <button
-              onClick={() => { setView("list"); resetForm(); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 6, background: "none",
-                border: "1px solid #1a3a1a", borderRadius: 10, padding: "8px 14px",
-                color: "#5a8a5a", fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              <IconBack /> Back
-            </button>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
-              {view === "edit" ? "Edit Invoice" : "New Invoice"}
-            </h1>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 24, alignItems: "start", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
-            {/* ─── Left: Form ─── */}
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
-              overflow: "hidden", minWidth: 0, maxWidth: "100%", boxSizing: "border-box",
-            }}>
-              {/* Customer & Invoice Info */}
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                <div style={{ gridColumn: isMobile ? "1" : "1 / -1" }}>
-                  <label style={labelStyle}>Customer</label>
-                  <select
-                    value={form.customer_id ?? ""}
-                    onChange={e => {
-                      if (e.target.value === "__new__") {
-                        setNewCustomerForm({ name: "", email: "", phone: "" });
-                        setShowNewCustomer(true);
-                      } else {
-                        setForm(prev => ({ ...prev, customer_id: e.target.value || null }));
-                      }
-                    }}
-                    style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}
-                  >
-                    <option value="">Select customer (optional)</option>
-                    <option value="__link_only__">🔗 No Customer — Link Only</option>
-                    <option value="__new__">+ New Customer</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name || c.email || c.phone || "Unknown"}</option>
-                    ))}
-                  </select>
-
-                  {/* Link-only mode banner */}
-                  {form.customer_id === "__link_only__" && (
-                    <div style={{
-                      marginTop: 8, padding: "12px 14px", borderRadius: 10,
-                      background: "rgba(33,150,243,0.06)", border: "1px solid rgba(33,150,243,0.2)",
-                    }}>
-                      <p style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600, marginBottom: 4 }}>
-                        🔗 Link-Only Invoice
-                      </p>
-                      <p style={{ fontSize: 12, color: "#5a8a8a", lineHeight: 1.5 }}>
-                        No customer assigned. Save, then copy the payment link and send it. The recipient will enter their own info when they pay.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Customer info card */}
-                  {form.customer_id && (() => {
-                    const sel = customers.find(c => c.id === form.customer_id);
-                    if (!sel) return null;
-                    return (
-                      <div style={{
-                        marginTop: 8, padding: "10px 14px", borderRadius: 10,
-                        background: "rgba(76,175,80,0.04)", border: "1px solid rgba(76,175,80,0.15)",
-                        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
-                      }}>
-                        <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>{sel.name || "—"}</span>
-                        {sel.email && <span style={{ fontSize: 12, color: "#5a8a5a" }}>✉ {sel.email}</span>}
-                        {sel.phone && <span style={{ fontSize: 12, color: "#5a8a5a" }}>📞 {sel.phone}</span>}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Job selector — shown when customer has jobs */}
-                  {form.customer_id && (
-                    <div style={{ marginTop: 10 }}>
-                      <label style={{ ...labelStyle, color: "#42a5f5" }}>
-                        Link to Job {loadingJobs && <span style={{ fontWeight: 400, letterSpacing: 0 }}>— loading…</span>}
-                      </label>
-                      {customerJobs.length > 0 ? (
-                        <select
-                          defaultValue=""
-                          onChange={e => {
-                            const job = customerJobs.find(j => j.id === e.target.value);
-                            if (job) handleJobAutoFill(job);
-                          }}
-                          style={{ ...inputStyle, appearance: "none", cursor: "pointer", borderColor: "rgba(33,150,243,0.3)", color: "#c8e0c8" }}
-                        >
-                          <option value="">— Select a job to auto-fill —</option>
-                          {customerJobs.map(j => (
-                            <option key={j.id} value={j.id}>
-                              {j.service_type}
-                              {j.scheduled_date ? ` · ${new Date(j.scheduled_date).toLocaleDateString()}` : ""}
-                              {j.amount ? ` · $${j.amount}` : ""}
-                              {" "}[{j.status}]
-                            </option>
-                          ))}
-                        </select>
-                      ) : !loadingJobs ? (
-                        <p style={{ fontSize: 12, color: "#3a5a3a", margin: "4px 0 0" }}>No jobs on file for this customer.</p>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* Inline new-customer mini-modal */}
-                  {showNewCustomer && (
-                    <div style={{
-                      marginTop: 10, padding: 14, borderRadius: 10,
-                      background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.2)",
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#5a8a5a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>New Customer</div>
-                      {[
-                        { key: "name", placeholder: "Full Name *", type: "text" },
-                        { key: "email", placeholder: "Email", type: "email" },
-                        { key: "phone", placeholder: "Phone", type: "tel" },
-                      ].map(f => (
-                        <input
-                          key={f.key}
-                          type={f.type}
-                          placeholder={f.placeholder}
-                          value={newCustomerForm[f.key as keyof typeof newCustomerForm]}
-                          onChange={e => setNewCustomerForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                          style={{ ...inputStyle, marginBottom: 8 }}
-                        />
-                      ))}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={handleCreateNewCustomer}
-                          disabled={savingNewCustomer}
-                          style={{
-                            flex: 1, padding: "8px 0", borderRadius: 6,
-                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
-                            border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          }}
-                        >{savingNewCustomer ? "Saving..." : "Save Customer"}</button>
-                        <button
-                          onClick={() => { setShowNewCustomer(false); }}
-                          style={{
-                            padding: "8px 14px", borderRadius: 6,
-                            background: "rgba(255,255,255,0.05)", border: "1px solid #1a3a1a",
-                            color: "#5a8a5a", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                          }}
-                        >Cancel</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label style={labelStyle}>Invoice #</label>
-                  <input
-                    value={form.invoice_number}
-                    onChange={e => setForm(prev => ({ ...prev, invoice_number: e.target.value }))}
-                    style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
-                  />
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>Due Date</label>
-                    <button
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, show_due_date: !prev.show_due_date }))}
-                      style={{
-                        background: form.show_due_date ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.05)",
-                        border: `1px solid ${form.show_due_date ? "rgba(76,175,80,0.4)" : "rgba(255,255,255,0.1)"}`,
-                        borderRadius: 6,
-                        padding: "3px 10px",
-                        fontSize: 11,
-                        color: form.show_due_date ? "#4CAF50" : "#5a7a5a",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      {form.show_due_date ? "ON" : "OFF"}
-                    </button>
-                  </div>
-                  {form.show_due_date && (
-                    <input
-                      type="date"
-                      value={form.due_date}
-                      onChange={e => setForm(prev => ({ ...prev, due_date: e.target.value }))}
-                      style={{ ...inputStyle, colorScheme: "dark" }}
-                    />
-                  )}
-                </div>
-                <div>
-                  <label style={labelStyle}>Tax Rate (%)</label>
-                  <input
-                    value={form.tax_rate}
-                    onChange={e => setForm(prev => ({ ...prev, tax_rate: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0"
-                    inputMode="decimal"
-                    style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
-                  />
-                </div>
-              </div>
-
-              {/* ─── Line Items ─── */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <label style={{ ...labelStyle, marginBottom: 0 }}>Line Items</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => setShowPresetPicker(true)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        padding: "6px 12px", borderRadius: 8,
-                        background: "rgba(33,150,243,0.1)", border: "1px solid rgba(33,150,243,0.2)",
-                        color: "#42a5f5", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                    >
-                      ⚡ Quick Add Service
-                    </button>
-                    <button
-                      onClick={addLineItem}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 4,
-                        padding: "6px 12px", borderRadius: 8,
-                        background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
-                        color: "#4CAF50", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                    >
-                      <IconPlus /> Custom Item
-                    </button>
-                  </div>
-                </div>
-
-                {/* Line item header — desktop only */}
-                {!isMobile && (
-                  <div style={{
-                    display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px",
-                    gap: 8, padding: "8px 0", borderBottom: "1px solid #1a3a1a", marginBottom: 8,
-                  }}>
-                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</span>
-                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Qty</span>
-                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Rate</span>
-                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", textAlign: "right" }}>Amount</span>
-                    <span />
-                  </div>
-                )}
-
-                {/* Line items */}
-                {form.line_items.map((item, idx) => (
-                  isMobile ? (
-                    /* Mobile: card layout */
-                    <div key={item.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 10, overflow: "hidden", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
-                      <textarea
-                        value={item.description}
-                        onChange={e => updateLineItem(item.id, "description", e.target.value)}
-                        placeholder="Service or item description"
-                        rows={2}
-                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", marginBottom: 8, resize: "none", lineHeight: 1.5, overflow: "hidden", wordBreak: "break-word" }}
-                      />
-                      <div style={{ display: "grid", gridTemplateColumns: "64px 1fr auto 32px", gap: 8, alignItems: "center" }}>
-                        <input
-                          value={item.quantity}
-                          onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
-                          inputMode="numeric"
-                          placeholder="Qty"
-                          style={{ ...inputStyle, padding: "8px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
-                        />
-                        <div style={{ position: "relative" }}>
-                          <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
-                          <input
-                            value={item.unit_price || ""}
-                            onChange={e => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            inputMode="decimal"
-                            style={{ ...inputStyle, padding: "8px 8px 8px 20px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", width: "100%", boxSizing: "border-box" }}
-                          />
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: item.amount > 0 ? "#4CAF50" : "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>
-                          {formatCurrency(item.amount)}
-                        </div>
-                        <button
-                          onClick={() => removeLineItem(item.id)}
-                          disabled={form.line_items.length === 1 && idx === 0}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: form.line_items.length === 1 && idx === 0 ? "#1a3a1a" : "#7a4a4a", cursor: form.line_items.length === 1 && idx === 0 ? "default" : "pointer" }}
-                        >
-                          <IconTrash />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Desktop: grid row */
-                    <div
-                      key={item.id}
-                      style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px", gap: 8, marginBottom: 8, alignItems: "center", minWidth: 0, overflow: "hidden" }}
-                    >
-                      <textarea
-                        value={item.description}
-                        onChange={e => updateLineItem(item.id, "description", e.target.value)}
-                        placeholder="Service or item description"
-                        rows={2}
-                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, minWidth: 0, width: "100%", maxWidth: "100%", boxSizing: "border-box", resize: "none", lineHeight: 1.5, overflow: "hidden", wordBreak: "break-word" }}
-                      />
-                      <input
-                        value={item.quantity}
-                        onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
-                        inputMode="numeric"
-                        style={{ ...inputStyle, padding: "10px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
-                      />
-                      <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
-                        <input
-                          value={item.unit_price || ""}
-                          onChange={e => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                          inputMode="decimal"
-                          style={{ ...inputStyle, padding: "10px 8px 10px 20px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}
-                        />
-                      </div>
-                      <div style={{ textAlign: "right", fontSize: 14, fontWeight: 700, color: item.amount > 0 ? "#4CAF50" : "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", padding: "0 4px" }}>
-                        {formatCurrency(item.amount)}
-                      </div>
-                      <button
-                        onClick={() => removeLineItem(item.id)}
-                        disabled={form.line_items.length === 1 && idx === 0}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: form.line_items.length === 1 && idx === 0 ? "#1a3a1a" : "#7a4a4a", cursor: form.line_items.length === 1 && idx === 0 ? "default" : "pointer", transition: "all 0.15s" }}
-                      >
-                        <IconTrash />
-                      </button>
-                    </div>
-                  )
-                ))}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label style={labelStyle}>Notes / Message to Customer</label>
-                <textarea
-                  value={form.notes}
-                  onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Thank you for your business! Payment is due within 14 days."
-                  rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }}
-                />
-              </div>
-
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-                <button
-                  onClick={() => handleSaveInvoice(true)}
-                  style={{
-                    flex: 1, padding: "14px", borderRadius: 12, border: "1px solid #1a3a1a",
-                    background: "transparent", color: "#c8e0c8", fontSize: 14, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  Save as Draft
-                </button>
-                <button
-                  onClick={() => handleSaveInvoice(false)}
-                  style={{
-                    flex: 1, padding: "14px", borderRadius: 12, border: "none",
-                    background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                    fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  }}
-                >
-                  <IconSend /> Save & Send
-                </button>
-              </div>
-            </div>
-
-            {/* ─── Right: Live Preview ─── */}
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 20px",
-              position: "sticky", top: 80,
-            }}>
-              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e8f5e8", fontWeight: 700, marginBottom: 16 }}>
-                Invoice Preview
-              </h3>
-
-              {/* Mini invoice card */}
-              <div style={{
-                background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 14,
-                padding: "20px 16px", marginBottom: 16,
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Invoice</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
-                      {form.invoice_number}
-                    </div>
-                  </div>
-                  <StatusBadge status={view === "edit" ? (selectedInvoice?.status || "draft") : "draft"} />
-                </div>
-
-                <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 12, marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>Bill To</div>
-                  <div style={{ fontSize: 13, color: (form.customer_id && form.customer_id !== "__link_only__") ? "#c8e0c8" : "#64b5f6" }}>
-                    {(form.customer_id && form.customer_id !== "__link_only__")
-                      ? (customers.find(c => c.id === form.customer_id)?.name || "Customer Selected")
-                      : (form.customer_id === "__link_only__" ? "🔗 Link Only — no customer" : "Select a customer...")
-                    }
-                  </div>
-                </div>
-
-                <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 12 }}>
-                  {form.line_items.filter(item => item.description).map(item => (
-                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#8aba8a", marginBottom: 6 }}>
-                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {item.description} {item.quantity > 1 ? `×${item.quantity}` : ""}
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, marginLeft: 8 }}>
-                        {formatCurrency(item.amount)}
-                      </span>
-                    </div>
-                  ))}
-                  {form.line_items.filter(item => item.description).length === 0 && (
-                    <div style={{ fontSize: 12, color: "#3a5a3a", fontStyle: "italic" }}>No items added yet</div>
-                  )}
-                </div>
-
-                {form.tax_rate > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
-                    <span>Tax ({form.tax_rate}%)</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(taxAmount)}</span>
-                  </div>
-                )}
-
-                <div style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                  marginTop: 12, paddingTop: 12, borderTop: "2px solid #1a3a1a",
-                }}>
-                  <span style={{ fontSize: 12, color: "#7a9a7a", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Total</span>
-                  <span style={{
-                    fontSize: 24, fontWeight: 800, color: "#4CAF50",
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}>
-                    {formatCurrency(total)}
-                  </span>
-                </div>
-              </div>
-
-              {form.show_due_date && form.due_date && (
-                <div style={{ fontSize: 11, color: "#3a5a3a", textAlign: "center" }}>
-                  Due: {formatDate(form.due_date)}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+        <InvoiceForm
+          view={view}
+          isMobile={isMobile}
+          form={form}
+          setForm={setForm}
+          customers={customers}
+          selectedInvoice={selectedInvoice}
+          customerJobs={customerJobs}
+          loadingJobs={loadingJobs}
+          showNewCustomer={showNewCustomer}
+          setShowNewCustomer={setShowNewCustomer}
+          newCustomerForm={newCustomerForm}
+          setNewCustomerForm={setNewCustomerForm}
+          savingNewCustomer={savingNewCustomer}
+          subtotal={subtotal}
+          taxAmount={taxAmount}
+          total={total}
+          onBack={() => { setView("list"); resetForm(); }}
+          onSave={handleSaveInvoice}
+          onCreateNewCustomer={handleCreateNewCustomer}
+          onJobAutoFill={handleJobAutoFill}
+          updateLineItem={updateLineItem}
+          addLineItem={addLineItem}
+          removeLineItem={removeLineItem}
+          onShowPresetPicker={() => setShowPresetPicker(true)}
+          onNavigate={onNavigate}
+        />
       )}
 
-      {/* ════════════════════════════════════════════
-           DETAIL VIEW
-         ════════════════════════════════════════════ */}
       {view === "detail" && selectedInvoice && (
-        <>
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-            <button
-              onClick={() => { setView("list"); setSelectedInvoice(null); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 6, background: "none",
-                border: "1px solid #1a3a1a", borderRadius: 10, padding: "8px 14px",
-                color: "#5a8a5a", fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              <IconBack /> Back
-            </button>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700, flex: 1 }}>
-              Invoice {selectedInvoice.invoice_number}
-            </h1>
-            <StatusBadge status={selectedInvoice.status} />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 24, alignItems: "start" }}>
-            {/* Left: Invoice details */}
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
-              order: isMobile ? 1 : 0,
-            }}>
-              {/* Business header */}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #1a3a1a" }}>
-                <div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: "#4CAF50", marginBottom: 4 }}>
-                    Jenkins Home & Property Solutions
-                  </div>
-                  <div style={{ fontSize: 12, color: "#5a8a5a", lineHeight: 1.8 }}>
-                    Central Florida<br />
-                    📞 407-686-9817<br />
-                    ✉️ Info@jhpsfl.com
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "#e8f5e8", fontFamily: "'Playfair Display', serif" }}>INVOICE</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>
-                    {selectedInvoice.invoice_number}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 8 }}>
-                    Date: {formatDate(selectedInvoice.created_at)}
-                    {selectedInvoice.due_date && <><br />Due: {formatDate(selectedInvoice.due_date)}</>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bill To */}
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Bill To</div>
-                {selectedInvoice.customer_id ? (
-                  <>
-                    <div style={{ fontSize: 15, color: "#c8e0c8", fontWeight: 600 }}>
-                      {selectedInvoice.customers?.name || "—"}
-                    </div>
-                    {selectedInvoice.customers?.email && (
-                      <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.email}</div>
-                    )}
-                    {selectedInvoice.customers?.phone && (
-                      <div style={{ fontSize: 13, color: "#5a8a5a" }}>{selectedInvoice.customers.phone}</div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600 }}>
-                    🔗 Link Only — recipient fills in their info at payment
-                  </div>
-                )}
-              </div>
-
-              {/* Line items table */}
-              <div style={{ borderRadius: 12, border: "1px solid #1a3a1a", overflow: "hidden", marginBottom: 20 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#0a160a" }}>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</th>
-                      <th style={{ padding: "12px 14px", textAlign: "center", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 60 }}>Qty</th>
-                      <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Rate</th>
-                      <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(selectedInvoice.line_items || []).map((item, idx) => (
-                      <tr key={idx} style={{ borderTop: "1px solid #0d1a0d" }}>
-                        <td style={{ padding: "12px 14px", fontSize: 14, color: "#c8e0c8" }}>{item.description}</td>
-                        <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}>{item.quantity}</td>
-                        <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(item.unit_price)}</td>
-                        <td style={{ padding: "12px 14px", fontSize: 14, color: "#4CAF50", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{formatCurrency(item.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals */}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <div style={{ width: 260 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
-                    <span>Subtotal</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(selectedInvoice.subtotal)}</span>
-                  </div>
-                  {selectedInvoice.tax_rate > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
-                      <span>Tax ({selectedInvoice.tax_rate}%)</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(selectedInvoice.tax_amount)}</span>
-                    </div>
-                  )}
-                  <div style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                    padding: "12px 0", borderTop: "2px solid #1a3a1a", marginTop: 4,
-                  }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#e8f5e8" }}>Total</span>
-                    <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
-                      {formatCurrency(selectedInvoice.total)}
-                    </span>
-                  </div>
-                  {selectedInvoice.status === "paid" && (
-                    <div style={{
-                      display: "flex", justifyContent: "space-between", padding: "8px 0",
-                      fontSize: 13, color: "#66bb6a", fontWeight: 600,
-                    }}>
-                      <span>Paid</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(selectedInvoice.amount_paid)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Notes */}
-              {selectedInvoice.notes && (
-                <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
-                  <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
-                  <div style={{ fontSize: 13, color: "#8aba8a", lineHeight: 1.6 }}>{selectedInvoice.notes}</div>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Actions sidebar — appears first on mobile */}
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 20px",
-              position: isMobile ? "static" : "sticky", top: 80,
-              order: isMobile ? 0 : 1,
-            }}>
-              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e8f5e8", fontWeight: 700, marginBottom: 20 }}>
-                Actions
-              </h3>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Send / Resend */}
-                {["draft", "sent", "overdue"].includes(selectedInvoice.status) && (
-                  <button
-                    onClick={() => { onNavigate?.(); setShowSendModal(true); }}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      padding: "12px", borderRadius: 12, border: "none",
-                      background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                      fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                      boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
-                    }}
-                  >
-                    <IconSend /> {selectedInvoice.status === "draft" ? "Send Invoice" : "Resend Invoice"}
-                  </button>
-                )}
-
-                {/* Copy payment link — prominent for link-only invoices */}
-                {selectedInvoice.status !== "paid" && (
-                  <button
-                    onClick={() => handleCopyLink(selectedInvoice)}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      padding: "12px", borderRadius: 12,
-                      border: !selectedInvoice.customer_id ? "none" : "1px solid rgba(33,150,243,0.3)",
-                      background: !selectedInvoice.customer_id ? "linear-gradient(135deg, #1e88e5, #1565c0)" : "rgba(33,150,243,0.08)",
-                      color: !selectedInvoice.customer_id ? "#fff" : "#42a5f5",
-                      fontSize: !selectedInvoice.customer_id ? 14 : 13,
-                      fontWeight: !selectedInvoice.customer_id ? 700 : 600,
-                      cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                      ...((!selectedInvoice.customer_id) ? { boxShadow: "0 4px 20px rgba(33,150,243,0.35)" } : {}),
-                    }}
-                  >
-                    <IconCopy /> {copiedLink ? "Copied!" : (!selectedInvoice.customer_id ? "Copy Payment Link" : "Copy Payment Link (for SMS)")}
-                  </button>
-                )}
-                {!selectedInvoice.customer_id && selectedInvoice.status !== "paid" && (
-                  <p style={{ fontSize: 12, color: "#5a8a8a", textAlign: "center", lineHeight: 1.5 }}>
-                    Send this link to anyone — they&apos;ll enter their info and pay. A customer profile will be created automatically.
-                  </p>
-                )}
-
-                {/* Mark as paid */}
-                {["sent", "overdue"].includes(selectedInvoice.status) && (
-                  <button
-                    onClick={() => handleMarkPaid(selectedInvoice)}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      padding: "12px", borderRadius: 12,
-                      border: "1px solid rgba(76,175,80,0.3)",
-                      background: "rgba(76,175,80,0.08)", color: "#66bb6a",
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    ✓ Mark as Paid
-                  </button>
-                )}
-
-                {/* Edit */}
-                {["draft", "sent"].includes(selectedInvoice.status) && (
-                  <button
-                    onClick={() => startEditInvoice(selectedInvoice)}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      padding: "12px", borderRadius: 12,
-                      border: "1px solid #1a3a1a", background: "transparent",
-                      color: "#8aba8a", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    <IconEdit /> Edit Invoice
-                  </button>
-                )}
-
-                {/* Delete */}
-                <button
-                  onClick={() => handleDeleteInvoice(selectedInvoice)}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    padding: "12px", borderRadius: 12,
-                    border: "1px solid rgba(239,83,80,0.2)", background: "transparent",
-                    color: "#ef5350", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  <IconTrash /> Delete Invoice
-                </button>
-              </div>
-
-              {/* Sent info */}
-              {selectedInvoice.sent_at && (
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
-                  <div style={{ fontSize: 11, color: "#5a8a5a" }}>
-                    📨 Sent: {formatDate(selectedInvoice.sent_at)}
-                  </div>
-                </div>
-              )}
-              {selectedInvoice.paid_date && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 11, color: "#66bb6a" }}>
-                    ✓ Paid: {formatDate(selectedInvoice.paid_date)}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+        <InvoiceDetailView
+          invoice={selectedInvoice}
+          isMobile={isMobile}
+          copiedLink={copiedLink}
+          onBack={() => { setView("list"); setSelectedInvoice(null); }}
+          onSend={() => setShowSendModal(true)}
+          onCopyLink={handleCopyLink}
+          onMarkPaid={handleMarkPaid}
+          onEdit={startEditInvoice}
+          onDelete={handleDeleteInvoice}
+          onNavigate={onNavigate}
+        />
       )}
 
-      {/* ════════════════════════════════════════════
-           SEND MODAL
-         ════════════════════════════════════════════ */}
       {showSendModal && selectedInvoice && (
-        <div
-          onClick={() => setShowSendModal(false)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 20, backdropFilter: "blur(8px)", animation: "fadeIn 0.2s ease",
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
-              maxWidth: 480, width: "100%", boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
-              animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700 }}>
-                Send Invoice
-              </h3>
-              <button
-                onClick={() => setShowSendModal(false)}
-                style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer" }}
-              >✕</button>
-            </div>
-
-            {/* Invoice summary */}
-            <div style={{
-              background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 12,
-              padding: "14px 16px", marginBottom: 20,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                <span style={{ color: "#5a8a5a" }}>{selectedInvoice.invoice_number}</span>
-                <span style={{ color: "#4CAF50", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
-                  {formatCurrency(selectedInvoice.total)}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 4 }}>
-                To: {selectedInvoice.customers?.name || "Customer"} ({selectedInvoice.customers?.email || "No email"})
-              </div>
-            </div>
-
-            {/* Send method tabs */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              <button
-                onClick={() => setSendMethod("email")}
-                style={{
-                  flex: 1, padding: "12px", borderRadius: 10,
-                  border: "1px solid " + (sendMethod === "email" ? "rgba(76,175,80,0.3)" : "#1a3a1a"),
-                  background: sendMethod === "email" ? "rgba(76,175,80,0.1)" : "transparent",
-                  color: sendMethod === "email" ? "#4CAF50" : "#5a8a5a",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}
-              >
-                ✉️ Send via Email
-              </button>
-              <button
-                onClick={() => setSendMethod("link")}
-                style={{
-                  flex: 1, padding: "12px", borderRadius: 10,
-                  border: "1px solid " + (sendMethod === "link" ? "rgba(33,150,243,0.3)" : "#1a3a1a"),
-                  background: sendMethod === "link" ? "rgba(33,150,243,0.1)" : "transparent",
-                  color: sendMethod === "link" ? "#42a5f5" : "#5a8a5a",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}
-              >
-                🔗 Copy Link (SMS)
-              </button>
-            </div>
-
-            {sendMethod === "email" ? (
-              <>
-                {selectedInvoice.customers?.email ? (
-                  <div>
-                    <div style={{
-                      background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.15)",
-                      borderRadius: 10, padding: "14px 16px", marginBottom: 16,
-                      fontSize: 13, color: "#8aba8a", lineHeight: 1.6,
-                    }}>
-                      A professional invoice email will be sent to <strong style={{ color: "#4CAF50" }}>{selectedInvoice.customers.email}</strong> with
-                      a secure payment link. The customer can pay directly from the email.
-                    </div>
-                    <button
-                      onClick={() => handleSendInvoice(selectedInvoice)}
-                      disabled={sendingInvoice}
-                      style={{
-                        width: "100%", padding: "14px", borderRadius: 12, border: "none",
-                        background: sendingInvoice ? "#1a3a1a" : "linear-gradient(135deg, #4CAF50, #2E7D32)",
-                        color: "#fff", fontSize: 15, fontWeight: 700, cursor: sendingInvoice ? "default" : "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
-                        boxShadow: sendingInvoice ? "none" : "0 4px 20px rgba(76,175,80,0.35)",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      }}
-                    >
-                      {sendingInvoice ? (
-                        <>
-                          <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                          Sending...
-                        </>
-                      ) : (
-                        <><IconSend /> Send Invoice Email</>
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{
-                    background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)",
-                    borderRadius: 10, padding: "14px 16px",
-                    fontSize: 13, color: "#ef9a9a",
-                  }}>
-                    ⚠ This customer doesn&apos;t have an email on file. Use the &quot;Copy Link&quot; option instead, or update the customer&apos;s email first.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div>
-                <div style={{
-                  background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 10,
-                  padding: "12px 14px", marginBottom: 16, wordBreak: "break-all",
-                  fontSize: 12, color: "#8aba8a", fontFamily: "'JetBrains Mono', monospace",
-                  lineHeight: 1.6, maxHeight: 100, overflowY: "auto",
-                }}>
-                  {getPaymentLink(selectedInvoice)}
-                </div>
-                <button
-                  onClick={() => {
-                    handleCopyLink(selectedInvoice);
-                    // Also update status to sent
-                    adminPost("invoices", "update", {
-                      id: selectedInvoice.id,
-                      status: selectedInvoice.status === "draft" ? "sent" : selectedInvoice.status,
-                      payment_link: getPaymentLink(selectedInvoice),
-                    }).then(() => loadInvoices());
-                  }}
-                  style={{
-                    width: "100%", padding: "14px", borderRadius: 12, border: "none",
-                    background: "linear-gradient(135deg, #42a5f5, #1565c0)", color: "#fff",
-                    fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    boxShadow: "0 4px 20px rgba(33,150,243,0.35)",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  }}
-                >
-                  <IconCopy /> Copy Payment Link
-                </button>
-                <p style={{ fontSize: 12, color: "#5a8a5a", marginTop: 10, textAlign: "center" }}>
-                  Paste this link into a text message to your customer
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        <SendInvoiceModal
+          invoice={selectedInvoice}
+          customers={customers}
+          sendMethod={sendMethod}
+          setSendMethod={setSendMethod}
+          sendingInvoice={sendingInvoice}
+          copiedLink={copiedLink}
+          onSend={handleSendInvoice}
+          onCopyLink={handleCopyLink}
+          onClose={() => setShowSendModal(false)}
+          getPaymentLink={getPaymentLink}
+          adminPost={adminPost}
+          loadInvoices={loadInvoices}
+        />
       )}
 
-      {/* ════════════════════════════════════════════
-           SERVICE PRESET PICKER MODAL
-         ════════════════════════════════════════════ */}
       {showPresetPicker && (
-        <div
-          onClick={() => { setShowPresetPicker(false); setPresetCategory(null); }}
-          style={{
-            position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.8)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 20, backdropFilter: "blur(8px)", animation: "fadeIn 0.2s ease",
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
-              maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto",
-              boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
-              animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700 }}>
-                {presetCategory ? presetCategory : "Quick Add Service"}
-              </h3>
-              <div style={{ display: "flex", gap: 8 }}>
-                {presetCategory && (
-                  <button
-                    onClick={() => setPresetCategory(null)}
-                    style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 13, cursor: "pointer" }}
-                  >← Back</button>
-                )}
-                <button
-                  onClick={() => { setShowPresetPicker(false); setPresetCategory(null); }}
-                  style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer" }}
-                >✕</button>
-              </div>
-            </div>
-
-            {!presetCategory ? (
-              /* Category grid */
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {SERVICE_PRESETS.map(cat => (
-                  <button
-                    key={cat.category}
-                    onClick={() => setPresetCategory(cat.category)}
-                    style={{
-                      padding: "18px 16px", borderRadius: 14, border: "1px solid #1a3a1a",
-                      background: "#0a160a", cursor: "pointer",
-                      textAlign: "left", transition: "all 0.2s",
-                    }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor = "#4CAF50"; e.currentTarget.style.background = "rgba(76,175,80,0.06)"; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = "#1a3a1a"; e.currentTarget.style.background = "#0a160a"; }}
-                  >
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8", marginBottom: 4 }}>
-                      {cat.category}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#5a8a5a" }}>
-                      {cat.items.length} services
-                    </div>
-                  </button>
-                ))}
-                {/* Custom item option */}
-                <button
-                  onClick={() => { setShowPresetPicker(false); addLineItem(); }}
-                  style={{
-                    padding: "18px 16px", borderRadius: 14,
-                    border: "1px dashed rgba(76,175,80,0.3)",
-                    background: "rgba(76,175,80,0.04)", cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#4CAF50", marginBottom: 4 }}>
-                    ✏️ Custom Item
-                  </div>
-                  <div style={{ fontSize: 12, color: "#5a8a5a" }}>
-                    Repair, upgrade, website, etc.
-                  </div>
-                </button>
-              </div>
-            ) : (
-              /* Service items list */
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {SERVICE_PRESETS.find(c => c.category === presetCategory)?.items.map(item => (
-                  <button
-                    key={item.description}
-                    onClick={() => addPresetItem(item.description, item.unit_price)}
-                    style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "14px 16px", borderRadius: 10, border: "1px solid #1a3a1a",
-                      background: "#0a160a", cursor: "pointer", textAlign: "left",
-                      transition: "all 0.2s",
-                    }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor = "#4CAF50"; e.currentTarget.style.background = "rgba(76,175,80,0.06)"; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = "#1a3a1a"; e.currentTarget.style.background = "#0a160a"; }}
-                  >
-                    <span style={{ fontSize: 14, color: "#c8e0c8" }}>{item.description}</span>
-                    <span style={{
-                      fontSize: 14, fontWeight: 700, color: "#4CAF50",
-                      fontFamily: "'JetBrains Mono', monospace",
-                    }}>
-                      {formatCurrency(item.unit_price)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <ServicePresetPicker
+          presetCategory={presetCategory}
+          setPresetCategory={setPresetCategory}
+          onAddPreset={addPresetItem}
+          onAddCustomItem={addLineItem}
+          onClose={() => setShowPresetPicker(false)}
+        />
       )}
 
-      {/* ════════════════════════════════════════════
-           CONFIRM DELETE MODAL
-         ════════════════════════════════════════════ */}
       {confirmDeleteInvoice && (
-        <div onClick={() => setConfirmDeleteInvoice(null)} style={{
-          position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: 20, backdropFilter: "blur(8px)", animation: "fadeIn 0.2s ease",
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: "linear-gradient(160deg, #1a0d0d, #110909)",
-            border: "1px solid rgba(239,83,80,0.3)", borderRadius: 20, padding: "32px 28px",
-            maxWidth: 420, width: "100%", boxShadow: "0 40px 80px rgba(0,0,0,0.6)",
-            animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
-          }}>
-            <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🗑️</div>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#ffcdd2", fontWeight: 700, textAlign: "center", marginBottom: 8 }}>
-              Delete Invoice?
-            </h3>
-            <p style={{ color: "#9a7a7a", fontSize: 14, textAlign: "center", marginBottom: 8 }}>
-              <strong style={{ color: "#ef9a9a" }}>{confirmDeleteInvoice.invoice_number}</strong>
-              {confirmDeleteInvoice.customers?.name ? ` — ${confirmDeleteInvoice.customers.name}` : ""}
-            </p>
-            <p style={{ color: "#7a5a5a", fontSize: 13, textAlign: "center", marginBottom: 24 }}>
-              This permanently removes the invoice from the database. This cannot be undone.
-            </p>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setConfirmDeleteInvoice(null)} style={{
-                flex: 1, padding: "12px", borderRadius: 12,
-                border: "1px solid #2a2a2a", background: "transparent",
-                color: "#8aba8a", fontSize: 14, fontWeight: 600, cursor: "pointer",
-              }}>
-                Cancel
-              </button>
-              <button onClick={confirmDeleteInvoiceAction} style={{
-                flex: 1, padding: "12px", borderRadius: 12, border: "none",
-                background: "linear-gradient(135deg, #c62828, #b71c1c)",
-                color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-                boxShadow: "0 4px 20px rgba(198,40,40,0.4)",
-              }}>
-                Yes, Delete
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDeleteModal
+          invoice={confirmDeleteInvoice}
+          onConfirm={confirmDeleteInvoiceAction}
+          onClose={() => setConfirmDeleteInvoice(null)}
+        />
       )}
 
-      {/* ─── Styles ─── */}
+      {/* Styles */}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
