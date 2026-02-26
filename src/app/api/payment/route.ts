@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const paymentNote =
       note ||
-      [service, invoiceNumber ? \INV#\\ : ''].filter(Boolean).join(' - ') ||
+      [service, invoiceNumber ? 'INV#' + invoiceNumber : ''].filter(Boolean).join(' - ') ||
       'JHPS Payment';
 
     const result = await squareClient.payments.create({
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const category = firstError.category || 'API_ERROR';
 
     // This is the string the user sees. Including the code explicitly.
-    const displayMessage = \Error [\]: \. (Ref: \)\;
+    const displayMessage = 'Error [' + errorCode + ']: ' + errorDetail + '. (Ref: ' + category + ')';
 
     return NextResponse.json({ 
       success: false, 
