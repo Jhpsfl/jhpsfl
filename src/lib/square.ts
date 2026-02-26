@@ -93,6 +93,7 @@ export async function storeCardOnFile(
 export async function chargeStoredCard(
   squareCardId: string,
   amountCents: number,
+  squareCustomerId: string,
   note?: string,
   buyerEmail?: string,
 ): Promise<{ paymentId: string; receiptUrl: string | null; status: string }> {
@@ -101,6 +102,7 @@ export async function chargeStoredCard(
     idempotencyKey: crypto.randomUUID(),
     amountMoney: { amount: BigInt(amountCents), currency: Currency.Usd },
     locationId,
+    customerId: squareCustomerId,
     note: note?.slice(0, 500) || 'JHPS Recurring Payment',
     buyerEmailAddress: buyerEmail || undefined,
     autocomplete: true,

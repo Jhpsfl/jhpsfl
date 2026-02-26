@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   // Find all auto-billing subscriptions due today or earlier
   const { data: dueSubs, error: queryErr } = await supabase
     .from('subscriptions')
-    .select('*, customers(id, name, email, phone)')
+    .select('*, customers(id, name, email, phone, square_customer_id)')
     .eq('billing_mode', 'auto')
     .eq('status', 'active')
     .lte('next_billing_date', today);
@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
       const payResult = await chargeStoredCard(
         card.square_card_id,
         amountCents,
+        sub.customers?.square_customer_id || '',
         note,
         sub.customers?.email || undefined,
       );

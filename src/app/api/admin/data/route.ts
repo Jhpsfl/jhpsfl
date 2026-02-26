@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
           // Look up subscription
           const { data: sub, error: subErr } = await supabase
             .from("subscriptions")
-            .select("*, customers(id, name, email, phone)")
+            .select("*, customers(id, name, email, phone, square_customer_id)")
             .eq("id", id)
             .single();
           if (subErr || !sub) return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
@@ -361,6 +361,7 @@ export async function POST(request: NextRequest) {
             const payResult = await chargeStoredCard(
               card.square_card_id,
               amountCents,
+              sub.customers?.square_customer_id || '',
               note,
               sub.customers?.email || undefined,
             );
