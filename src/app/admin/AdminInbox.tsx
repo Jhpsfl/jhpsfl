@@ -207,19 +207,14 @@ export default function AdminInbox({ userId, backRef }: { userId: string; backRe
     setCollapsedMsgs(new Set());
   }, []);
 
-  // ─── Back button: expose handler to parent via ref ───
-  useEffect(() => {
-    if (backRef) {
-      backRef.current = () => {
-        if (selectedThread) {
-          closeThread();
-          return true;
-        }
-        return false;
-      };
-      return () => { backRef.current = null; };
-    }
-  }, [backRef, selectedThread, closeThread]);
+  // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
+  if (backRef) {
+    backRef.current = () => {
+      if (composeOpen) { setComposeOpen(false); return true; }
+      if (selectedThread) { closeThread(); return true; }
+      return false;
+    };
+  }
 
   // ─── Data fetching ───
   const fetchThreads = useCallback(async (quiet = false) => {

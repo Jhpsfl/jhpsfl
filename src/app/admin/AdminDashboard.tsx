@@ -670,50 +670,31 @@ export default function AdminDashboard() {
     };
   }, [userId]);
 
+  // ─── Exit-toast state ───
+  const [showExitToast, setShowExitToast] = useState(false);
+  const exitToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitToastActive = useRef(false);
+
+  // ─── Stable popstate handler ref ───
+  // Updated synchronously every render so the listener is never stale.
+  // The listener itself is registered once (empty deps) via the ref indirection.
+  const popstateHandlerRef = useRef<() => void>(() => {});
+
   // ─── Push sentinel buffer on mount ───
-  // Browser history is only a trigger mechanism — real nav state lives in tabHistoryRef.
-  // We maintain a MINIMUM of 2 sentinel entries so the TWA runtime never sees
-  // history.length drop to 1 (which causes Android to close the activity).
+  // We push 5 sentinels so Android never sees history.length drop to 1
+  // (which triggers TWA close) regardless of timing.
   useEffect(() => {
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    for (let i = 0; i < 5; i++) {
+      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    }
   }, []);
 
-  // Handle Android Back Button — sentinel approach
+  // ─── Register popstate listener once — no re-registration, no stale closures ───
   useEffect(() => {
-    const handlePopState = () => {
-      // Repush 3 sentinels so length never risks hitting 1 between presses
-      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-
-      // Priority 1: Close modals (overlays on current tab — don't pop tab history)
-      if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
-      if (showCustomerModal) { setShowCustomerModal(false); return; }
-
-      // Priority 2: Let active child handle its own detail/thread view
-      if (activeTab === "messages" && inboxBackRef.current?.()) return;
-      if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
-      if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
-
-      // Priority 3: Pop tab history to navigate one level back
-      const history = tabHistoryRef.current;
-      if (history.length > 1) {
-        const newHistory = history.slice(0, -1);
-        const prevTab = newHistory[newHistory.length - 1];
-        tabHistoryRef.current = newHistory;
-        setActiveTab(prevTab);
-        if (prevTab !== "customer_detail") setCustomerDetail(null);
-        return;
-      }
-
-      // Priority 4: Already at root (overview) — trap, do nothing (sentinel already pushed)
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [activeTab, showJobModal, showCustomerModal]);
+    const handler = () => popstateHandlerRef.current();
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
@@ -785,6 +766,55 @@ export default function AdminDashboard() {
     } else if (tab === "video_leads") {
       setBadgeCounts(prev => ({ ...prev, newLeads: 0 }));
     }
+  };
+
+  // ─── Update popstate handler every render (always fresh, never stale) ───
+  popstateHandlerRef.current = () => {
+    // Always repush 5 sentinels — keeps TWA alive across all back presses
+    for (let i = 0; i < 5; i++) {
+      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    }
+
+    // P1: Close dashboard-level modals
+    if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
+    if (showCustomerModal) { setShowCustomerModal(false); return; }
+
+    // P2: Delegate to active child's back handler (updated synchronously — never null)
+    if (activeTab === "messages" && inboxBackRef.current?.()) return;
+    if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
+    if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
+
+    // P3: Pop tab history — go back exactly one level
+    if (tabHistoryRef.current.length > 1) {
+      const newHistory = tabHistoryRef.current.slice(0, -1);
+      const dest = newHistory[newHistory.length - 1];
+      tabHistoryRef.current = newHistory;
+      setActiveTab(dest);
+      if (dest !== "customer_detail") setCustomerDetail(null);
+      // Clear any pending exit toast since we navigated back
+      if (exitToastActive.current) {
+        exitToastActive.current = false;
+        setShowExitToast(false);
+        if (exitToastTimer.current) { clearTimeout(exitToastTimer.current); exitToastTimer.current = null; }
+      }
+      return;
+    }
+
+    // P4: At root — show "press back again to exit" toast
+    if (exitToastActive.current) {
+      // Second press within window — dismiss toast (TWA will handle close via sentinel depletion)
+      exitToastActive.current = false;
+      setShowExitToast(false);
+      if (exitToastTimer.current) { clearTimeout(exitToastTimer.current); exitToastTimer.current = null; }
+      return;
+    }
+    exitToastActive.current = true;
+    setShowExitToast(true);
+    exitToastTimer.current = setTimeout(() => {
+      exitToastActive.current = false;
+      setShowExitToast(false);
+      exitToastTimer.current = null;
+    }, 2500);
   };
 
   // ─── RENDER ───
@@ -1851,7 +1881,7 @@ export default function AdminDashboard() {
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
           }
-          
+
           /* Improved form inputs for mobile */
           .JobModal input,
           .JobModal select,
@@ -1862,7 +1892,25 @@ export default function AdminDashboard() {
             padding: 14px 16px !important;
           }
         }
+        @keyframes exitToastSlide {
+          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
       `}</style>
+
+      {/* ─── Exit toast ─── */}
+      {showExitToast && (
+        <div style={{
+          position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
+          background: "#1a3a1a", color: "#c8e0c8",
+          padding: "14px 28px", borderRadius: 28, zIndex: 99999,
+          fontSize: 14, fontWeight: 500, whiteSpace: "nowrap",
+          boxShadow: "0 6px 24px rgba(0,0,0,0.6)", border: "1px solid #2e5a2e",
+          animation: "exitToastSlide 0.25s ease",
+        }}>
+          Press back again to exit
+        </div>
+      )}
     </>
   );
 }

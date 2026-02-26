@@ -282,20 +282,14 @@ export default function AdminVideoLeads({ userId, backRef }: { userId: string; b
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
-  // ─── Back button: expose handler to parent via ref ───
-  useEffect(() => {
-    if (backRef) {
-      backRef.current = () => {
-        if (selectedLead) {
-          setSelectedLead(null);
-          setLeadDetail(null);
-          return true;
-        }
-        return false;
-      };
-      return () => { backRef.current = null; };
-    }
-  }, [backRef, selectedLead]);
+  // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
+  if (backRef) {
+    backRef.current = () => {
+      if (showQuoteBuilder) { setShowQuoteBuilder(false); return true; }
+      if (selectedLead) { setSelectedLead(null); setLeadDetail(null); return true; }
+      return false;
+    };
+  }
 
   // ─── RENDER: Lead Detail View ───
   if (selectedLead && leadDetail) {

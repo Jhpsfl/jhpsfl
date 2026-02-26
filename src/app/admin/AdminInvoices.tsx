@@ -247,24 +247,14 @@ export default function AdminInvoices({ userId, backRef }: { userId: string; bac
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // ─── Back button: expose handler to parent via ref ───
-  useEffect(() => {
-    if (backRef) {
-      backRef.current = () => {
-        if (showSendModal) {
-          setShowSendModal(false);
-          return true;
-        }
-        if (view !== "list") {
-          setView("list");
-          setSelectedInvoice(null);
-          return true;
-        }
-        return false;
-      };
-      return () => { backRef.current = null; };
-    }
-  }, [backRef, view, showSendModal]);
+  // ─── Back button: updated synchronously every render (no useEffect timing gap) ───
+  if (backRef) {
+    backRef.current = () => {
+      if (showSendModal) { setShowSendModal(false); return true; }
+      if (view !== "list") { setView("list"); setSelectedInvoice(null); return true; }
+      return false;
+    };
+  }
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
