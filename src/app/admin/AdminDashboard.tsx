@@ -680,20 +680,27 @@ export default function AdminDashboard() {
   // The listener itself is registered once (empty deps) via the ref indirection.
   const popstateHandlerRef = useRef<() => void>(() => {});
 
-  // ─── Push sentinel buffer on mount ───
-  // We push 5 sentinels so Android never sees history.length drop to 1
-  // (which triggers TWA close) regardless of timing.
+  // ─── Push 2 sentinel entries on mount ───
+  // Browser history is only used as a trigger — all nav state lives in tabHistoryRef.
+  // 2 entries keeps Android from seeing history.length hit 1 (which closes the TWA).
   useEffect(() => {
-    for (let i = 0; i < 5; i++) {
-      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    }
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
   }, []);
 
-  // ─── Register popstate listener once — no re-registration, no stale closures ───
+  // ─── Register popstate listener once, in CAPTURE phase ───
+  // Capture phase runs before Next.js's bubble-phase router listener.
+  // We check e.state.sentinel — if it's our entry, stop propagation so Next.js
+  // never sees the event (prevents the brief flash/re-render Next.js causes).
+  // Non-sentinel popstates (real Next.js navigations) are left alone.
   useEffect(() => {
-    const handler = () => popstateHandlerRef.current();
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
+    const handler = (e: PopStateEvent) => {
+      if (!e.state?.sentinel) return; // not our entry — let Next.js handle it
+      e.stopImmediatePropagation();   // block Next.js router from seeing this
+      popstateHandlerRef.current();
+    };
+    window.addEventListener("popstate", handler, true); // true = capture phase
+    return () => window.removeEventListener("popstate", handler, true);
   }, []);
 
   const handleInstall = async () => {
@@ -770,10 +777,9 @@ export default function AdminDashboard() {
 
   // ─── Update popstate handler every render (always fresh, never stale) ───
   popstateHandlerRef.current = () => {
-    // Always repush 5 sentinels — keeps TWA alive across all back presses
-    for (let i = 0; i < 5; i++) {
-      window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    }
+    // Repush 2 sentinel entries so the TWA always has history to go back through
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
 
     // P1: Close dashboard-level modals
     if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
