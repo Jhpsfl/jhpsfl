@@ -492,6 +492,7 @@ export default function AdminDashboard() {
   const inboxBackRef = useRef<(() => boolean) | null>(null);
   const videoLeadsBackRef = useRef<(() => boolean) | null>(null);
   const invoicesBackRef = useRef<(() => boolean) | null>(null);
+  const invoiceCreateRef = useRef<(() => void) | null>(null);
 
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
@@ -1316,20 +1317,31 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        {/* Ultra-slim New Job Button */}
-                        <button 
-                          onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}
-                          style={{
-                            width: "100%", padding: "6px 10px", marginBottom: 12,
-                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
-                            border: "none", borderRadius: 6, color: "#fff",
-                            fontSize: 11, fontWeight: 700, cursor: "pointer",
-                            fontFamily: "'DM Sans', sans-serif",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                          }}
-                        >
-                          <span style={{ fontSize: 12 }}>+</span> New Job
-                        </button>
+                        {/* Quick-Action Split Bar */}
+                        <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                          {[
+                            { label: "New Job", onClick: () => { pushSentinel(); setEditingJob(null); setShowJobModal(true); } },
+                            { label: "New Invoice", onClick: () => { pushSentinel(); if (activeTab === "invoices") { invoiceCreateRef.current?.(); } else { switchTab("invoices"); setTimeout(() => invoiceCreateRef.current?.(), 80); } } },
+                            { label: "New Customer", onClick: () => { pushSentinel(); setShowCustomerModal(true); } },
+                          ].map((btn, i) => (
+                            <button
+                              key={btn.label}
+                              onClick={btn.onClick}
+                              style={{
+                                flex: 1, padding: "6px 4px",
+                                background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                                border: "none",
+                                borderRadius: i === 0 ? "6px 0 0 6px" : i === 2 ? "0 6px 6px 0" : 0,
+                                borderRight: i < 2 ? "1px solid rgba(0,0,0,0.25)" : "none",
+                                color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                                fontFamily: "'DM Sans', sans-serif",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+                              }}
+                            >
+                              <span style={{ fontSize: 11 }}>+</span> {btn.label}
+                            </button>
+                          ))}
+                        </div>
 
                         {/* High-density Navigation Grid */}
                         <div style={{
@@ -1708,7 +1720,7 @@ export default function AdminDashboard() {
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} />
                     )}
                   </div>
                 )}

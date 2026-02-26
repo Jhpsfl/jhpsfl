@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId, backRef, onNavigate }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void }) {
+export default function AdminInvoices({ userId, backRef, onNavigate, createRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<(() => void) | null> }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -253,6 +253,14 @@ export default function AdminInvoices({ userId, backRef, onNavigate }: { userId:
       if (showSendModal) { setShowSendModal(false); return true; }
       if (view !== "list") { setView("list"); setSelectedInvoice(null); return true; }
       return false;
+    };
+  }
+
+  // ─── Create trigger: called from dashboard "New Invoice" button ───
+  if (createRef) {
+    createRef.current = () => {
+      setView("create");
+      onNavigate?.();
     };
   }
 
