@@ -562,31 +562,6 @@ export default function PaymentPage() {
         .mobile-menu a { color: #e8f5e8; font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: 'Playfair Display', serif; }
         .mobile-menu a:hover { color: #4CAF50; }
 
-        /* Outer clip: only max-height + opacity, no transform (avoids horizontal bleed) */
-        .billing-clip {
-          width: 100%;
-          overflow: hidden;
-          transition: max-height 0.44s cubic-bezier(0.16, 1, 0.3, 1),
-                      opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .billing-clip.open  { max-height: 500px; opacity: 1; }
-        .billing-clip.closed { max-height: 0; opacity: 0; }
-
-        /* Inner card: scaleY for the "pop from center" feel */
-        .billing-inner {
-          transform-origin: center top;
-          transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
-          padding-top: 4px;
-        }
-        .billing-clip.open  .billing-inner { transform: scaleY(1); }
-        .billing-clip.closed .billing-inner { transform: scaleY(0.6); }
-
-        .billing-city-zip {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 14px;
-        }
-
         .same-billing-toggle {
           display: flex; align-items: center; gap: 12px; cursor: pointer;
           padding: 12px 16px; border-radius: 10px;
@@ -601,10 +576,6 @@ export default function PaymentPage() {
         .same-billing-toggle.checked {
           border-color: rgba(76,175,80,0.35);
           background: rgba(76,175,80,0.08);
-        }
-
-        @media (max-width: 768px) {
-          .billing-city-zip { grid-template-columns: 1fr; }
         }
 
         .noise-overlay {
@@ -1057,9 +1028,20 @@ export default function PaymentPage() {
                             </div>
                           </div>
 
-                          {/* Animated billing address — outer clips height, inner scales for pop effect */}
-                          <div className={`billing-clip${sameBilling ? " closed" : " open"}`}>
-                            <div className="billing-inner">
+                          {/* Animated billing address — pure inline transitions, no CSS class dependency */}
+                          <div style={{
+                            width: "100%",
+                            maxHeight: sameBilling ? 0 : 480,
+                            overflow: "hidden",
+                            opacity: sameBilling ? 0 : 1,
+                            transition: "max-height 0.44s cubic-bezier(0.16,1,0.3,1), opacity 0.32s cubic-bezier(0.16,1,0.3,1)",
+                          }}>
+                            <div style={{
+                              transform: sameBilling ? "scaleY(0.65)" : "scaleY(1)",
+                              transformOrigin: "center top",
+                              transition: "transform 0.38s cubic-bezier(0.16,1,0.3,1)",
+                              paddingTop: 4,
+                            }}>
                               <div style={{
                                 background: "rgba(33,150,243,0.05)",
                                 border: "1px solid rgba(33,150,243,0.2)",
@@ -1070,7 +1052,7 @@ export default function PaymentPage() {
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                   <div style={{ width: 3, height: 16, borderRadius: 2, background: "#42a5f5", flexShrink: 0 }} />
                                   <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, color: "#42a5f5" }}>
-                                    Billing Address
+                                    BILLING ADDRESS
                                   </p>
                                 </div>
                                 <div>
@@ -1080,21 +1062,19 @@ export default function PaymentPage() {
                                     onChange={(e) => updateField("billingAddress", e.target.value)}
                                     style={{ borderColor: "rgba(33,150,243,0.25)" }} />
                                 </div>
-                                <div className="billing-city-zip">
-                                  <div>
-                                    <label style={labelStyle}>City</label>
-                                    <input className="pay-input" placeholder="Deltona"
-                                      value={formData.billingCity}
-                                      onChange={(e) => updateField("billingCity", e.target.value)}
-                                      style={{ borderColor: "rgba(33,150,243,0.25)" }} />
-                                  </div>
-                                  <div>
-                                    <label style={labelStyle}>Zip</label>
-                                    <input className="pay-input" placeholder="32725"
-                                      value={formData.billingZip}
-                                      onChange={(e) => updateField("billingZip", e.target.value)}
-                                      style={{ borderColor: "rgba(33,150,243,0.25)" }} />
-                                  </div>
+                                <div>
+                                  <label style={labelStyle}>City</label>
+                                  <input className="pay-input" placeholder="Deltona"
+                                    value={formData.billingCity}
+                                    onChange={(e) => updateField("billingCity", e.target.value)}
+                                    style={{ borderColor: "rgba(33,150,243,0.25)" }} />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Zip Code</label>
+                                  <input className="pay-input" placeholder="32725"
+                                    value={formData.billingZip}
+                                    onChange={(e) => updateField("billingZip", e.target.value)}
+                                    style={{ borderColor: "rgba(33,150,243,0.25)" }} />
                                 </div>
                               </div>
                             </div>
