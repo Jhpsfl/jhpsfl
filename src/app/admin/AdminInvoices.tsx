@@ -484,41 +484,14 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     if (sendMethod === "email" && customer?.email) {
       const paymentLink = getPaymentLink(invoice);
 
-      // Format line items for email body
-      const itemsList = invoice.line_items
-        .map(item => `• ${item.description} — ${formatCurrency(item.amount)}`)
-        .join("\n");
-
-      const emailBody = `Hello ${customer.name || "there"},
-
-You have a new invoice from Jenkins Home & Property Solutions.
-
-Invoice #: ${invoice.invoice_number}
-Due Date: ${formatDate(invoice.due_date)}
-
-Services:
-${itemsList}
-
-${"─".repeat(40)}
-Total Due: ${formatCurrency(invoice.total)}
-
-Pay securely online:
-${paymentLink}
-
-Thank you for your business!
-
-Jenkins Home & Property Solutions
-📞 407-686-9817
-✉️ Info@jhpsfl.com`;
-
-      const res = await fetch("/api/email/compose", {
+      const res = await fetch("/api/invoice/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clerk_user_id: userId,
-          to_email: customer.email,
-          subject: `Invoice ${invoice.invoice_number} from Jenkins Home & Property Solutions — ${formatCurrency(invoice.total)}`,
-          body: emailBody,
+          invoice,
+          customer,
+          payment_link: paymentLink,
         }),
       });
 
