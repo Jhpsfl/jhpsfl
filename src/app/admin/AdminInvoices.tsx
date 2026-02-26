@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<((preselectedCustomerId?: string) => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void }) {
+export default function AdminInvoices({ userId, backRef, onNavigate, createRef, initialInvoiceId, onInitialInvoiceConsumed, initialCustomerId, onInitialCustomerConsumed }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void; createRef?: React.MutableRefObject<((preselectedCustomerId?: string) => void) | null>; initialInvoiceId?: string | null; onInitialInvoiceConsumed?: () => void; initialCustomerId?: string | null; onInitialCustomerConsumed?: () => void }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -388,6 +388,15 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       onInitialInvoiceConsumed?.();
     }
   }, [initialInvoiceId, invoices, loading, onNavigate, onInitialInvoiceConsumed]);
+
+  // ─── Auto-open create form pre-filled with customer (e.g. "Create Invoice" from customer detail) ───
+  useEffect(() => {
+    if (!initialCustomerId) return;
+    setForm(prev => ({ ...prev, customer_id: initialCustomerId }));
+    setView("create");
+    onNavigate?.();
+    onInitialCustomerConsumed?.();
+  }, [initialCustomerId, onNavigate, onInitialCustomerConsumed]);
 
   // ─── Line item calculations ───
   const updateLineItem = (id: string, field: keyof InvoiceLineItem, value: string | number) => {

@@ -647,6 +647,7 @@ export default function AdminDashboard() {
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
+  const [pendingInvoiceCustomerId, setPendingInvoiceCustomerId] = useState<string | null>(null);
 
   // Modals
   const [showJobModal, setShowJobModal] = useState(false);
@@ -1844,7 +1845,7 @@ export default function AdminDashboard() {
                             </button>
                             <button className="action-btn action-btn-primary" onClick={() => {
                               pushSentinel();
-                              invoiceCreateRef.current?.(customerDetail.customer.id);
+                              setPendingInvoiceCustomerId(customerDetail.customer.id);
                               switchTab("invoices");
                             }}>
                               📄 Create Invoice
@@ -2098,7 +2099,7 @@ export default function AdminDashboard() {
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} initialInvoiceId={pendingInvoiceId} onInitialInvoiceConsumed={() => setPendingInvoiceId(null)} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} initialInvoiceId={pendingInvoiceId} onInitialInvoiceConsumed={() => setPendingInvoiceId(null)} initialCustomerId={pendingInvoiceCustomerId} onInitialCustomerConsumed={() => setPendingInvoiceCustomerId(null)} />
                     )}
                   </div>
                 )}
