@@ -1167,11 +1167,12 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                   isMobile ? (
                     /* Mobile: card layout */
                     <div key={item.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-                      <input
+                      <textarea
                         value={item.description}
                         onChange={e => updateLineItem(item.id, "description", e.target.value)}
                         placeholder="Service or item description"
-                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, width: "100%", boxSizing: "border-box", marginBottom: 8 }}
+                        rows={2}
+                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, width: "100%", boxSizing: "border-box", marginBottom: 8, resize: "none", lineHeight: 1.5, overflow: "hidden" }}
                       />
                       <div style={{ display: "grid", gridTemplateColumns: "64px 1fr auto 32px", gap: 8, alignItems: "center" }}>
                         <input
@@ -1209,11 +1210,12 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
                       key={item.id}
                       style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}
                     >
-                      <input
+                      <textarea
                         value={item.description}
                         onChange={e => updateLineItem(item.id, "description", e.target.value)}
                         placeholder="Service or item description"
-                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13 }}
+                        rows={2}
+                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, resize: "none", lineHeight: 1.5, boxSizing: "border-box", overflow: "hidden" }}
                       />
                       <input
                         value={item.quantity}
