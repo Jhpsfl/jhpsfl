@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const squareClient = new SquareClient({
   token: process.env.SQUARE_ACCESS_TOKEN?.trim()!,
-  environment: SquareEnvironment.Sandbox,
+  environment: SquareEnvironment.Production,
 });
 
 export async function POST(request: Request) {
