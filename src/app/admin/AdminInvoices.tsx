@@ -217,7 +217,7 @@ const IconBack = () => (
 );
 
 // ─── Main Export ───
-export default function AdminInvoices({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
+export default function AdminInvoices({ userId, backRef, onNavigate }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -548,6 +548,7 @@ Jenkins Home & Property Solutions
 
   // ─── Edit invoice ───
   const startEditInvoice = (invoice: Invoice) => {
+    onNavigate?.(); // push sentinel during user gesture
     setSelectedInvoice(invoice);
     setForm({
       customer_id: invoice.customer_id,
@@ -634,7 +635,7 @@ Jenkins Home & Property Solutions
               </p>
             </div>
             <button
-              onClick={() => { resetForm(); setView("create"); }}
+              onClick={() => { onNavigate?.(); resetForm(); setView("create"); }}
               className="action-btn action-btn-primary"
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px" }}
             >
@@ -725,7 +726,7 @@ Jenkins Home & Property Solutions
               </p>
               {!searchQuery && filterStatus === "all" && (
                 <button
-                  onClick={() => { resetForm(); setView("create"); }}
+                  onClick={() => { onNavigate?.(); resetForm(); setView("create"); }}
                   className="action-btn action-btn-primary"
                   style={{ padding: "10px 24px" }}
                 >
@@ -757,7 +758,7 @@ Jenkins Home & Property Solutions
                         style={{ cursor: "pointer", transition: "background 0.2s" }}
                         onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = "rgba(76,175,80,0.04)"; }}
                         onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => { setSelectedInvoice(inv); setView("detail"); }}
+                        onClick={() => { onNavigate?.(); setSelectedInvoice(inv); setView("detail"); }}
                       >
                         <td style={{ padding: "14px 12px", fontSize: 14, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, borderBottom: "1px solid #0d1a0d" }}>
                           {inv.invoice_number}
@@ -791,7 +792,7 @@ Jenkins Home & Property Solutions
                             )}
                             {["draft", "sent", "overdue"].includes(inv.status) && (
                               <button
-                                onClick={() => { setSelectedInvoice(inv); setShowSendModal(true); }}
+                                onClick={() => { onNavigate?.(); setSelectedInvoice(inv); setShowSendModal(true); }}
                                 title="Send invoice"
                                 className="quick-action"
                                 style={{ display: "flex", alignItems: "center", gap: 4 }}
@@ -1282,7 +1283,7 @@ Jenkins Home & Property Solutions
                 {/* Send / Resend */}
                 {["draft", "sent", "overdue"].includes(selectedInvoice.status) && (
                   <button
-                    onClick={() => setShowSendModal(true)}
+                    onClick={() => { onNavigate?.(); setShowSendModal(true); }}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       padding: "12px", borderRadius: 12, border: "none",

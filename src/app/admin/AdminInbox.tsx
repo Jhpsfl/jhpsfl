@@ -169,7 +169,7 @@ const IconMore = () => (
 );
 
 // ─── Main Component ───
-export default function AdminInbox({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
+export default function AdminInbox({ userId, backRef, onNavigate }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void }) {
   const [inboxTab, setInboxTab] = useState<InboxTab>("email");
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [smsThreads, setSmsThreads] = useState<SmsThread[]>([]);
@@ -237,6 +237,7 @@ export default function AdminInbox({ userId, backRef }: { userId: string; backRe
       setMessages(msgs);
       setLeadInfo(data.lead || null);
       setSelectedThread(threadId);
+      onNavigate?.(); // push sentinel during user gesture — non-skippable
       setReplyText("");
       // Gmail behavior: collapse all but last message
       if (msgs.length > 1) {
@@ -473,7 +474,7 @@ export default function AdminInbox({ userId, backRef }: { userId: string; backRe
             )}
             <div style={{ flex: 1 }} />
             {someSelected && <span style={{ fontSize: 11, color: "#5a8a5a" }}>{selectedIds.size} selected</span>}
-            <button onClick={() => setComposeOpen(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 50, border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a" }}>
+            <button onClick={() => { onNavigate?.(); setComposeOpen(true); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 50, border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a" }}>
               <IconCompose />
             </button>
           </div>
@@ -525,7 +526,7 @@ export default function AdminInbox({ userId, backRef }: { userId: string; backRe
           )}
 
           {/* Mobile FAB */}
-          <button className="gmail-fab" onClick={() => setComposeOpen(true)}><IconCompose /> Compose</button>
+          <button className="gmail-fab" onClick={() => { onNavigate?.(); setComposeOpen(true); }}><IconCompose /> Compose</button>
         </div>
       )}
 

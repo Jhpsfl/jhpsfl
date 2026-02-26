@@ -543,6 +543,31 @@ export default function AdminDashboard() {
     return res.json();
   }, [userId]);
 
+  // ─── Gesture-based sentinel system ───
+  // Chrome's History Manipulation Intervention marks pushState entries created
+  // WITHOUT user activation (click/tap) as "skippable" — the hardware back button
+  // skips ALL of them in one press. To prevent the TWA from closing, we ONLY push
+  // sentinel entries during user gestures (which have activation and are non-skippable).
+  const pushSentinel = useCallback(() => {
+    const n = Date.now();
+    window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
+  }, []);
+
+  // Push 1 extra "buffer" sentinel on the very first user interaction.
+  // This buffer ensures that when the user backtracks all the way to the root,
+  // there's still one sentinel left to catch the back press and show the exit toast.
+  const firstInteractionDone = useRef(false);
+  useEffect(() => {
+    const handler = () => {
+      if (!firstInteractionDone.current) {
+        firstInteractionDone.current = true;
+        pushSentinel(); // has user activation — non-skippable
+      }
+    };
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, [pushSentinel]);
+
   // ─── Load data based on active tab ───
   const loadTab = useCallback(async (tab: Tab) => {
     setLoading(true);
@@ -589,6 +614,7 @@ export default function AdminDashboard() {
   }, [adminFetch]);
 
   const loadCustomerDetail = useCallback(async (customerId: string) => {
+    pushSentinel(); // user-activated — non-skippable by Chrome
     setLoading(true);
     try {
       const res = await adminFetch("customer_detail", customerId);
@@ -601,7 +627,7 @@ export default function AdminDashboard() {
       console.error("Customer detail error:", err);
     }
     setLoading(false);
-  }, [adminFetch]);
+  }, [adminFetch, pushSentinel]);
 
   useEffect(() => {
     if (userId) loadTab("overview");
@@ -680,21 +706,6 @@ export default function AdminDashboard() {
   // The listener itself is registered once (empty deps) via the ref indirection.
   const popstateHandlerRef = useRef<() => void>(() => {});
 
-  // ─── Sentinel push helper ───
-  // Uses a unique hash URL on every push so Android TWA counts each entry as a
-  // real navigation (same-URL pushState is invisible to the TWA runtime and does
-  // NOT prevent the activity from closing on back press).
-  const pushSentinel = useCallback(() => {
-    const n = Date.now();
-    window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
-  }, []);
-
-  // ─── Push 2 sentinel entries on mount ───
-  useEffect(() => {
-    pushSentinel();
-    pushSentinel();
-  }, [pushSentinel]);
-
   // ─── Register popstate listener once, in CAPTURE phase ───
   // Capture phase runs before Next.js's bubble-phase router listener.
   // We check e.state.sentinel — if it's our entry, stop propagation so Next.js
@@ -770,6 +781,7 @@ export default function AdminDashboard() {
   });
 
   const switchTab = (tab: Tab) => {
+    pushSentinel(); // user-activated — non-skippable by Chrome
     tabHistoryRef.current = [...tabHistoryRef.current, tab];
     setActiveTab(tab);
     setCustomerDetail(null);
@@ -784,9 +796,10 @@ export default function AdminDashboard() {
 
   // ─── Update popstate handler every render (always fresh, never stale) ───
   popstateHandlerRef.current = () => {
-    // Repush 2 sentinel entries — hash URLs so Android TWA counts them as real navigations
-    pushSentinel();
-    pushSentinel();
+    // NOTE: Do NOT push sentinels here. This handler runs inside a popstate event,
+    // which has NO user activation. Chrome's History Manipulation Intervention would
+    // mark any pushState entries from here as "skippable" — defeating the purpose.
+    // Sentinels are only pushed during user gestures (switchTab, onNavigate, etc.).
 
     // P1: Close dashboard-level modals
     if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
@@ -1301,7 +1314,7 @@ export default function AdminDashboard() {
 
                         {/* Ultra-slim New Job Button */}
                         <button 
-                          onClick={() => { setEditingJob(null); setShowJobModal(true); }}
+                          onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}
                           style={{
                             width: "100%", padding: "6px 10px", marginBottom: 12,
                             background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
@@ -1414,7 +1427,7 @@ export default function AdminDashboard() {
                             <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
                               Customers
                             </h1>
-                            <button className="action-btn action-btn-primary" onClick={() => setShowCustomerModal(true)}>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setShowCustomerModal(true); }}>
                               + Add Customer
                             </button>
                           </div>
@@ -1504,7 +1517,7 @@ export default function AdminDashboard() {
                             </div>
                             <div style={{ color: "#3a5a3a", fontSize: 12, marginTop: 8 }}>Customer since {formatDate(customerDetail.customer.created_at)}</div>
                           </div>
-                          <button className="action-btn action-btn-primary" onClick={() => { setEditingJob(null); setShowJobModal(true); }}>
+                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>
                             + New Job
                           </button>
                         </div>
@@ -1540,7 +1553,7 @@ export default function AdminDashboard() {
                                 <Td mono accent>{formatCurrency(j.amount)}</Td>
                                 <Td>
                                   <div style={{ display: "flex", gap: 6 }}>
-                                    <button className="quick-action" onClick={() => { setEditingJob(j); setShowJobModal(true); }}>Edit</button>
+                                    <button className="quick-action" onClick={() => { pushSentinel(); setEditingJob(j); setShowJobModal(true); }}>Edit</button>
                                     {j.status === "scheduled" && (
                                       <button className="quick-action" onClick={() => handleUpdateJobStatus(j.id, "in_progress")}>Start</button>
                                     )}
@@ -1603,7 +1616,7 @@ export default function AdminDashboard() {
                           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>
                             Jobs
                           </h1>
-                          <button className="action-btn action-btn-primary" onClick={() => { setEditingJob(null); setShowJobModal(true); }}>
+                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>
                             + New Job
                           </button>
                         </div>
@@ -1617,7 +1630,7 @@ export default function AdminDashboard() {
                               <Td mono accent>{formatCurrency(j.amount)}</Td>
                               <Td>
                                 <div style={{ display: "flex", gap: 6 }}>
-                                  <button className="quick-action" onClick={() => { setEditingJob(j); setShowJobModal(true); }}>Edit</button>
+                                  <button className="quick-action" onClick={() => { pushSentinel(); setEditingJob(j); setShowJobModal(true); }}>Edit</button>
                                   {j.status === "scheduled" && (
                                     <button className="quick-action" onClick={() => handleUpdateJobStatus(j.id, "in_progress")}>Start</button>
                                   )}
@@ -1681,17 +1694,17 @@ export default function AdminDashboard() {
 
                     {/* ─── VIDEO LEADS TAB ─── */}
                     {activeTab === "video_leads" && userId && (
-                      <AdminVideoLeads userId={userId} backRef={videoLeadsBackRef} />
+                      <AdminVideoLeads userId={userId} backRef={videoLeadsBackRef} onNavigate={pushSentinel} />
                     )}
 
                     {/* ─── MESSAGES TAB ─── */}
                     {activeTab === "messages" && userId && (
-                      <AdminInbox userId={userId} backRef={inboxBackRef} />
+                      <AdminInbox userId={userId} backRef={inboxBackRef} onNavigate={pushSentinel} />
                     )}
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} backRef={invoicesBackRef} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} />
                     )}
                   </div>
                 )}

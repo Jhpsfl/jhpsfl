@@ -104,7 +104,7 @@ function fileSize(bytes: number) {
 }
 
 // ─── Main Component ───
-export default function AdminVideoLeads({ userId, backRef }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null> }) {
+export default function AdminVideoLeads({ userId, backRef, onNavigate }: { userId: string; backRef?: React.MutableRefObject<(() => boolean) | null>; onNavigate?: () => void }) {
   const [leads, setLeads] = useState<VideoLead[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -143,6 +143,7 @@ export default function AdminVideoLeads({ userId, backRef }: { userId: string; b
       const data = await res.json();
       setLeadDetail(data);
       setSelectedLead(leadId);
+      onNavigate?.(); // push sentinel during user gesture — non-skippable
       setShowQuoteBuilder(false);
       setEditingQuote(null);
     }
@@ -457,7 +458,7 @@ export default function AdminVideoLeads({ userId, backRef }: { userId: string; b
               📋 Quotes ({leadDetail.quotes.length})
             </div>
             {!showQuoteBuilder && (
-              <button onClick={() => { setEditingQuote(null); setShowQuoteBuilder(true); }} style={{
+              <button onClick={() => { onNavigate?.(); setEditingQuote(null); setShowQuoteBuilder(true); }} style={{
                 padding: "6px 14px", borderRadius: 10, border: "none",
                 background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
                 fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
@@ -492,7 +493,7 @@ export default function AdminVideoLeads({ userId, backRef }: { userId: string; b
                   <span style={{ fontSize: 11, color: "#3a5a3a" }}>{formatDate(q.created_at)}</span>
                   {q.status === "draft" && !showQuoteBuilder && (
                     <>
-                      <button onClick={() => { setEditingQuote(q); setShowQuoteBuilder(true); }} style={{
+                      <button onClick={() => { onNavigate?.(); setEditingQuote(q); setShowQuoteBuilder(true); }} style={{
                         padding: "5px 12px", borderRadius: 8, border: "1px solid #2E7D32",
                         background: "transparent", color: "#4CAF50", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                       }}>Edit</button>
