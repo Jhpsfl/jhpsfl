@@ -842,7 +842,10 @@ export default function AdminDashboard() {
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
-    toastTimeout.current = setTimeout(() => setToast(null), 4000);
+    // Success auto-dismisses; errors stay until clicked
+    if (type === "success") {
+      toastTimeout.current = setTimeout(() => setToast(null), 4000);
+    }
   }, []);
 
   // ─── API helper ───
@@ -1549,14 +1552,18 @@ export default function AdminDashboard() {
       {toast && (
         <div style={{
           position: "fixed", top: 20, right: 20, zIndex: 10000,
-          padding: "14px 24px", borderRadius: 12,
-          background: toast.type === "success" ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "linear-gradient(135deg, #ef5350, #c62828)",
+          maxWidth: "min(420px, calc(100vw - 40px)",
+          padding: "14px 16px 14px 20px", borderRadius: 12,
+          background: toast.type === "success" ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "linear-gradient(135deg, #c62828, #8b0000)",
           color: "#fff", fontSize: 14, fontWeight: 600,
-          boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
           animation: "toastIn 0.3s ease",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          {toast.type === "success" ? "✓" : "⚠"} {toast.message}
+          display: "flex", alignItems: "flex-start", gap: 10,
+          cursor: "pointer",
+        }} onClick={() => { if (toastTimeout.current) clearTimeout(toastTimeout.current); setToast(null); }}>
+          <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{toast.type === "success" ? "✓" : "⚠"}</span>
+          <span style={{ flex: 1, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{toast.message}</span>
+          <span style={{ fontSize: 18, opacity: 0.7, flexShrink: 0, lineHeight: 1, marginTop: -1, marginLeft: 4 }}>✕</span>
         </div>
       )}
 

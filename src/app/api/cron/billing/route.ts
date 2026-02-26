@@ -129,16 +129,16 @@ export async function GET(request: NextRequest) {
       results.succeeded++;
     } catch (chargeErr) {
       results.failed++;
-      const errMsg = chargeErr instanceof Error ? chargeErr.message : 'Charge failed';
+      const rawMsg = chargeErr instanceof Error ? chargeErr.message : String(chargeErr);
       await supabase.from('billing_log').insert({
         subscription_id: sub.id,
         customer_id: sub.customer_id,
         amount: sub.amount,
         status: 'failed',
-        error_message: errMsg,
+        error_message: rawMsg.slice(0, 500),
       });
       // Do NOT advance billing date — will retry next day
-      console.error(`CRON_CHARGE_FAILED [sub=${sub.id}]:`, errMsg);
+      console.error(`CRON_CHARGE_FAILED [sub=${sub.id}]:`, rawMsg);
     }
   }
 

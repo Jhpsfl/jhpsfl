@@ -5,6 +5,48 @@ import { Resend } from "resend";
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from "@/lib/receipt-generator";
 import type { ReceiptData } from "@/lib/receipt-generator";
 
+// ─── Square error parser ───
+const SQUARE_ERROR_MAP: Record<string, string> = {
+  TRANSACTION_LIMIT: "Card declined: Transaction limit exceeded. Ask customer to contact their bank or use a different card.",
+  INSUFFICIENT_FUNDS: "Card declined: Insufficient funds.",
+  CARD_DECLINED: "Card was declined by the bank. Customer should contact their bank.",
+  GENERIC_DECLINE: "Card was declined. Customer should try a different card or contact their bank.",
+  EXPIRED_CARD: "Card has expired. Customer needs to update their card.",
+  INVALID_CARD: "Card information is invalid.",
+  CVV_FAILURE: "Card security code (CVV) did not match.",
+  ADDRESS_VERIFICATION_FAILURE: "Billing address verification failed.",
+  VOICE_FAILURE: "Card requires voice authorization — contact the bank.",
+  BAD_EXPIRY: "Card expiration date is invalid.",
+  CARD_NOT_SUPPORTED: "This card type is not supported.",
+  INVALID_ACCOUNT: "Card account is invalid or closed.",
+  CARD_VELOCITY_EXCEEDED: "Card declined: Too many transactions in a short period.",
+  PAYMENT_LIMIT_EXCEEDED: "Payment amount exceeds the allowed limit.",
+};
+
+function parseSquareError(err: unknown): string {
+  if (!(err instanceof Error)) return "Charge failed — unknown error";
+  const msg = err.message;
+  try {
+    // Square SDK throws "Status code: 400 Body: {...}"
+    const bodyMatch = msg.match(/Body:\s*(\{[\s\S]*)/);
+    if (bodyMatch) {
+      const parsed = JSON.parse(bodyMatch[1]);
+      const squareErr = parsed?.errors?.[0];
+      if (squareErr?.code && SQUARE_ERROR_MAP[squareErr.code]) {
+        return SQUARE_ERROR_MAP[squareErr.code];
+      }
+      if (squareErr?.detail) {
+        // Strip raw auth error wrappers like "Authorization error: 'TRANSACTION_LIMIT'"
+        const detail = squareErr.detail.replace(/^Authorization error:\s*'?|'?$/g, "").trim();
+        return SQUARE_ERROR_MAP[detail] || `Card declined: ${detail}`;
+      }
+      if (squareErr?.code) return `Card declined: ${squareErr.code}`;
+    }
+  } catch { /* fall through */ }
+  // If no parseable JSON, return the raw message up to 120 chars
+  return msg.length > 120 ? msg.slice(0, 120) + "…" : msg;
+}
+
 // ─── Auth check ───
 async function verifyAdmin(clerkUserId: string) {
   const supabase = createSupabaseAdmin();
@@ -431,16 +473,17 @@ export async function POST(request: NextRequest) {
               nextBillingDate: nextDate,
             });
           } catch (chargeErr) {
-            const errMsg = chargeErr instanceof Error ? chargeErr.message : "Charge failed";
-            // Log failure
+            const errMsg = parseSquareError(chargeErr);
+            const rawMsg = chargeErr instanceof Error ? chargeErr.message : String(chargeErr);
+            // Log failure (raw message for debugging)
             await supabase.from("billing_log").insert({
               subscription_id: id,
               customer_id: sub.customer_id,
               amount: sub.amount,
               status: "failed",
-              error_message: errMsg,
+              error_message: rawMsg.slice(0, 500),
             });
-            return NextResponse.json({ error: `Charge failed: ${errMsg}` }, { status: 400 });
+            return NextResponse.json({ error: errMsg }, { status: 400 });
           }
         }
         break;
