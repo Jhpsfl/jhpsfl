@@ -247,6 +247,15 @@ export default function AdminInvoices({ userId }: { userId: string }) {
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   // Service preset picker
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [presetCategory, setPresetCategory] = useState<string | null>(null);
@@ -815,14 +824,14 @@ Jenkins Home & Property Solutions
             </h1>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 24, alignItems: "start" }}>
             {/* ─── Left: Form ─── */}
             <div style={{
               background: "linear-gradient(160deg, #0d1f0d, #091409)",
               border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
             }}>
               {/* Customer & Invoice Info */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 24 }}>
                 <div>
                   <label style={labelStyle}>Customer *</label>
                   <select
@@ -897,71 +906,101 @@ Jenkins Home & Property Solutions
                   </div>
                 </div>
 
-                {/* Line item header */}
-                <div style={{
-                  display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px",
-                  gap: 8, padding: "8px 0", borderBottom: "1px solid #1a3a1a", marginBottom: 8,
-                }}>
-                  <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</span>
-                  <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Qty</span>
-                  <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Rate</span>
-                  <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", textAlign: "right" }}>Amount</span>
-                  <span />
-                </div>
+                {/* Line item header — desktop only */}
+                {!isMobile && (
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px",
+                    gap: 8, padding: "8px 0", borderBottom: "1px solid #1a3a1a", marginBottom: 8,
+                  }}>
+                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</span>
+                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Qty</span>
+                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Rate</span>
+                    <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", textAlign: "right" }}>Amount</span>
+                    <span />
+                  </div>
+                )}
 
                 {/* Line items */}
                 {form.line_items.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px",
-                      gap: 8, marginBottom: 8, alignItems: "center",
-                    }}
-                  >
-                    <input
-                      value={item.description}
-                      onChange={e => updateLineItem(item.id, "description", e.target.value)}
-                      placeholder="Service or item description"
-                      style={{ ...inputStyle, padding: "10px 12px", fontSize: 13 }}
-                    />
-                    <input
-                      value={item.quantity}
-                      onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
-                      inputMode="numeric"
-                      style={{ ...inputStyle, padding: "10px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
-                    />
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
+                  isMobile ? (
+                    /* Mobile: card layout */
+                    <div key={item.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
                       <input
-                        value={item.unit_price || ""}
-                        onChange={e => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        inputMode="decimal"
-                        style={{ ...inputStyle, padding: "10px 8px 10px 20px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}
+                        value={item.description}
+                        onChange={e => updateLineItem(item.id, "description", e.target.value)}
+                        placeholder="Service or item description"
+                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, width: "100%", boxSizing: "border-box", marginBottom: 8 }}
                       />
+                      <div style={{ display: "grid", gridTemplateColumns: "64px 1fr auto 32px", gap: 8, alignItems: "center" }}>
+                        <input
+                          value={item.quantity}
+                          onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
+                          inputMode="numeric"
+                          placeholder="Qty"
+                          style={{ ...inputStyle, padding: "8px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
+                        />
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
+                          <input
+                            value={item.unit_price || ""}
+                            onChange={e => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            inputMode="decimal"
+                            style={{ ...inputStyle, padding: "8px 8px 8px 20px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", width: "100%", boxSizing: "border-box" }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: item.amount > 0 ? "#4CAF50" : "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>
+                          {formatCurrency(item.amount)}
+                        </div>
+                        <button
+                          onClick={() => removeLineItem(item.id)}
+                          disabled={form.line_items.length === 1 && idx === 0}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: form.line_items.length === 1 && idx === 0 ? "#1a3a1a" : "#7a4a4a", cursor: form.line_items.length === 1 && idx === 0 ? "default" : "pointer" }}
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
                     </div>
-                    <div style={{
-                      textAlign: "right", fontSize: 14, fontWeight: 700,
-                      color: item.amount > 0 ? "#4CAF50" : "#3a5a3a",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      padding: "0 4px",
-                    }}>
-                      {formatCurrency(item.amount)}
-                    </div>
-                    <button
-                      onClick={() => removeLineItem(item.id)}
-                      disabled={form.line_items.length === 1 && idx === 0}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        width: 32, height: 32, borderRadius: 8, border: "none",
-                        background: "transparent", color: form.line_items.length === 1 && idx === 0 ? "#1a3a1a" : "#7a4a4a",
-                        cursor: form.line_items.length === 1 && idx === 0 ? "default" : "pointer",
-                        transition: "all 0.15s",
-                      }}
+                  ) : (
+                    /* Desktop: grid row */
+                    <div
+                      key={item.id}
+                      style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}
                     >
-                      <IconTrash />
-                    </button>
-                  </div>
+                      <input
+                        value={item.description}
+                        onChange={e => updateLineItem(item.id, "description", e.target.value)}
+                        placeholder="Service or item description"
+                        style={{ ...inputStyle, padding: "10px 12px", fontSize: 13 }}
+                      />
+                      <input
+                        value={item.quantity}
+                        onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
+                        inputMode="numeric"
+                        style={{ ...inputStyle, padding: "10px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
+                      />
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
+                        <input
+                          value={item.unit_price || ""}
+                          onChange={e => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          inputMode="decimal"
+                          style={{ ...inputStyle, padding: "10px 8px 10px 20px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}
+                        />
+                      </div>
+                      <div style={{ textAlign: "right", fontSize: 14, fontWeight: 700, color: item.amount > 0 ? "#4CAF50" : "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", padding: "0 4px" }}>
+                        {formatCurrency(item.amount)}
+                      </div>
+                      <button
+                        onClick={() => removeLineItem(item.id)}
+                        disabled={form.line_items.length === 1 && idx === 0}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: form.line_items.length === 1 && idx === 0 ? "#1a3a1a" : "#7a4a4a", cursor: form.line_items.length === 1 && idx === 0 ? "default" : "pointer", transition: "all 0.15s" }}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  )
                 ))}
               </div>
 
@@ -1107,11 +1146,12 @@ Jenkins Home & Property Solutions
             <StatusBadge status={selectedInvoice.status} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 24, alignItems: "start" }}>
             {/* Left: Invoice details */}
             <div style={{
               background: "linear-gradient(160deg, #0d1f0d, #091409)",
               border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
+              order: isMobile ? 1 : 0,
             }}>
               {/* Business header */}
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #1a3a1a" }}>
@@ -1218,11 +1258,12 @@ Jenkins Home & Property Solutions
               )}
             </div>
 
-            {/* Right: Actions sidebar */}
+            {/* Right: Actions sidebar — appears first on mobile */}
             <div style={{
               background: "linear-gradient(160deg, #0d1f0d, #091409)",
               border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 20px",
-              position: "sticky", top: 80,
+              position: isMobile ? "static" : "sticky", top: 80,
+              order: isMobile ? 0 : 1,
             }}>
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e8f5e8", fontWeight: 700, marginBottom: 20 }}>
                 Actions
