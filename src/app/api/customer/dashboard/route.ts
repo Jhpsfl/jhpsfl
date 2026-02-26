@@ -34,13 +34,14 @@ export async function GET(req: NextRequest) {
         jobs: [],
         payments: [],
         subscriptions: [],
+        invoices: [],
       });
     }
 
     const customerId = customer.id;
 
     // Fetch all related data in parallel
-    const [jobSitesRes, jobsRes, paymentsRes, subscriptionsRes] =
+    const [jobSitesRes, jobsRes, paymentsRes, subscriptionsRes, invoicesRes] =
       await Promise.all([
         supabase
           .from("job_sites")
@@ -51,20 +52,26 @@ export async function GET(req: NextRequest) {
           .from("jobs")
           .select("*")
           .eq("customer_id", customerId)
-          .order("created_at", { ascending: false })
-          .limit(10),
+          .order("scheduled_date", { ascending: false })
+          .limit(50),
         supabase
           .from("payments")
           .select("*")
           .eq("customer_id", customerId)
           .order("created_at", { ascending: false })
-          .limit(10),
+          .limit(50),
         supabase
           .from("subscriptions")
           .select("*")
           .eq("customer_id", customerId)
           .eq("status", "active")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("invoices")
+          .select("*")
+          .eq("customer_id", customerId)
+          .order("created_at", { ascending: false })
+          .limit(50),
       ]);
 
     return NextResponse.json({
@@ -73,6 +80,7 @@ export async function GET(req: NextRequest) {
       jobs: jobsRes.data || [],
       payments: paymentsRes.data || [],
       subscriptions: subscriptionsRes.data || [],
+      invoices: invoicesRes.data || [],
     });
   } catch (err) {
     console.error("Dashboard API error:", err);

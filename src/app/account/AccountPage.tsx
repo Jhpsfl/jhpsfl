@@ -51,6 +51,19 @@ interface Subscription {
   status: string;
   next_billing_date: string | null;
 }
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  subtotal: number;
+  tax_rate: number | null;
+  tax_amount: number | null;
+  total: number;
+  amount_paid: number | null;
+  status: string;
+  line_items: { description: string; amount: number }[] | null;
+  payment_link: string | null;
+  created_at: string;
+}
 interface StoredCard {
   id: string;
   brand: string | null;
@@ -66,6 +79,7 @@ interface DashboardData {
   jobs: Job[];
   payments: Payment[];
   subscriptions: Subscription[];
+  invoices: Invoice[];
 }
 
 const clerkAppearance = {
@@ -112,6 +126,10 @@ function StatusBadge({ status }: { status: string }) {
     pending: { bg: "rgba(255,167,38,0.15)", text: "#ffa726" },
     failed: { bg: "rgba(239,83,80,0.1)", text: "#ef5350" },
     paused: { bg: "rgba(255,167,38,0.15)", text: "#ffa726" },
+    draft: { bg: "rgba(158,158,158,0.12)", text: "#9e9e9e" },
+    sent: { bg: "rgba(33,150,243,0.15)", text: "#42a5f5" },
+    paid: { bg: "rgba(76,175,80,0.15)", text: "#66bb6a" },
+    overdue: { bg: "rgba(239,83,80,0.15)", text: "#ef5350" },
   };
   const c = colors[status] || { bg: "rgba(255,255,255,0.08)", text: "#aaa" };
   return (
@@ -270,6 +288,96 @@ function DashboardView() {
           </div>
         </div>
       )}
+
+      {/* Invoices */}
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>INVOICES</h3>
+        {data?.invoices && data.invoices.length > 0 ? (
+          <>
+            {/* Pending / Sent / Overdue invoices first */}
+            {data.invoices.filter(inv => ["sent", "overdue", "draft"].includes(inv.status)).length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, color: "#ffa726", fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>PENDING</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {data.invoices.filter(inv => ["sent", "overdue", "draft"].includes(inv.status)).map((inv) => (
+                    <div key={inv.id} style={{
+                      background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                      border: inv.status === "overdue" ? "1px solid rgba(239,83,80,0.3)" : "1px solid #1a3a1a",
+                      borderRadius: 14, padding: "16px 20px",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <p style={{ color: "#e8f5e8", fontWeight: 700, marginBottom: 2 }}>Invoice #{inv.invoice_number}</p>
+                          <p style={{ color: "#5a8a5a", fontSize: 12 }}>
+                            {new Date(inv.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <p style={{ color: "#ffa726", fontWeight: 700, fontSize: 18 }}>${inv.total.toFixed(2)}</p>
+                          <StatusBadge status={inv.status} />
+                        </div>
+                      </div>
+                      {inv.line_items && inv.line_items.length > 0 && (
+                        <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 8, marginTop: 4 }}>
+                          {inv.line_items.map((item, i) => (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", padding: "2px 0" }}>
+                              <span>{item.description}</span>
+                              <span>${item.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {inv.payment_link && (
+                        <a href={inv.payment_link} style={{
+                          display: "inline-block", marginTop: 10,
+                          background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                          padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                          textDecoration: "none",
+                        }}>
+                          Pay Now
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Paid / Cancelled invoices */}
+            {data.invoices.filter(inv => ["paid", "cancelled"].includes(inv.status)).length > 0 && (
+              <div>
+                <p style={{ fontSize: 11, color: "#66bb6a", fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>COMPLETED</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {data.invoices.filter(inv => ["paid", "cancelled"].includes(inv.status)).map((inv) => (
+                    <div key={inv.id} style={{
+                      background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                      border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+                    }}>
+                      <div>
+                        <p style={{ color: "#e8f5e8", fontWeight: 600, marginBottom: 2 }}>Invoice #{inv.invoice_number}</p>
+                        <p style={{ color: "#5a8a5a", fontSize: 12 }}>{new Date(inv.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ color: "#4CAF50", fontWeight: 700 }}>${inv.total.toFixed(2)}</span>
+                        <StatusBadge status={inv.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 14, padding: "24px",
+            textAlign: "center", color: "#3a5a3a",
+          }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>📄</p>
+            <p style={{ fontSize: 14 }}>No invoices yet.</p>
+          </div>
+        )}
+      </div>
 
       {/* Payment Methods */}
       <div style={{ marginBottom: 24 }}>
