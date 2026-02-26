@@ -2,6 +2,8 @@ import { SquareClient, SquareEnvironment, Currency, type OrderLineItem } from 's
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Resend } from 'resend';
+import { generateReceiptPDF, getReceiptFilename } from '@/lib/receipt-generator';
+import type { ReceiptData } from '@/lib/receipt-generator';
 
 const squareClient = new SquareClient({
   token: process.env.SQUARE_ACCESS_TOKEN?.trim()!,
@@ -181,9 +183,45 @@ export async function POST(request: Request) {
           }
         }
 
-        // ─── 5. Send receipt email ───
+        // ─── 5. Send receipt email with PDF attachment ───
         if (customerEmail) {
           try {
+            const paymentAmountCents = Math.round(parseFloat(amount) * 100);
+            const lineItemsCents: ReceiptData['lineItems'] = invoiceRecord?.line_items?.length
+              ? invoiceRecord.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => {
+                  const unitCents = Math.round((item.unit_price || item.amount || 0) * 100);
+                  const qty = item.quantity || 1;
+                  return {
+                    name: item.description || 'Service',
+                    quantity: qty,
+                    unitPrice: unitCents,
+                    totalPrice: unitCents * qty,
+                  };
+                })
+              : [{ name: service || 'JHPS Service', quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
+
+            const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
+            const subtotalCents = paymentAmountCents - taxCents;
+
+            const receiptData: ReceiptData = {
+              paymentId: result.payment.id || 'N/A',
+              paymentDate: new Date(),
+              customerName: customerName || 'Valued Customer',
+              customerEmail,
+              lineItems: lineItemsCents,
+              subtotal: subtotalCents,
+              taxAmount: taxCents,
+              totalAmount: paymentAmountCents,
+              paymentStatus: 'COMPLETED',
+              paymentMethod: result.payment.cardDetails
+                ? `${result.payment.cardDetails.card?.cardBrand || 'Card'} ending in ${result.payment.cardDetails.card?.last4 || '????'}`
+                : undefined,
+              orderId: orderId || undefined,
+            };
+
+            const pdfBuffer = await generateReceiptPDF(receiptData);
+            const pdfFilename = getReceiptFilename(receiptData);
+
             const receiptHtml = buildReceiptHtml({
               customerName: customerName || 'Valued Customer',
               amount: parseFloat(amount),
@@ -195,11 +233,18 @@ export async function POST(request: Request) {
               lineItems: invoiceRecord?.line_items || null,
               taxRate: taxRate || 0,
             });
+
             await resend.emails.send({
               from: 'JHPS Florida <info@jhpsfl.com>',
               to: [customerEmail],
               subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — Jenkins Home & Property Solutions`,
               html: receiptHtml,
+              attachments: [
+                {
+                  filename: pdfFilename,
+                  content: pdfBuffer.toString('base64'),
+                },
+              ],
             });
           } catch (emailErr) {
             console.error('RECEIPT_EMAIL_ERROR:', emailErr);
