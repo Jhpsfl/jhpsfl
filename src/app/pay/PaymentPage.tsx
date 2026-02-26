@@ -163,6 +163,25 @@ interface FormData {
   amount: string;
 }
 
+interface InvoiceLineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+interface InvoicePublicData {
+  invoice_number: string;
+  due_date: string | null;
+  line_items: InvoiceLineItem[];
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  status: string;
+}
+
 export default function PaymentPage() {
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -176,6 +195,10 @@ export default function PaymentPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [invoiceMode, setInvoiceMode] = useState(false);
+  const [invoiceData, setInvoiceData] = useState<InvoicePublicData | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   // Auto-fill from invoice payment link params
@@ -191,20 +214,38 @@ export default function PaymentPage() {
     const city = searchParams.get("city");
     const zip = searchParams.get("zip");
 
-    if (invoice || amount || name) {
-      setFormData(prev => ({
-        ...prev,
-        ...(name && { name }),
-        ...(email && { email }),
-        ...(phone && { phone }),
-        ...(address && { address }),
-        ...(city && { city }),
-        ...(zip && { zip }),
-        ...(service && { service }),
-        ...(description && { jobDescription: description }),
-        ...(invoice && { invoiceNumber: invoice }),
-        ...(amount && { amount }),
-      }));
+    setFormData(prev => ({
+      ...prev,
+      ...(name && { name }),
+      ...(email && { email }),
+      ...(phone && { phone }),
+      ...(address && { address }),
+      ...(city && { city }),
+      ...(zip && { zip }),
+      ...(service && { service }),
+      ...(description && { jobDescription: description }),
+      ...(invoice && { invoiceNumber: invoice }),
+      ...(amount && { amount }),
+    }));
+
+    // Invoice mode: fetch line items from the server
+    if (invoice) {
+      setInvoiceMode(true);
+      setInvoiceLoading(true);
+      setInvoiceError(null);
+      fetch(`/api/invoice/public/${encodeURIComponent(invoice)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.invoice) {
+            setInvoiceData(data.invoice);
+            // Lock the amount to the real invoice total
+            setFormData(prev => ({ ...prev, amount: data.invoice.total.toFixed(2) }));
+          } else {
+            setInvoiceError(data.error || "Could not load invoice details.");
+          }
+        })
+        .catch(() => setInvoiceError("Could not load invoice details."))
+        .finally(() => setInvoiceLoading(false));
     }
   }, [searchParams]);
 
@@ -718,109 +759,222 @@ export default function PaymentPage() {
                 <div>
                   {/* ─── Step 1: Details ─── */}
                   {step === "form" && (
-                    <div style={{
-                      background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
-                      border: "1px solid #1a3a1a", borderRadius: 20, padding: "36px 32px",
-                    }}>
-                      <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700, marginBottom: 28 }}>
-                        Your Information
-                      </h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                        {/* Name + Phone row */}
-                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                          <div ref={nameRef} className={showErrors && !formData.name ? "field-invalid" : ""}>
-                            <label style={labelStyle}>Full Name *</label>
-                            <input className="pay-input" placeholder="John Smith" value={formData.name}
-                              onChange={(e) => updateField("name", e.target.value)} />
-                            {showErrors && !formData.name && <span className="field-error-msg">Name is required</span>}
+                      {/* ── Invoice Summary (invoice mode only) ── */}
+                      {invoiceMode && (
+                        <div style={{
+                          background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
+                          border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700 }}>
+                              Invoice Summary
+                            </h2>
+                            {invoiceData && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+                                color: "#4CAF50", background: "rgba(76,175,80,0.1)",
+                                border: "1px solid rgba(76,175,80,0.2)", borderRadius: 8,
+                                padding: "4px 12px", fontWeight: 600,
+                              }}>
+                                {invoiceData.invoice_number}
+                              </span>
+                            )}
                           </div>
-                          <div ref={phoneRef} className={showErrors && !formData.phone ? "field-invalid" : ""}>
-                            <label style={labelStyle}>Phone Number *</label>
-                            <input className="pay-input" placeholder="(407) 555-0123" type="tel" value={formData.phone}
-                              onChange={(e) => updateField("phone", e.target.value)} />
-                            {showErrors && !formData.phone && <span className="field-error-msg">Phone is required</span>}
-                          </div>
-                        </div>
 
-                        {/* Email */}
-                        <div ref={emailRef} className={showErrors && !formData.email ? "field-invalid" : ""}>
-                          <label style={labelStyle}>Email *</label>
-                          <input className="pay-input" placeholder="john@example.com" type="email" value={formData.email}
-                            onChange={(e) => updateField("email", e.target.value)} />
-                          {showErrors && !formData.email && <span className="field-error-msg">Email is required</span>}
-                        </div>
-
-                        {/* Address */}
-                        <div ref={addressRef} className={showErrors && !formData.address ? "field-invalid" : ""}>
-                          <label style={labelStyle}>Property Address *</label>
-                          <input className="pay-input" placeholder="123 Main Street" value={formData.address}
-                            onChange={(e) => updateField("address", e.target.value)} />
-                          {showErrors && !formData.address && <span className="field-error-msg">Address is required</span>}
-                        </div>
-
-                        {/* City + Zip row */}
-                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
-                          <div>
-                            <label style={labelStyle}>City</label>
-                            <input className="pay-input" placeholder="Deltona" value={formData.city}
-                              onChange={(e) => updateField("city", e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={labelStyle}>Zip Code</label>
-                            <input className="pay-input" placeholder="32725" value={formData.zip}
-                              onChange={(e) => updateField("zip", e.target.value)} />
-                          </div>
-                        </div>
-
-                        {/* Service */}
-                        <div>
-                          <label style={labelStyle}>Service Type</label>
-                          <select className="pay-select" value={formData.service}
-                            onChange={(e) => updateField("service", e.target.value)}>
-                            <option value="">Select a service</option>
-                            <option value="Lawn Care">Lawn Care</option>
-                            <option value="Pressure Washing">Pressure Washing / Soft Wash</option>
-                            <option value="Junk Removal">Junk Removal</option>
-                            <option value="Land Clearing">Land Clearing</option>
-                            <option value="Property Cleanup">Property Cleanups</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-
-                        {/* Job Description */}
-                        <div>
-                          <label style={labelStyle}>Job Description</label>
-                          <textarea className="pay-input" placeholder="Describe the work being paid for..." rows={3}
-                            value={formData.jobDescription}
-                            onChange={(e) => updateField("jobDescription", e.target.value)}
-                            style={{ resize: "vertical" }} />
-                        </div>
-
-                        {/* Invoice + Amount row */}
-                        <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                          <div>
-                            <label style={labelStyle}>Invoice # (optional)</label>
-                            <input className="pay-input" placeholder="INV-001" value={formData.invoiceNumber}
-                              onChange={(e) => updateField("invoiceNumber", e.target.value)} />
-                          </div>
-                          <div ref={amountRef} className={showErrors && !(formData.amount && parseFloat(formData.amount) > 0) ? "field-invalid" : ""}>
-                            <label style={labelStyle}>Payment Amount *</label>
-                            <div className="amount-input-wrapper">
-                              <input className="pay-input amount-input" placeholder="0.00" value={formData.amount}
-                                onChange={(e) => updateField("amount", formatAmount(e.target.value))}
-                                inputMode="decimal" />
+                          {invoiceLoading && (
+                            <div style={{ color: "#4a7a4a", fontSize: 14, textAlign: "center", padding: "20px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                              <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+                              Loading invoice…
                             </div>
-                            {showErrors && !(formData.amount && parseFloat(formData.amount) > 0) && <span className="field-error-msg">Enter a valid amount</span>}
+                          )}
+
+                          {invoiceError && (
+                            <div style={{ color: "#ef9a9a", fontSize: 14, padding: "12px 16px", background: "rgba(244,67,54,0.08)", border: "1px solid rgba(244,67,54,0.2)", borderRadius: 10 }}>
+                              ⚠️ {invoiceError}
+                            </div>
+                          )}
+
+                          {invoiceData && !invoiceLoading && (
+                            <>
+                              {invoiceData.due_date && (
+                                <div style={{ fontSize: 13, color: "#7a9a7a", marginBottom: 16 }}>
+                                  Due: <span style={{ color: "#c8e0c8", fontWeight: 600 }}>
+                                    {new Date(invoiceData.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Line items */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
+                                {invoiceData.line_items.map((item, i) => (
+                                  <div key={item.id || i} style={{
+                                    display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                                    padding: "10px 0",
+                                    borderBottom: i < invoiceData.line_items.length - 1 ? "1px solid #112a11" : "none",
+                                  }}>
+                                    <div style={{ flex: 1, marginRight: 16 }}>
+                                      <span style={{ fontSize: 14, color: "#c8e0c8" }}>{item.description}</span>
+                                      {item.quantity > 1 && (
+                                        <span style={{ fontSize: 12, color: "#5a8a5a", marginLeft: 8 }}>× {item.quantity}</span>
+                                      )}
+                                    </div>
+                                    <span style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                                      ${item.amount.toFixed(2)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Totals */}
+                              <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                  <span>Subtotal</span>
+                                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.subtotal.toFixed(2)}</span>
+                                </div>
+                                {invoiceData.tax_rate > 0 && (
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                    <span>Tax ({invoiceData.tax_rate}%)</span>
+                                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
+                                  </div>
+                                )}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
+                                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>Total Due</span>
+                                  <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                    ${invoiceData.total.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Contact Information ── */}
+                      <div style={{
+                        background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
+                        border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                      }}>
+                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700, marginBottom: 20 }}>
+                          {invoiceMode ? "Contact Information" : "Your Information"}
+                        </h2>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                          {/* Name + Phone row */}
+                          <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                            <div ref={nameRef} className={showErrors && !formData.name ? "field-invalid" : ""}>
+                              <label style={labelStyle}>Full Name *</label>
+                              <input className="pay-input" placeholder="John Smith" value={formData.name}
+                                onChange={(e) => updateField("name", e.target.value)} />
+                              {showErrors && !formData.name && <span className="field-error-msg">Name is required</span>}
+                            </div>
+                            <div ref={phoneRef} className={showErrors && !formData.phone ? "field-invalid" : ""}>
+                              <label style={labelStyle}>Phone Number *</label>
+                              <input className="pay-input" placeholder="(407) 555-0123" type="tel" value={formData.phone}
+                                onChange={(e) => updateField("phone", e.target.value)} />
+                              {showErrors && !formData.phone && <span className="field-error-msg">Phone is required</span>}
+                            </div>
+                          </div>
+
+                          {/* Email */}
+                          <div ref={emailRef} className={showErrors && !formData.email ? "field-invalid" : ""}>
+                            <label style={labelStyle}>Email *</label>
+                            <input className="pay-input" placeholder="john@example.com" type="email" value={formData.email}
+                              onChange={(e) => updateField("email", e.target.value)} />
+                            {showErrors && !formData.email && <span className="field-error-msg">Email is required</span>}
+                          </div>
+
+                          {/* Generic mode only: Service + Description + Invoice# + Amount */}
+                          {!invoiceMode && (
+                            <>
+                              {/* Service */}
+                              <div>
+                                <label style={labelStyle}>Service Type</label>
+                                <select className="pay-select" value={formData.service}
+                                  onChange={(e) => updateField("service", e.target.value)}>
+                                  <option value="">Select a service</option>
+                                  <option value="Lawn Care">Lawn Care</option>
+                                  <option value="Pressure Washing">Pressure Washing / Soft Wash</option>
+                                  <option value="Junk Removal">Junk Removal</option>
+                                  <option value="Land Clearing">Land Clearing</option>
+                                  <option value="Property Cleanup">Property Cleanups</option>
+                                  <option value="Other">Other</option>
+                                </select>
+                              </div>
+
+                              {/* Job Description */}
+                              <div>
+                                <label style={labelStyle}>Job Description</label>
+                                <textarea className="pay-input" placeholder="Describe the work being paid for..." rows={3}
+                                  value={formData.jobDescription}
+                                  onChange={(e) => updateField("jobDescription", e.target.value)}
+                                  style={{ resize: "vertical" }} />
+                              </div>
+
+                              {/* Invoice + Amount row */}
+                              <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                <div>
+                                  <label style={labelStyle}>Invoice # (optional)</label>
+                                  <input className="pay-input" placeholder="INV-001" value={formData.invoiceNumber}
+                                    onChange={(e) => updateField("invoiceNumber", e.target.value)} />
+                                </div>
+                                <div ref={amountRef} className={showErrors && !(formData.amount && parseFloat(formData.amount) > 0) ? "field-invalid" : ""}>
+                                  <label style={labelStyle}>Payment Amount *</label>
+                                  <div className="amount-input-wrapper">
+                                    <input className="pay-input amount-input" placeholder="0.00" value={formData.amount}
+                                      onChange={(e) => updateField("amount", formatAmount(e.target.value))}
+                                      inputMode="decimal" />
+                                  </div>
+                                  {showErrors && !(formData.amount && parseFloat(formData.amount) > 0) && <span className="field-error-msg">Enter a valid amount</span>}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ── Billing Address ── */}
+                      <div style={{
+                        background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
+                        border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                      }}>
+                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700, marginBottom: 8 }}>
+                          Billing Address
+                        </h2>
+                        <p style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 20 }}>
+                          {invoiceMode
+                            ? "Confirm or enter your billing address for this payment."
+                            : "Enter your service address."}
+                        </p>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                          <div ref={addressRef} className={showErrors && !formData.address ? "field-invalid" : ""}>
+                            <label style={labelStyle}>Street Address *</label>
+                            <input className="pay-input" placeholder="123 Main Street" value={formData.address}
+                              onChange={(e) => updateField("address", e.target.value)} />
+                            {showErrors && !formData.address && <span className="field-error-msg">Address is required</span>}
+                          </div>
+
+                          <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                            <div>
+                              <label style={labelStyle}>City</label>
+                              <input className="pay-input" placeholder="Deltona" value={formData.city}
+                                onChange={(e) => updateField("city", e.target.value)} />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Zip Code</label>
+                              <input className="pay-input" placeholder="32725" value={formData.zip}
+                                onChange={(e) => updateField("zip", e.target.value)} />
+                            </div>
                           </div>
                         </div>
-
-                        {/* Continue button */}
-                        <button className="cta-pay" onClick={handleContinue}
-                          style={{ marginTop: 8 }}>
-                          Continue to Payment →
-                        </button>
                       </div>
+
+                      {/* Continue button */}
+                      <button className="cta-pay" onClick={handleContinue} style={{ marginTop: 4 }}>
+                        Continue to Payment →
+                      </button>
                     </div>
                   )}
 
@@ -902,11 +1056,11 @@ export default function PaymentPage() {
                     Payment Summary
                   </h3>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
                     {[
                       ["Customer", formData.name || "—"],
                       ["Phone", formData.phone || "—"],
-                      ["Service", formData.service || "—"],
+                      ...(!invoiceMode ? [["Service", formData.service || "—"]] : []),
                       ["Invoice", formData.invoiceNumber || "—"],
                     ].map(([label, value]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
@@ -916,9 +1070,32 @@ export default function PaymentPage() {
                     ))}
                   </div>
 
+                  {/* Invoice line items in summary sidebar */}
+                  {invoiceMode && invoiceData && invoiceData.line_items.length > 0 && (
+                    <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Services</div>
+                      {invoiceData.line_items.map((item, i) => (
+                        <div key={item.id || i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+                          <span style={{ color: "#8aba8a", flex: 1, marginRight: 8, lineHeight: 1.4 }}>
+                            {item.description}{item.quantity > 1 ? ` ×${item.quantity}` : ""}
+                          </span>
+                          <span style={{ color: "#c8e0c8", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                            ${item.amount.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                      {invoiceData.tax_rate > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: "#5a8a5a" }}>
+                          <span>Tax ({invoiceData.tax_rate}%)</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 24 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>Total</span>
+                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>Total Due</span>
                       <span style={{
                         fontSize: 32, fontWeight: 800, color: "#4CAF50",
                         fontFamily: "'JetBrains Mono', monospace",
