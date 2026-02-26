@@ -680,13 +680,20 @@ export default function AdminDashboard() {
   // The listener itself is registered once (empty deps) via the ref indirection.
   const popstateHandlerRef = useRef<() => void>(() => {});
 
-  // ─── Push 2 sentinel entries on mount ───
-  // Browser history is only used as a trigger — all nav state lives in tabHistoryRef.
-  // 2 entries keeps Android from seeing history.length hit 1 (which closes the TWA).
-  useEffect(() => {
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+  // ─── Sentinel push helper ───
+  // Uses a unique hash URL on every push so Android TWA counts each entry as a
+  // real navigation (same-URL pushState is invisible to the TWA runtime and does
+  // NOT prevent the activity from closing on back press).
+  const pushSentinel = useCallback(() => {
+    const n = Date.now();
+    window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
   }, []);
+
+  // ─── Push 2 sentinel entries on mount ───
+  useEffect(() => {
+    pushSentinel();
+    pushSentinel();
+  }, [pushSentinel]);
 
   // ─── Register popstate listener once, in CAPTURE phase ───
   // Capture phase runs before Next.js's bubble-phase router listener.
@@ -777,9 +784,9 @@ export default function AdminDashboard() {
 
   // ─── Update popstate handler every render (always fresh, never stale) ───
   popstateHandlerRef.current = () => {
-    // Repush 2 sentinel entries so the TWA always has history to go back through
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
-    window.history.pushState({ sentinel: true, ts: Date.now() }, "");
+    // Repush 2 sentinel entries — hash URLs so Android TWA counts them as real navigations
+    pushSentinel();
+    pushSentinel();
 
     // P1: Close dashboard-level modals
     if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
