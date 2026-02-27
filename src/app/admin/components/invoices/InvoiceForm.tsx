@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./invoiceTypes";
+import type { Invoice, InvoiceLineItem, Customer, CustomerJob, PaymentTerms } from "./invoiceTypes";
 import { formatCurrency, formatDate } from "./invoiceHelpers";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconPlus, IconSend, IconTrash, IconBack } from "./InvoiceIcons";
+import PaymentTermsConfig from "./PaymentTermsConfig";
 
 export default function InvoiceForm({
   view, isMobile, form, setForm, customers, selectedInvoice,
@@ -25,6 +26,7 @@ export default function InvoiceForm({
     tax_rate: number;
     notes: string;
     line_items: InvoiceLineItem[];
+    payment_terms: PaymentTerms | null;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -393,6 +395,13 @@ export default function InvoiceForm({
             ))}
           </div>
 
+          {/* ─── Payment Terms Config ─── */}
+          <PaymentTermsConfig
+            terms={form.payment_terms}
+            total={total}
+            onChange={(newTerms) => setForm(prev => ({ ...prev, payment_terms: newTerms }))}
+          />
+
           {/* Notes */}
           <div>
             <label style={labelStyle}>Notes / Message to Customer</label>
@@ -501,6 +510,25 @@ export default function InvoiceForm({
                 {formatCurrency(total)}
               </span>
             </div>
+
+            {/* Payment terms preview in sidebar */}
+            {form.payment_terms && form.payment_terms.type !== "full" && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #1a3a1a" }}>
+                <div style={{ fontSize: 10, color: "#ffb74d", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+                  💳 {form.payment_terms.type === "deposit_balance" ? "Deposit + Balance" : "Installment Plan"}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#4CAF50", marginBottom: 2 }}>
+                  <span>Deposit</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{formatCurrency(form.payment_terms.deposit_amount)}</span>
+                </div>
+                {form.payment_terms.schedule.slice(1).map((item, idx) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8aba8a", marginBottom: 2 }}>
+                    <span>{item.label}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {form.show_due_date && form.due_date && (

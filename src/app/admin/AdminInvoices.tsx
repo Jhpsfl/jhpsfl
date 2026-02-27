@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
-import { generateInvoiceNumber, formatCurrency, getDefaultDueDate, createLineItemId } from "./components/invoices/invoiceHelpers";
+import type { Invoice, InvoiceLineItem, Customer, CustomerJob, PaymentTerms, PaymentScheduleItem } from "./components/invoices/invoiceTypes";
+import { generateInvoiceNumber, formatCurrency, getDefaultDueDate, createLineItemId, getDisclaimer } from "./components/invoices/invoiceHelpers";
 import InvoiceListView from "./components/invoices/InvoiceListView";
 import InvoiceForm from "./components/invoices/InvoiceForm";
 import InvoiceDetailView from "./components/invoices/InvoiceDetailView";
 import SendInvoiceModal from "./components/invoices/SendInvoiceModal";
 import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
+import RecordPaymentModal from "./components/invoices/RecordPaymentModal";
 
 // Re-export types for external consumers
 export type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
@@ -33,7 +34,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const [newCustomerForm, setNewCustomerForm] = useState({ name: "", email: "", phone: "" });
   const [savingNewCustomer, setSavingNewCustomer] = useState(false);
 
-  // Invoice form state
+  // Invoice form state — now includes payment_terms
   const [form, setForm] = useState({
     customer_id: null as string | null,
     invoice_number: generateInvoiceNumber(),
@@ -42,6 +43,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     tax_rate: 0,
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as InvoiceLineItem[],
+    payment_terms: null as PaymentTerms | null,
   });
 
   // Send modal
@@ -53,6 +55,9 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // Confirm delete modal
   const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<Invoice | null>(null);
 
+  // Record payment modal
+  const [recordPaymentItem, setRecordPaymentItem] = useState<PaymentScheduleItem | null>(null);
+
   // Jobs for the currently selected customer
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -60,6 +65,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
+      if (recordPaymentItem) { setRecordPaymentItem(null); return true; }
       if (confirmDeleteInvoice) { setConfirmDeleteInvoice(null); return true; }
       if (showNewCustomer) { setShowNewCustomer(false); return true; }
       if (showSendModal) { setShowSendModal(false); return true; }
@@ -112,6 +118,16 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       ...(invoice.line_items?.[0]?.description && { service: invoice.line_items[0].description }),
       ...(invoice.notes && { description: invoice.notes }),
     });
+
+    // If payment terms with deposit, show next unpaid amount in link
+    if (invoice.payment_terms && invoice.payment_terms.type !== "full") {
+      const nextPayment = invoice.payment_terms.schedule.find(s => s.status !== "paid");
+      if (nextPayment) {
+        params.set("amount", nextPayment.amount.toFixed(2));
+        params.set("payment_label", nextPayment.label);
+      }
+    }
+
     return `${baseUrl}/pay?${params.toString()}`;
   };
 
@@ -272,6 +288,15 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       return;
     }
 
+    // Build notes — append legal disclaimer if payment terms are set
+    let finalNotes = form.notes || "";
+    if (form.payment_terms && form.payment_terms.type !== "full") {
+      const disclaimer = getDisclaimer(form.payment_terms.type);
+      if (disclaimer && !finalNotes.includes(disclaimer)) {
+        finalNotes = finalNotes ? `${finalNotes}\n\n${disclaimer}` : disclaimer;
+      }
+    }
+
     const payload: Record<string, unknown> = {
       customer_id: (form.customer_id && form.customer_id !== "__link_only__") ? form.customer_id : null,
       invoice_number: form.invoice_number,
@@ -281,13 +306,16 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       subtotal,
       total,
       amount_paid: 0,
-      notes: form.notes || null,
+      notes: finalNotes || null,
       status: asDraft ? "draft" : "sent",
       line_items: form.line_items.filter(item => item.description && item.amount > 0),
+      payment_terms: form.payment_terms || null,
     };
 
     if (view === "edit" && selectedInvoice) {
       payload.id = selectedInvoice.id;
+      // Preserve existing amount_paid when editing
+      payload.amount_paid = selectedInvoice.amount_paid || 0;
     }
 
     const action = view === "edit" ? "update" : "create";
@@ -379,6 +407,75 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     }
   };
 
+  // ─── Record payment against a schedule item ───
+  const handleRecordPayment = async (data: {
+    scheduleItemId: string;
+    paid_amount: number;
+    payment_method: string;
+    paid_date: string;
+    notes: string;
+  }) => {
+    if (!selectedInvoice || !selectedInvoice.payment_terms) return;
+
+    // Update the schedule item locally
+    const updatedSchedule = selectedInvoice.payment_terms.schedule.map(item => {
+      if (item.id !== data.scheduleItemId) return item;
+      return {
+        ...item,
+        status: data.paid_amount >= item.amount ? "paid" as const : "pending" as const,
+        paid_amount: data.paid_amount,
+        paid_date: data.paid_date,
+        payment_method: data.payment_method,
+        notes: data.notes || item.notes,
+      };
+    });
+
+    const updatedTerms: PaymentTerms = {
+      ...selectedInvoice.payment_terms,
+      schedule: updatedSchedule,
+    };
+
+    // Calculate total amount paid across all schedule items
+    const totalPaid = updatedSchedule.reduce((sum, item) => sum + item.paid_amount, 0);
+    const allPaid = updatedSchedule.every(item => item.status === "paid");
+
+    // Determine invoice status
+    let newStatus: string = selectedInvoice.status;
+    if (allPaid) {
+      newStatus = "paid";
+    } else if (totalPaid > 0) {
+      newStatus = "partial";
+    }
+
+    const res = await adminPost("invoices", "update", {
+      id: selectedInvoice.id,
+      payment_terms: updatedTerms,
+      amount_paid: totalPaid,
+      status: newStatus,
+      ...(allPaid ? { paid_date: new Date().toISOString() } : {}),
+    });
+
+    if (res?.success || res?.data) {
+      showToast(`Payment of ${formatCurrency(data.paid_amount)} recorded`);
+
+      // Update local state immediately
+      const updatedInvoice: Invoice = {
+        ...selectedInvoice,
+        payment_terms: updatedTerms,
+        amount_paid: totalPaid,
+        status: newStatus as Invoice["status"],
+        ...(allPaid ? { paid_date: new Date().toISOString() } : {}),
+      };
+      setSelectedInvoice(updatedInvoice);
+
+      await loadInvoices();
+    } else {
+      showToast(res?.error || "Failed to record payment", "error");
+    }
+
+    setRecordPaymentItem(null);
+  };
+
   // ─── Delete invoice ───
   const handleDeleteInvoice = (invoice: Invoice) => {
     setConfirmDeleteInvoice(invoice);
@@ -421,6 +518,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       tax_rate: 0,
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
+      payment_terms: null,
     });
   };
 
@@ -438,6 +536,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       line_items: invoice.line_items?.length
         ? invoice.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
         : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
+      payment_terms: invoice.payment_terms || null,
     });
     setView("edit");
   };
@@ -463,8 +562,8 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     sent: invoices.filter(i => i.status === "sent").length,
     paid: invoices.filter(i => i.status === "paid").length,
     overdue: invoices.filter(i => i.status === "overdue").length,
-    totalOwed: invoices.filter(i => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + i.total, 0),
-    totalPaid: invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.total, 0),
+    totalOwed: invoices.filter(i => ["sent", "overdue", "partial"].includes(i.status)).reduce((s, i) => s + (i.total - i.amount_paid), 0),
+    totalPaid: invoices.filter(i => ["paid", "partial"].includes(i.status)).reduce((s, i) => s + i.amount_paid, 0),
   };
 
   // ─── RENDER ───
@@ -547,6 +646,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           onEdit={startEditInvoice}
           onDelete={handleDeleteInvoice}
           onNavigate={onNavigate}
+          onRecordPayment={(item) => setRecordPaymentItem(item)}
         />
       )}
 
@@ -582,6 +682,14 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           invoice={confirmDeleteInvoice}
           onConfirm={confirmDeleteInvoiceAction}
           onClose={() => setConfirmDeleteInvoice(null)}
+        />
+      )}
+
+      {recordPaymentItem && (
+        <RecordPaymentModal
+          scheduleItem={recordPaymentItem}
+          onConfirm={handleRecordPayment}
+          onClose={() => setRecordPaymentItem(null)}
         />
       )}
 

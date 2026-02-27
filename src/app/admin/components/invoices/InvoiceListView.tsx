@@ -94,8 +94,8 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
             style={{ paddingLeft: 36 }}
           />
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["all", "draft", "sent", "paid", "overdue"].map(status => (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["all", "draft", "sent", "partial", "paid", "overdue"].map(status => (
             <button
               key={status}
               onClick={() => setFilterStatus(status)}
@@ -148,7 +148,7 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'DM Sans', sans-serif" }}>
             <thead>
               <tr style={{ background: "#0a160a" }}>
-                {["Invoice #", "Customer", "Status", "Amount", "Due Date", "Created", "Actions"].map(h => (
+                {["Invoice #", "Customer", "Status", "Amount", "Paid", "Due Date", "Created", "Actions"].map(h => (
                   <th key={h} style={{
                     padding: "14px 12px", textAlign: "left", fontSize: 11,
                     color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5,
@@ -161,6 +161,7 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
             <tbody>
               {filteredInvoices.map(inv => {
                 const customer = inv.customers || customers.find(c => c.id === inv.customer_id);
+                const hasTerms = inv.payment_terms && inv.payment_terms.type !== "full";
                 return (
                   <tr
                     key={inv.id}
@@ -176,10 +177,18 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
                       {inv.customer_id ? (customer?.name || customer?.email || "—") : "🔗 Link Only"}
                     </td>
                     <td style={{ padding: "14px 12px", borderBottom: "1px solid #0d1a0d" }}>
-                      <InvoiceStatusBadge status={inv.status} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <InvoiceStatusBadge status={inv.status} />
+                        {hasTerms && (
+                          <span style={{ fontSize: 10, color: "#ffb74d", fontWeight: 600 }} title="Has payment plan">💳</span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: "14px 12px", fontSize: 14, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, borderBottom: "1px solid #0d1a0d" }}>
                       {formatCurrency(inv.total)}
+                    </td>
+                    <td style={{ padding: "14px 12px", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", borderBottom: "1px solid #0d1a0d", color: inv.amount_paid > 0 ? "#66bb6a" : "#3a5a3a" }}>
+                      {inv.amount_paid > 0 ? formatCurrency(inv.amount_paid) : "—"}
                     </td>
                     <td style={{ padding: "14px 12px", fontSize: 13, color: "#8aba8a", borderBottom: "1px solid #0d1a0d" }}>
                       {formatDate(inv.due_date)}
@@ -199,7 +208,7 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
                             <IconLink /> Link
                           </button>
                         )}
-                        {["draft", "sent", "overdue"].includes(inv.status) && (
+                        {["draft", "sent", "overdue", "partial"].includes(inv.status) && (
                           <button
                             onClick={() => onSend(inv)}
                             title="Send invoice"

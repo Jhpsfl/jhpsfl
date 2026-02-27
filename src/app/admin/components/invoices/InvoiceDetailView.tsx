@@ -1,12 +1,13 @@
 "use client";
 
 import React from "react";
-import type { Invoice } from "./invoiceTypes";
+import type { Invoice, PaymentScheduleItem } from "./invoiceTypes";
 import { formatCurrency, formatDate } from "./invoiceHelpers";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconSend, IconCopy, IconEdit, IconTrash, IconBack } from "./InvoiceIcons";
+import PaymentScheduleView from "./PaymentScheduleView";
 
-export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate }: {
+export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment }: {
   invoice: Invoice;
   isMobile: boolean;
   copiedLink: boolean;
@@ -17,7 +18,10 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   onEdit: (inv: Invoice) => void;
   onDelete: (inv: Invoice) => void;
   onNavigate?: () => void;
+  onRecordPayment?: (scheduleItem: PaymentScheduleItem) => void;
 }) {
+  const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
+
   return (
     <>
       {/* Header */}
@@ -40,121 +44,140 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 24, alignItems: "start" }}>
         {/* Left: Invoice details */}
-        <div style={{
-          background: "linear-gradient(160deg, #0d1f0d, #091409)",
-          border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
-          order: isMobile ? 1 : 0,
-        }}>
-          {/* Business header */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #1a3a1a" }}>
-            <div>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: "#4CAF50", marginBottom: 4 }}>
-                Jenkins Home & Property Solutions
-              </div>
-              <div style={{ fontSize: 12, color: "#5a8a5a", lineHeight: 1.8 }}>
-                Central Florida<br />
-                📞 407-686-9817<br />
-                ✉️ Info@jhpsfl.com
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#e8f5e8", fontFamily: "'Playfair Display', serif" }}>INVOICE</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>
-                {invoice.invoice_number}
-              </div>
-              <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 8 }}>
-                Date: {formatDate(invoice.created_at)}
-                {invoice.due_date && <><br />Due: {formatDate(invoice.due_date)}</>}
-              </div>
-            </div>
-          </div>
-
-          {/* Bill To */}
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Bill To</div>
-            {invoice.customer_id ? (
-              <>
-                <div style={{ fontSize: 15, color: "#c8e0c8", fontWeight: 600 }}>
-                  {invoice.customers?.name || "—"}
+        <div style={{ order: isMobile ? 1 : 0 }}>
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
+          }}>
+            {/* Business header */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #1a3a1a" }}>
+              <div>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: "#4CAF50", marginBottom: 4 }}>
+                  Jenkins Home & Property Solutions
                 </div>
-                {invoice.customers?.email && (
-                  <div style={{ fontSize: 13, color: "#5a8a5a" }}>{invoice.customers.email}</div>
+                <div style={{ fontSize: 12, color: "#5a8a5a", lineHeight: 1.8 }}>
+                  Central Florida<br />
+                  📞 407-686-9817<br />
+                  ✉️ Info@jhpsfl.com
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#e8f5e8", fontFamily: "'Playfair Display', serif" }}>INVOICE</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>
+                  {invoice.invoice_number}
+                </div>
+                <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 8 }}>
+                  Date: {formatDate(invoice.created_at)}
+                  {invoice.due_date && <><br />Due: {formatDate(invoice.due_date)}</>}
+                </div>
+              </div>
+            </div>
+
+            {/* Bill To */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Bill To</div>
+              {invoice.customer_id ? (
+                <>
+                  <div style={{ fontSize: 15, color: "#c8e0c8", fontWeight: 600 }}>
+                    {invoice.customers?.name || "—"}
+                  </div>
+                  {invoice.customers?.email && (
+                    <div style={{ fontSize: 13, color: "#5a8a5a" }}>{invoice.customers.email}</div>
+                  )}
+                  {invoice.customers?.phone && (
+                    <div style={{ fontSize: 13, color: "#5a8a5a" }}>{invoice.customers.phone}</div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600 }}>
+                  🔗 Link Only — recipient fills in their info at payment
+                </div>
+              )}
+            </div>
+
+            {/* Line items table */}
+            <div style={{ borderRadius: 12, border: "1px solid #1a3a1a", overflow: "hidden", marginBottom: 20 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#0a160a" }}>
+                    <th style={{ padding: "12px 14px", textAlign: "left", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</th>
+                    <th style={{ padding: "12px 14px", textAlign: "center", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 60 }}>Qty</th>
+                    <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Rate</th>
+                    <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(invoice.line_items || []).map((item, idx) => (
+                    <tr key={idx} style={{ borderTop: "1px solid #0d1a0d" }}>
+                      <td style={{ padding: "12px 14px", fontSize: 14, color: "#c8e0c8" }}>{item.description}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}>{item.quantity}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(item.unit_price)}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 14, color: "#4CAF50", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{formatCurrency(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ width: 260 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
+                  <span>Subtotal</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.subtotal)}</span>
+                </div>
+                {invoice.tax_rate > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
+                    <span>Tax ({invoice.tax_rate}%)</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.tax_amount)}</span>
+                  </div>
                 )}
-                {invoice.customers?.phone && (
-                  <div style={{ fontSize: 13, color: "#5a8a5a" }}>{invoice.customers.phone}</div>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                  padding: "12px 0", borderTop: "2px solid #1a3a1a", marginTop: 4,
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e8f5e8" }}>Total</span>
+                  <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                    {formatCurrency(invoice.total)}
+                  </span>
+                </div>
+                {(invoice.status === "paid" || invoice.amount_paid > 0) && (
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", padding: "8px 0",
+                    fontSize: 13, color: "#66bb6a", fontWeight: 600,
+                  }}>
+                    <span>Paid</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.amount_paid)}</span>
+                  </div>
                 )}
-              </>
-            ) : (
-              <div style={{ fontSize: 13, color: "#64b5f6", fontWeight: 600 }}>
-                🔗 Link Only — recipient fills in their info at payment
+                {invoice.amount_paid > 0 && invoice.amount_paid < invoice.total && (
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", padding: "8px 0",
+                    fontSize: 13, color: "#ef9a9a", fontWeight: 600,
+                  }}>
+                    <span>Balance</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.total - invoice.amount_paid)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Notes */}
+            {invoice.notes && (
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
+                <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+                <div style={{ fontSize: 13, color: "#8aba8a", lineHeight: 1.6 }}>{invoice.notes}</div>
               </div>
             )}
           </div>
 
-          {/* Line items table */}
-          <div style={{ borderRadius: 12, border: "1px solid #1a3a1a", overflow: "hidden", marginBottom: 20 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#0a160a" }}>
-                  <th style={{ padding: "12px 14px", textAlign: "left", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</th>
-                  <th style={{ padding: "12px 14px", textAlign: "center", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 60 }}>Qty</th>
-                  <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Rate</th>
-                  <th style={{ padding: "12px 14px", textAlign: "right", fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", width: 100 }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(invoice.line_items || []).map((item, idx) => (
-                  <tr key={idx} style={{ borderTop: "1px solid #0d1a0d" }}>
-                    <td style={{ padding: "12px 14px", fontSize: 14, color: "#c8e0c8" }}>{item.description}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}>{item.quantity}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "#8aba8a", textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(item.unit_price)}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 14, color: "#4CAF50", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{formatCurrency(item.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Totals */}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <div style={{ width: 260 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
-                <span>Subtotal</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.subtotal)}</span>
-              </div>
-              {invoice.tax_rate > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
-                  <span>Tax ({invoice.tax_rate}%)</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.tax_amount)}</span>
-                </div>
-              )}
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                padding: "12px 0", borderTop: "2px solid #1a3a1a", marginTop: 4,
-              }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#e8f5e8" }}>Total</span>
-                <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
-                  {formatCurrency(invoice.total)}
-                </span>
-              </div>
-              {invoice.status === "paid" && (
-                <div style={{
-                  display: "flex", justifyContent: "space-between", padding: "8px 0",
-                  fontSize: 13, color: "#66bb6a", fontWeight: 600,
-                }}>
-                  <span>Paid</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.amount_paid)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Notes */}
-          {invoice.notes && (
-            <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
-              <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
-              <div style={{ fontSize: 13, color: "#8aba8a", lineHeight: 1.6 }}>{invoice.notes}</div>
-            </div>
+          {/* Payment Schedule (below the invoice card) */}
+          {hasPaymentTerms && invoice.payment_terms && (
+            <PaymentScheduleView
+              terms={invoice.payment_terms}
+              total={invoice.total}
+              onRecordPayment={onRecordPayment}
+            />
           )}
         </div>
 
@@ -170,7 +193,7 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
           </h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {["draft", "sent", "overdue"].includes(invoice.status) && (
+            {["draft", "sent", "overdue", "partial"].includes(invoice.status) && (
               <button
                 onClick={() => { onNavigate?.(); onSend(); }}
                 style={{
@@ -209,7 +232,7 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
               </p>
             )}
 
-            {["sent", "overdue"].includes(invoice.status) && (
+            {["sent", "overdue", "partial"].includes(invoice.status) && !hasPaymentTerms && (
               <button
                 onClick={() => onMarkPaid(invoice)}
                 style={{
@@ -253,8 +276,28 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
             </button>
           </div>
 
-          {invoice.sent_at && (
+          {/* Payment terms badge in sidebar */}
+          {hasPaymentTerms && invoice.payment_terms && (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
+              <div style={{
+                padding: "10px 12px", borderRadius: 10,
+                background: "rgba(255,183,77,0.04)", border: "1px solid rgba(255,183,77,0.12)",
+              }}>
+                <div style={{ fontSize: 10, color: "#ffb74d", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+                  💳 {invoice.payment_terms.type === "deposit_balance" ? "Deposit + Balance" : "Installment Plan"}
+                </div>
+                <div style={{ fontSize: 13, color: "#c8e0c8" }}>
+                  Deposit: <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.payment_terms.deposit_amount)}</strong>
+                </div>
+                <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>
+                  {invoice.payment_terms.schedule.filter(s => s.status === "paid").length} of {invoice.payment_terms.schedule.length} payments received
+                </div>
+              </div>
+            </div>
+          )}
+
+          {invoice.sent_at && (
+            <div style={{ marginTop: hasPaymentTerms ? 8 : 20, paddingTop: hasPaymentTerms ? 0 : 16, borderTop: hasPaymentTerms ? "none" : "1px solid #1a3a1a" }}>
               <div style={{ fontSize: 11, color: "#5a8a5a" }}>
                 📨 Sent: {formatDate(invoice.sent_at)}
               </div>

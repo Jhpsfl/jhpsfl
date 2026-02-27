@@ -299,6 +299,7 @@ export async function POST(request: NextRequest) {
                 line_items: payload.line_items || [],
                 payment_link: payload.payment_link || null,
                 sent_at: payload.sent_at || null,
+                payment_terms: payload.payment_terms || null,
               })
               .select(`*, customers ( name, email, phone )`)
               .single();
@@ -311,7 +312,7 @@ export async function POST(request: NextRequest) {
               "customer_id", "invoice_number", "status", "subtotal",
               "tax_rate", "tax_amount", "total", "amount_paid",
               "due_date", "paid_date", "notes", "line_items",
-              "payment_link", "sent_at"
+              "payment_link", "sent_at", "payment_terms"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];

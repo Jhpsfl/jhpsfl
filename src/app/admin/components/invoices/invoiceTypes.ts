@@ -25,11 +25,38 @@ export interface InvoiceLineItem {
   amount: number;
 }
 
+// ─── Payment Terms Types ───
+
+export type PaymentTermsType = "full" | "deposit_balance" | "deposit_installments";
+
+export interface PaymentScheduleItem {
+  id: string;
+  label: string;            // e.g. "Deposit", "Balance Due", "Installment 1 of 3"
+  amount: number;
+  due_date: string | null;  // ISO date string
+  status: "pending" | "paid" | "overdue";
+  paid_date: string | null;
+  paid_amount: number;
+  payment_method: string | null;  // "square", "cash", "check", "zelle", etc.
+  notes: string | null;
+}
+
+export interface PaymentTerms {
+  type: PaymentTermsType;
+  deposit_amount: number;         // flat dollar amount for deposit
+  deposit_percentage: number;     // OR percentage (whichever was used to calculate)
+  deposit_method: "percentage" | "fixed";
+  num_installments: number;       // only for deposit_installments (e.g. 2, 3, 4)
+  installment_frequency: "weekly" | "biweekly" | "monthly";  // spacing between installments
+  balance_due_on: "completion" | "date";  // for deposit_balance: when is the rest due?
+  schedule: PaymentScheduleItem[];
+}
+
 export interface Invoice {
   id: string;
   customer_id: string | null;
   invoice_number: string;
-  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  status: "draft" | "sent" | "paid" | "overdue" | "cancelled" | "partial";
   subtotal: number;
   tax_rate: number;
   tax_amount: number;
@@ -44,4 +71,7 @@ export interface Invoice {
   created_at: string;
   updated_at: string;
   customers?: { name: string | null; email: string | null; phone: string | null };
+
+  // ─── New: Payment Terms ───
+  payment_terms?: PaymentTerms | null;
 }
