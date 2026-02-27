@@ -6,17 +6,25 @@ export default function AdminSwRegistrar() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/admin" })
-        .then(reg => {
-          console.log("SW registered");
-          setRegistration(reg);
-        })
-        .catch(err => console.error("SW registration failed:", err));
-    }
+    if (!("serviceWorker" in navigator)) return;
 
-    // Check current notification permission
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/admin" })
+      .then(async (reg) => {
+        console.log("SW registered");
+        setRegistration(reg);
+
+        // iOS PWA fix: Safari and the installed PWA have DIFFERENT push endpoints.
+        // If the user subscribed from Safari first, the DB has the wrong endpoint.
+        // On every load with permission already granted, re-sync the current
+        // subscription (or create one) so the DB always has the PWA endpoint.
+        if ("Notification" in window && Notification.permission === "granted") {
+          setNotificationPermission("granted");
+          await syncPushSubscription(reg);
+        }
+      })
+      .catch(err => console.error("SW registration failed:", err));
+
     if (typeof window !== 'undefined' && "Notification" in window) {
       setNotificationPermission(Notification.permission);
     }
@@ -55,6 +63,43 @@ export default function AdminSwRegistrar() {
   }, [handleEnableNotifications]);
 
   return null;
+}
+
+/**
+ * Called on every load when permission is already granted.
+ * Gets the existing push subscription (or creates one) and syncs it to the
+ * server — ensuring the DB has the PWA endpoint, not the Safari one.
+ */
+async function syncPushSubscription(registration: ServiceWorkerRegistration) {
+  try {
+    const clerkUserId = localStorage.getItem("jhps_admin_uid");
+    if (!clerkUserId) return; // not logged in yet
+
+    const vapidRes = await fetch("/api/push/vapid-public-key");
+    if (!vapidRes.ok) return;
+    const { publicKey } = await vapidRes.json();
+    const convertedVapidKey = urlBase64ToUint8Array(publicKey);
+
+    // Get existing subscription or create a fresh one for this context
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey as BufferSource,
+      });
+      console.log("SW: created new push subscription for this context");
+    }
+
+    // Always upsert — endpoint may differ between Safari and installed PWA
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clerk_user_id: clerkUserId, subscription: subscription.toJSON() }),
+    });
+    console.log("SW: push subscription synced to server", subscription.endpoint.substring(0, 60));
+  } catch (err) {
+    console.warn("SW: push subscription sync failed:", err);
+  }
 }
 
 async function subscribeToNotifications(registration: ServiceWorkerRegistration) {

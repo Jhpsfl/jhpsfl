@@ -14,25 +14,30 @@ self.addEventListener("activate", (event) => {
 });
 
 // ─── Push Event ───
-// This fires when a push arrives from the server (even if app is closed)
+// This fires when a push arrives from the server (even if app is closed).
+// IMPORTANT (iOS): Every push event MUST show a notification.
+// Silent returns (no showNotification) cause iOS to throttle/batch future
+// pushes for this origin — leading to 5-minute+ delays.
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  let payload = { title: "JHPS Admin", body: "You have a new notification", tag: "jhps-general", url: "/admin", icon: null, badge: undefined };
 
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    payload = { title: "JHPS", body: event.data.text() };
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = { ...payload, ...parsed };
+    } catch {
+      payload.body = event.data.text() || payload.body;
+    }
   }
 
   const { title, body, tag, url, icon, badge: badgeCount } = payload;
 
-  const options = {
-    body: body || "You have a new notification",
+  const notifOptions = {
+    body,
     icon: icon || "/favicon-192.png",
     badge: "/favicon-32.png",
-    tag: tag || "jhps-general",          // same tag = replace previous notification of same type
-    renotify: true,                       // vibrate even if replacing same tag
+    tag: tag || "jhps-general",
+    renotify: true,
     data: { url: url || "/admin" },
     actions: [
       { action: "open", title: "Open" },
@@ -41,18 +46,22 @@ self.addEventListener("push", (event) => {
     vibrate: [200, 100, 200],
   };
 
+  // Show notification first — this MUST complete for iOS to consider the
+  // push handled. Badge update and tab messaging are secondary.
   event.waitUntil(
-    Promise.all([
-      self.registration.showNotification(title || "JHPS Admin", options),
-      // Set app icon badge (works on Android Chrome 81+ and iOS Safari 16.4+ PWA)
-      "setAppBadge" in self.registration
+    self.registration.showNotification(title || "JHPS Admin", notifOptions).then(() => {
+      // Badge update (iOS Safari 16.4+ PWA + Android Chrome 81+)
+      const badgePromise = "setAppBadge" in self.registration
         ? self.registration.setAppBadge(badgeCount !== undefined ? badgeCount : 1)
-        : Promise.resolve(),
-      // Tell open admin tabs to refresh badge counts immediately
-      clients.matchAll({ type: "window" }).then(windowClients => {
+        : Promise.resolve();
+
+      // Tell any open admin tabs to refresh badge counts
+      const msgPromise = clients.matchAll({ type: "window" }).then(windowClients => {
         windowClients.forEach(client => client.postMessage({ type: "REFRESH_BADGES" }));
-      }),
-    ])
+      });
+
+      return Promise.all([badgePromise, msgPromise]);
+    })
   );
 });
 
