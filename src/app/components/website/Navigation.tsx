@@ -48,6 +48,15 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
               onMouseOut={(e) => { e.currentTarget.style.color = "#8aba8a"; }}
               >{label}</button>
             ))}
+            <Link href="/commercial" style={{
+              color: "#c8a84b", fontSize: 13, fontWeight: 600, textDecoration: "none",
+              padding: "7px 16px", border: "1px solid rgba(200,168,75,0.3)", borderRadius: 10,
+              transition: "all 0.3s", letterSpacing: 0.3, whiteSpace: "nowrap",
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(200,168,75,0.1)"; e.currentTarget.style.borderColor = "rgba(200,168,75,0.6)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(200,168,75,0.3)"; }}>
+              🏢 Commercial
+            </Link>
             <Link href="/pay" style={{
               color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
               padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
@@ -125,6 +134,9 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
           {[["Services", "services"], ["Gallery", "gallery"], ["How It Works", "how-it-works"], ["Contact", "contact"]].map(([label, id]) => (
             <a key={id} href={`#${id}`} onClick={() => { scrollTo(id!); setMenuOpen(false); }}>{label}</a>
           ))}
+          <Link href="/commercial" onClick={() => setMenuOpen(false)} style={{ color: "#c8a84b", fontSize: 22, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
+            🏢 Commercial Services
+          </Link>
           <Link href="/pay" onClick={() => setMenuOpen(false)} style={{ color: "#e8f5e8", fontSize: 28, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
             Make Payment
           </Link>
