@@ -24,6 +24,32 @@ export async function POST(req: NextRequest) {
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // ─── Detect if this is a contract (has payment terms) ───
+  const isContract = invoice.payment_terms && invoice.payment_terms.type !== 'full' && invoice.payment_terms.schedule?.length > 0;
+  let agreementUrl: string | null = null;
+
+  // For contracts: create financing agreement and get signing link
+  if (isContract) {
+    try {
+      const origin = req.headers.get('origin') || 'https://jhpsfl.com';
+      const agreementRes = await fetch(`${origin}/api/agreement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clerk_user_id,
+          invoice_id: invoice.id,
+        }),
+      });
+      const agreementData = await agreementRes.json();
+      if (agreementData.success && agreementData.url) {
+        agreementUrl = agreementData.url;
+      }
+    } catch (err) {
+      console.error('AGREEMENT_CREATE_ERROR:', err);
+      // Fall through — will send without agreement link
+    }
+  }
+
   // ─── Build InvoiceData for PDF generator ───
   const subtotalCents = Math.round((invoice.subtotal || 0) * 100);
   const taxCents = Math.round((invoice.tax_amount || 0) * 100);
@@ -65,7 +91,6 @@ export async function POST(req: NextRequest) {
 
   const isOverdue = invoiceData.invoiceStatus === 'OVERDUE';
   const statusColor = isOverdue ? '#C62828' : '#1565C0';
-  const isContract = invoiceData.paymentTerms && invoiceData.paymentTerms.type !== 'full' && invoiceData.paymentTerms.schedule?.length > 0;
   const docLabel = isContract ? 'Service Contract' : 'Invoice';
 
   const html = `
@@ -88,7 +113,13 @@ export async function POST(req: NextRequest) {
           ${isContract && invoiceData.paymentTerms ? `<p style="margin:4px 0;font-size:14px;"><strong>Deposit Due Now:</strong> <span style="color:#2E7D32;font-weight:bold;">${fmt(Math.round(invoiceData.paymentTerms.deposit_amount * 100))}</span></p>` : ''}
           ${invoiceData.dueDate ? `<p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>` : ''}
         </div>
-        ${payment_link ? `
+        ${isContract && agreementUrl ? `
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${agreementUrl}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#1565C0,#0D47A1);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Review & Sign Agreement →</a>
+          </div>
+          <p style="text-align:center;font-size:13px;color:#666;margin-top:8px;">Please review the contract, sign digitally, and upload your ID to proceed.</p>
+          <p style="text-align:center;font-size:12px;color:#999;margin-top:4px;">After signing, you'll be directed to make your deposit payment.</p>
+        ` : payment_link ? `
           <div style="text-align:center;margin:24px 0;">
             <a href="${payment_link}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Pay Now →</a>
           </div>

@@ -7,10 +7,10 @@ import crypto from "crypto";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { clerk_user_id, quote_id } = body;
+    const { clerk_user_id, quote_id, invoice_id } = body;
 
-    if (!clerk_user_id || !quote_id) {
-      return NextResponse.json({ error: "Missing clerk_user_id or quote_id" }, { status: 400 });
+    if (!clerk_user_id || (!quote_id && !invoice_id)) {
+      return NextResponse.json({ error: "Missing clerk_user_id or quote_id/invoice_id" }, { status: 400 });
     }
 
     const supabase = createSupabaseAdmin();
@@ -23,31 +23,101 @@ export async function POST(request: NextRequest) {
       .single();
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    // Fetch the quote with customer data
-    const { data: quote, error: quoteErr } = await supabase
-      .from("quotes")
-      .select("*, customers(name, email, phone)")
-      .eq("id", quote_id)
-      .single();
+    // ─── Source: Invoice or Quote ───
+    let sourceData: {
+      customer_id: string | null;
+      customer_name: string;
+      customer_email: string;
+      customer_phone: string;
+      line_items: { description: string; quantity: number; unit_price: number; amount: number }[];
+      subtotal: number;
+      tax_amount: number;
+      total: number;
+      payment_terms: { type: string; deposit_amount: number; deposit_percentage: number; deposit_method: string; schedule: { label: string; amount: number; due_date: string | null }[] } | null;
+      notes: string | null;
+      source_number: string;
+      source_type: "quote" | "invoice";
+      source_id: string;
+      payment_link?: string;
+    } | null = null;
 
-    if (quoteErr || !quote) {
-      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+    if (invoice_id) {
+      // Invoice-based agreement
+      const { data: invoice, error: invErr } = await supabase
+        .from("invoices")
+        .select("*, customers(name, email, phone)")
+        .eq("id", invoice_id)
+        .single();
+      if (invErr || !invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+      if (!invoice.payment_terms) return NextResponse.json({ error: "Invoice does not have payment terms" }, { status: 400 });
+
+      const customer = invoice.customers || {};
+      sourceData = {
+        customer_id: invoice.customer_id,
+        customer_name: customer.name || "Customer",
+        customer_email: customer.email || "",
+        customer_phone: customer.phone || "",
+        line_items: invoice.line_items || [],
+        subtotal: invoice.subtotal,
+        tax_amount: invoice.tax_amount,
+        total: invoice.total,
+        payment_terms: invoice.payment_terms,
+        notes: invoice.notes,
+        source_number: invoice.invoice_number,
+        source_type: "invoice",
+        source_id: invoice_id,
+        payment_link: invoice.payment_link || undefined,
+      };
+    } else if (quote_id) {
+      // Quote-based agreement (original flow)
+      const { data: quote, error: quoteErr } = await supabase
+        .from("quotes")
+        .select("*, customers(name, email, phone)")
+        .eq("id", quote_id)
+        .single();
+      if (quoteErr || !quote) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+      if (!quote.show_financing && !quote.payment_terms) return NextResponse.json({ error: "Quote does not have financing enabled" }, { status: 400 });
+
+      const customer = quote.customers || {};
+      sourceData = {
+        customer_id: quote.customer_id,
+        customer_name: customer.name || "Customer",
+        customer_email: customer.email || "",
+        customer_phone: customer.phone || "",
+        line_items: quote.line_items || [],
+        subtotal: quote.subtotal,
+        tax_amount: quote.tax_amount,
+        total: quote.total,
+        payment_terms: quote.payment_terms,
+        notes: quote.notes,
+        source_number: quote.quote_number,
+        source_type: "quote",
+        source_id: quote_id,
+      };
     }
 
-    if (!quote.show_financing && !quote.payment_terms) {
-      return NextResponse.json({ error: "Quote does not have financing enabled" }, { status: 400 });
-    }
+    if (!sourceData) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
-    // Check if an active (non-expired/voided) agreement already exists
-    const { data: existing } = await supabase
+    // Check if an active agreement already exists for this source
+    const lookupCol = sourceData.source_type === "invoice" ? "quote_id" : "quote_id";
+    const lookupId = sourceData.source_type === "invoice" ? invoice_id : quote_id;
+    
+    // For invoices, check by customer_id + matching snapshot number; for quotes use quote_id
+    let existingQuery = supabase
       .from("financing_agreements")
       .select("id, token, status")
-      .eq("quote_id", quote_id)
-      .in("status", ["pending", "viewed"])
-      .single();
+      .in("status", ["pending", "viewed"]);
+    
+    if (quote_id) {
+      existingQuery = existingQuery.eq("quote_id", quote_id);
+    } else {
+      // For invoice-based, look up by customer_id and check snapshot
+      existingQuery = existingQuery.eq("customer_id", sourceData.customer_id);
+    }
 
-    if (existing) {
-      // Return existing agreement instead of creating a new one
+    const { data: existing } = await existingQuery.single();
+
+    if (existing && quote_id) {
       const baseUrl = request.headers.get("origin") || "https://jhpsfl.com";
       return NextResponse.json({
         success: true,
@@ -58,9 +128,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Build the quote snapshot
-    const customer = quote.customers || {};
-    const paymentTerms = quote.payment_terms;
+    // Build snapshot and schedule
+    const paymentTerms = sourceData.payment_terms;
     const schedule: PaymentScheduleSnapshot[] = paymentTerms?.schedule?.map((s: { label: string; amount: number; due_date: string | null }) => ({
       label: s.label,
       amount: s.amount,
@@ -68,49 +137,49 @@ export async function POST(request: NextRequest) {
     })) || [];
 
     const snapshot: QuoteSnapshot = {
-      quote_number: quote.quote_number,
-      customer_name: customer.name || "Customer",
-      customer_email: customer.email || "",
-      customer_phone: customer.phone || "",
-      line_items: (quote.line_items || []).map((li: { description: string; quantity: number; unit_price: number; amount: number }) => ({
+      quote_number: sourceData.source_number,
+      customer_name: sourceData.customer_name,
+      customer_email: sourceData.customer_email,
+      customer_phone: sourceData.customer_phone,
+      line_items: sourceData.line_items.map((li) => ({
         description: li.description,
         quantity: li.quantity,
         unit_price: li.unit_price,
         amount: li.amount,
       })),
-      subtotal: quote.subtotal,
-      tax_amount: quote.tax_amount,
-      total: quote.total,
+      subtotal: sourceData.subtotal,
+      tax_amount: sourceData.tax_amount,
+      total: sourceData.total,
       payment_terms_type: paymentTerms?.type || "deposit_balance",
-      deposit_amount: paymentTerms?.deposit_amount || quote.total * 0.5,
-      notes: quote.notes,
+      deposit_amount: paymentTerms?.deposit_amount || sourceData.total * 0.5,
+      notes: sourceData.notes,
     };
 
-    // Generate agreement text
+    // Add payment_link to snapshot if available (for post-signing redirect)
+    const snapshotWithPayLink = {
+      ...snapshot,
+      ...(sourceData.payment_link ? { payment_link: sourceData.payment_link } : {}),
+    };
+
     const agreementText = generateAgreementText(snapshot, schedule);
-
-    // Generate secure token
     const token = crypto.randomUUID();
-
-    // Set expiration — 7 days from now
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Create the agreement record
     const { data: agreement, error: insertErr } = await supabase
       .from("financing_agreements")
       .insert({
-        quote_id,
-        customer_id: quote.customer_id || null,
+        quote_id: quote_id || null,
+        customer_id: sourceData.customer_id || null,
         token,
         status: "pending",
         agreement_text: agreementText,
         payment_schedule: schedule,
-        quote_snapshot: snapshot,
+        quote_snapshot: snapshotWithPayLink,
         expires_at: expiresAt.toISOString(),
-        signer_name: customer.name || null,
-        signer_email: customer.email || null,
-        signer_phone: customer.phone || null,
+        signer_name: sourceData.customer_name || null,
+        signer_email: sourceData.customer_email || null,
+        signer_phone: sourceData.customer_phone || null,
       })
       .select()
       .single();

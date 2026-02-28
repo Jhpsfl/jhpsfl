@@ -431,8 +431,44 @@ export default function AgreementPage() {
           <h2 style={{ fontSize: 24, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Agreement Signed!</h2>
           <p style={{ color: "#6b7280", fontSize: 15, lineHeight: 1.6, maxWidth: 420, margin: "0 auto 24px" }}>
             Thank you, {signerName || ""}. Your financing agreement has been submitted successfully.
-            The JHPS team will be in touch shortly to get started.
           </p>
+
+          {/* Pay Deposit button — built from snapshot data */}
+          {agreement?.quote_snapshot && (() => {
+            const snap = agreement.quote_snapshot as unknown as Record<string, unknown>;
+            const depositAmt = (snap.deposit_amount as number) || 0;
+            const payLink = snap.payment_link as string | undefined;
+            // Build a deposit payment URL
+            const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+            const params = new URLSearchParams({
+              invoice: (snap.quote_number as string) || "",
+              amount: depositAmt.toFixed(2),
+              ...(snap.customer_name ? { name: snap.customer_name as string } : {}),
+              ...(snap.customer_email ? { email: snap.customer_email as string } : {}),
+              payment_label: "Deposit",
+            });
+            const depositUrl = payLink || `${baseUrl}/pay?${params.toString()}`;
+            return depositAmt > 0 ? (
+              <a
+                href={depositUrl}
+                style={{
+                  display: "inline-block",
+                  padding: "16px 40px",
+                  background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                  color: "#fff",
+                  textDecoration: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  fontSize: 18,
+                  marginBottom: 24,
+                  boxShadow: "0 4px 14px rgba(46,125,50,0.3)",
+                }}
+              >
+                Pay Deposit — ${depositAmt.toLocaleString("en-US", { minimumFractionDigits: 2 })} →
+              </a>
+            ) : null;
+          })()}
+
           <div style={{ ...cardStyle, textAlign: "left", maxWidth: 380, margin: "0 auto" }}>
             <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, marginBottom: 12 }}>WHAT HAPPENS NEXT</div>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
@@ -441,7 +477,7 @@ export default function AgreementPage() {
             </div>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#e8f5e9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#2E7D32", flexShrink: 0 }}>2</div>
-              <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.5 }}>We&apos;ll contact you to collect the deposit and schedule the work</div>
+              <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.5 }}>Pay your deposit using the button above or contact us to arrange payment</div>
             </div>
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#e8f5e9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#2E7D32", flexShrink: 0 }}>3</div>
