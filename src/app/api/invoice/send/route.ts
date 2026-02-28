@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     totalAmount: totalCents,
     paymentLink: payment_link || undefined,
     notes: invoice.notes || undefined,
+    paymentTerms: invoice.payment_terms || undefined,
   };
 
   // ─── Generate PDF ───
@@ -64,21 +65,27 @@ export async function POST(req: NextRequest) {
 
   const isOverdue = invoiceData.invoiceStatus === 'OVERDUE';
   const statusColor = isOverdue ? '#C62828' : '#1565C0';
+  const isContract = invoiceData.paymentTerms && invoiceData.paymentTerms.type !== 'full' && invoiceData.paymentTerms.schedule?.length > 0;
+  const docLabel = isContract ? 'Service Contract' : 'Invoice';
 
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
       <div style="background:linear-gradient(135deg,#2E7D32,#4CAF50);padding:28px 32px;border-radius:12px 12px 0 0;">
         <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Jenkins Home &amp; Property Solutions</h1>
-        <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Invoice ${invoiceData.invoiceNumber}</p>
+        <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">${docLabel} ${invoiceData.invoiceNumber}</p>
       </div>
       <div style="background:#fff;padding:32px;border:1px solid #e0e0e0;border-top:none;">
         <p style="margin:0 0 16px;font-size:15px;">Hi ${invoiceData.customerName},</p>
         <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
-          Please find your invoice for <strong>${fmt(totalCents)}</strong> attached to this email as a PDF.
+          ${isContract
+            ? `Please find your <strong>${docLabel}</strong> for <strong>${fmt(totalCents)}</strong> attached to this email. This includes your payment schedule and full terms & conditions.`
+            : `Please find your invoice for <strong>${fmt(totalCents)}</strong> attached to this email as a PDF.`
+          }
         </p>
         <div style="background:${isOverdue ? '#FFEBEE' : '#FFF3E0'};border:1px solid ${statusColor};border-radius:8px;padding:16px;margin-bottom:24px;">
-          <p style="margin:4px 0;font-size:14px;"><strong>Invoice #:</strong> ${invoiceData.invoiceNumber}</p>
-          <p style="margin:4px 0;font-size:14px;"><strong>Amount Due:</strong> ${fmt(totalCents)}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>${docLabel} #:</strong> ${invoiceData.invoiceNumber}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>${isContract ? 'Total Contract Price' : 'Amount Due'}:</strong> ${fmt(totalCents)}</p>
+          ${isContract && invoiceData.paymentTerms ? `<p style="margin:4px 0;font-size:14px;"><strong>Deposit Due Now:</strong> <span style="color:#2E7D32;font-weight:bold;">${fmt(Math.round(invoiceData.paymentTerms.deposit_amount * 100))}</span></p>` : ''}
           ${invoiceData.dueDate ? `<p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>` : ''}
         </div>
         ${payment_link ? `
@@ -111,7 +118,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await resend.emails.send({
       from: 'JHPS Florida <info@jhpsfl.com>',
       to: [customer.email],
-      subject: `Invoice ${invoiceData.invoiceNumber} — ${fmt(totalCents)} Due — Jenkins Home & Property Solutions`,
+      subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— Jenkins Home & Property Solutions`,
       html,
       attachments: [
         {
@@ -136,7 +143,7 @@ export async function POST(req: NextRequest) {
     direction: 'outbound',
     from_email: 'info@jhpsfl.com',
     to_email: customer.email,
-    subject: `Invoice ${invoiceData.invoiceNumber} — ${fmt(totalCents)} Due — Jenkins Home & Property Solutions`,
+    subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— Jenkins Home & Property Solutions`,
     body_html: html,
     resend_message_id: resendMessageId,
   });

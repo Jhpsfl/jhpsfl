@@ -86,6 +86,12 @@ export interface InvoiceData extends BaseDocumentData {
   invoiceStatus: 'DUE' | 'OVERDUE' | 'SENT';
   paymentLink?: string;
   jobAddress?: string;
+  /** When present, the invoice becomes a multi-page Service Contract */
+  paymentTerms?: {
+    type: string;
+    deposit_amount: number;
+    schedule: { label: string; amount: number; due_date: string | null; status?: string }[];
+  } | null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -387,6 +393,122 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
 // INVOICE DOCUMENT
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// FLORIDA SERVICE CONTRACT — LEGAL TERMS (Ch. 713, Ch. 682)
+// ═══════════════════════════════════════════════════════════════
+
+const LEGAL_SECTIONS = [
+  {
+    title: '1. PAYMENT TERMS & SCHEDULE',
+    text: 'Customer agrees to make payments in accordance with the Payment Schedule set forth on Page 1 of this Service Contract. All payments are due on or before their scheduled due dates. Payments may be made via credit/debit card, cash, check, Zelle, or Venmo. The deposit is NON-REFUNDABLE and secures the Customer\'s scheduled service date. Work will not commence until the deposit has been received and cleared.',
+  },
+  {
+    title: '2. LATE PAYMENT & ACCELERATION',
+    text: 'A late fee of 1.5% per month (18% annual percentage rate) shall be assessed on any amount not received within seven (7) calendar days of its scheduled due date. If any payment is more than fourteen (14) calendar days past due, the entire remaining unpaid balance shall become immediately due and payable in full ("Acceleration"). The Company reserves the right to suspend or halt all work on the project if any payment is more than seven (7) days past due, and to resume only upon full cure of the delinquency.',
+  },
+  {
+    title: '3. CONSTRUCTION LIEN RIGHTS — FLORIDA STATUTE CH. 713',
+    text: 'UNDER FLORIDA\'S CONSTRUCTION LIEN LAW (SECTIONS 713.001–713.37, FLORIDA STATUTES), THOSE WHO WORK ON YOUR PROPERTY OR PROVIDE MATERIALS AND SERVICES AND ARE NOT PAID IN FULL HAVE A RIGHT TO ENFORCE THEIR CLAIM FOR PAYMENT AGAINST YOUR PROPERTY. THIS CLAIM IS KNOWN AS A CONSTRUCTION LIEN. The Company expressly reserves all lien rights available under Florida Statute Chapter 713. In the event Customer fails to make any payment required under this Contract, the Company may record a Claim of Lien against the real property where services were performed within ninety (90) days of the last day the Company furnished labor, services, or materials, and may take all actions permitted under Florida law to enforce such lien, including but not limited to foreclosure proceedings. Customer acknowledges that failure to pay may result in a lien being filed against the property, which could result in the forced sale of the property to satisfy amounts owed.',
+  },
+  {
+    title: '4. AUTHORIZATION TO PERFORM WORK',
+    text: 'By executing this Contract, Customer authorizes the Company to perform the services described in the Scope of Work at the specified service location. Customer represents and warrants that they are the owner of the property or are duly authorized by the property owner to approve the work described herein. Customer agrees to provide reasonable access to the property as needed for the Company to perform the work.',
+  },
+  {
+    title: '5. CHANGES TO SCOPE OF WORK',
+    text: 'Any changes, additions, or modifications to the scope of work described in this Contract must be agreed upon in writing by both parties before such additional work is performed. Additional work beyond the original scope will result in additional charges, which will be documented in a written Change Order signed by both parties. The Company is not obligated to perform work beyond the scope described herein without a signed Change Order.',
+  },
+  {
+    title: '6. WARRANTY & LIMITATION OF LIABILITY',
+    text: 'The Company warrants its workmanship for a period of thirty (30) days from the date of completion. This warranty does not cover damage caused by weather events, neglect, misuse, third-party actions, or acts of God. THE COMPANY\'S TOTAL LIABILITY UNDER THIS CONTRACT SHALL NOT EXCEED THE TOTAL CONTRACT PRICE. IN NO EVENT SHALL THE COMPANY BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES. The Company is not liable for any pre-existing conditions, concealed defects, or damage not caused by the Company\'s work.',
+  },
+  {
+    title: '7. RIGHT TO CURE',
+    text: 'Before pursuing any legal remedy for alleged defective work, Customer shall provide the Company with written notice describing the alleged deficiency and a reasonable opportunity to cure, which shall be no less than fifteen (15) business days from receipt of written notice. This provision is consistent with Florida\'s right-to-cure requirements for residential construction contracts.',
+  },
+  {
+    title: '8. CANCELLATION & TERMINATION',
+    text: 'Customer may cancel this Contract within three (3) business days of execution for a full refund of the deposit, minus any costs already incurred by the Company (Florida Home Solicitation Sales Act, if applicable). After three (3) business days, the deposit is non-refundable. If Customer cancels after work has commenced, Customer is responsible for payment for all work completed to date, all materials purchased or ordered, and any restocking or cancellation fees incurred by the Company. Either party may terminate this Contract for cause upon fourteen (14) days\' written notice if the other party has materially breached this Contract and failed to cure such breach within the notice period.',
+  },
+  {
+    title: '9. DISPUTE RESOLUTION & ARBITRATION',
+    text: 'Any dispute, claim, or controversy arising out of or relating to this Contract or the breach thereof shall first be addressed through good-faith negotiation between the parties. If the dispute cannot be resolved through negotiation within thirty (30) days, it shall be submitted to binding arbitration in Volusia County, Florida, administered by the American Arbitration Association (AAA) in accordance with its Commercial Arbitration Rules then in effect, pursuant to Florida\'s Revised Arbitration Code (Chapter 682, Florida Statutes). The arbitrator shall be empowered to award reasonable attorneys\' fees and costs to the prevailing party. Judgment on the award rendered by the arbitrator may be entered in any court having jurisdiction thereof. THE PARTIES ACKNOWLEDGE THAT BY AGREEING TO ARBITRATION, THEY ARE WAIVING THEIR RIGHT TO A JURY TRIAL.',
+  },
+  {
+    title: '10. INDEMNIFICATION',
+    text: 'Customer agrees to indemnify, defend, and hold harmless the Company, its officers, employees, and agents from and against any and all claims, damages, losses, and expenses (including reasonable attorneys\' fees) arising out of or resulting from: (a) Customer\'s breach of this Contract; (b) Customer\'s negligent or wrongful acts or omissions; (c) any inaccuracy in Customer\'s representations under this Contract; or (d) any claim by a third party related to Customer\'s use of or access to the property.',
+  },
+  {
+    title: '11. INSURANCE & PERMITS',
+    text: 'The Company maintains general liability insurance and workers\' compensation coverage as required by Florida law. If permits are required for the work described herein, the party responsible for obtaining such permits shall be identified in the Scope of Work. Unless otherwise agreed in writing, the Company shall obtain all necessary permits at Customer\'s expense.',
+  },
+  {
+    title: '12. GOVERNING LAW & VENUE',
+    text: 'This Contract shall be governed by and construed in accordance with the laws of the State of Florida, without regard to conflict of laws principles. Any legal proceedings not subject to the arbitration clause shall be brought exclusively in the courts of Volusia County, Florida.',
+  },
+  {
+    title: '13. ENTIRE AGREEMENT & SEVERABILITY',
+    text: 'This Contract, together with any Change Orders, constitutes the entire agreement between the parties and supersedes all prior negotiations, representations, and agreements. If any provision of this Contract is found to be invalid or unenforceable, the remaining provisions shall remain in full force and effect. No modification of this Contract shall be binding unless in writing and signed by both parties.',
+  },
+  {
+    title: '14. ELECTRONIC SIGNATURE & ACCEPTANCE',
+    text: 'The parties agree that electronic signatures are valid and enforceable under the Florida Uniform Electronic Transactions Act (UETA) and the federal Electronic Signatures in Global and National Commerce Act (E-SIGN). By signing this Contract electronically or making the deposit payment, Customer acknowledges that they have read, understand, and agree to all terms and conditions herein.',
+  },
+];
+
+/** Legal terms pages — rendered as Page 2+ of the contract */
+const LegalTermsPages: React.FC<{ docNumber: string }> = ({ docNumber }) => (
+  <Page size="LETTER" style={s.page}>
+    <ContinuationHeader docType="CONTRACT" docNumber={docNumber} />
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.primary, marginBottom: 4 }}>
+        TERMS & CONDITIONS
+      </Text>
+      <Text style={{ fontSize: 8, color: C.light }}>
+        Jenkins Home & Property Solutions, LLC — Service Contract {docNumber}
+      </Text>
+    </View>
+    {LEGAL_SECTIONS.map((section, i) => (
+      <View key={i} style={{ marginBottom: 10 }} wrap={false}>
+        <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 3 }}>
+          {section.title}
+        </Text>
+        <Text style={{ fontSize: 8, color: C.mid, lineHeight: 1.6 }}>
+          {section.text}
+        </Text>
+      </View>
+    ))}
+    <View style={{ marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border }} wrap={false}>
+      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 6 }}>
+        ACKNOWLEDGMENT & ACCEPTANCE
+      </Text>
+      <Text style={{ fontSize: 8, color: C.mid, lineHeight: 1.6, marginBottom: 16 }}>
+        By signing below or making the initial deposit payment, Customer acknowledges receipt of this
+        Service Contract, has read all terms and conditions, and agrees to be bound by them.
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+        <View style={{ width: '48%' }}>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: C.black, marginBottom: 4, height: 30 }} />
+          <Text style={{ fontSize: 8, color: C.light }}>Customer Signature</Text>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: C.black, marginBottom: 4, height: 24, marginTop: 12 }} />
+          <Text style={{ fontSize: 8, color: C.light }}>Printed Name</Text>
+        </View>
+        <View style={{ width: '48%' }}>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: C.black, marginBottom: 4, height: 30 }} />
+          <Text style={{ fontSize: 8, color: C.light }}>Date</Text>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: C.black, marginBottom: 4, height: 24, marginTop: 12 }} />
+          <Text style={{ fontSize: 8, color: C.light }}>Service Property Address</Text>
+        </View>
+      </View>
+    </View>
+    <Footer />
+  </Page>
+);
+
+// ═══════════════════════════════════════════════════════════════
+// INVOICE / SERVICE CONTRACT DOCUMENT
+// ═══════════════════════════════════════════════════════════════
+
 const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, logoUrl }) => {
   const isOverdue = data.invoiceStatus === 'OVERDUE';
   const badge = isOverdue ? s.badgeOverdue : s.badgeDue;
@@ -394,14 +516,18 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   const label = isOverdue ? 'OVERDUE' : 'DUE';
   const color = isOverdue ? C.overdueRed : C.dueBlue;
 
+  const hasPaymentTerms = data.paymentTerms && data.paymentTerms.type !== 'full' && data.paymentTerms.schedule?.length > 0;
+  const docType = hasPaymentTerms ? 'SERVICE CONTRACT' : 'INVOICE';
+  const docTypeShort = hasPaymentTerms ? 'CONTRACT' : 'INVOICE';
+
   return (
-    <Document title={`JHPS Invoice - ${data.invoiceNumber}`} author={BRAND.name} subject="Service Invoice">
+    <Document title={`JHPS ${docType} - ${data.invoiceNumber}`} author={BRAND.name} subject={docType}>
       <Page size="LETTER" style={s.page}>
-        <ContinuationHeader docType="INVOICE" docNumber={data.invoiceNumber} />
+        <ContinuationHeader docType={docTypeShort} docNumber={data.invoiceNumber} />
         <View style={s.header}>
           <CompanyHeader logoUrl={logoUrl} />
           <View style={s.headerRight}>
-            <Text style={s.docTitle}>INVOICE</Text>
+            <Text style={s.docTitle}>{docType}</Text>
             <View style={badge}><Text style={badgeText}>{label}</Text></View>
           </View>
         </View>
@@ -420,25 +546,111 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             )}
           </View>
           <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
-            <Text style={s.metaLabel}>Invoice Details</Text>
-            <Text style={s.metaVal}>Invoice #: {data.invoiceNumber}</Text>
+            <Text style={s.metaLabel}>{hasPaymentTerms ? 'Contract Details' : 'Invoice Details'}</Text>
+            <Text style={s.metaVal}>{hasPaymentTerms ? 'Contract' : 'Invoice'} #: {data.invoiceNumber}</Text>
             <Text style={s.metaVal}>Issued: {formatDateShort(data.invoiceDate)}</Text>
             {data.dueDate && <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text>}
             {data.orderId && <Text style={s.metaVal}>Order: {data.orderId}</Text>}
           </View>
         </View>
+
+        {/* Scope of Work */}
+        {hasPaymentTerms && (
+          <View style={{ marginBottom: 4 }}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.light, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+              Scope of Work
+            </Text>
+          </View>
+        )}
         <ItemsTable items={data.lineItems} />
-        <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel="Amount Due" />
+        <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel={hasPaymentTerms ? 'Total Contract Price' : 'Amount Due'} />
+
+        {/* Payment Schedule — only for contracts with financing */}
+        {hasPaymentTerms && data.paymentTerms && (
+          <View style={{ marginTop: 20 }} wrap={false}>
+            <View style={{ backgroundColor: '#1E3A5F', padding: '8 12', borderRadius: '4 4 0 0' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
+            </View>
+            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderRadius: '0 0 4 4' }}>
+              {/* Header row */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', padding: '6 12' }}>
+                <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>PAYMENT</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
+              </View>
+              {data.paymentTerms.schedule.map((item, i) => {
+                const isDeposit = i === 0;
+                return (
+                  <View key={i} style={{ flexDirection: 'row', padding: '7 12', borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
+                    <Text style={{ flex: 2, fontSize: 9, color: '#2D3748', fontFamily: isDeposit ? 'Helvetica-Bold' : 'Helvetica' }}>
+                      {item.label}{isDeposit ? ' (Non-Refundable)' : ''}
+                    </Text>
+                    <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>
+                      {item.due_date ? formatDateShort(new Date(item.due_date)) : 'Upon signing'}
+                    </Text>
+                    <Text style={{ flex: 1, fontSize: 9, color: isDeposit ? C.primary : '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>
+                      {fmt(Math.round(item.amount * 100))}
+                    </Text>
+                  </View>
+                );
+              })}
+              {/* Deposit due now callout */}
+              <View style={{ padding: '10 12', backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
+                    DEPOSIT DUE NOW
+                  </Text>
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
+                    {fmt(Math.round(data.paymentTerms.deposit_amount * 100))}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={s.infoBox} wrap={false}>
-          <Text style={s.infoTitle}>Invoice Information</Text>
+          <Text style={s.infoTitle}>{hasPaymentTerms ? 'Contract Information' : 'Invoice Information'}</Text>
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
-          <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
+          <View style={s.infoRow}><Text style={s.infoLabel}>{hasPaymentTerms ? 'Contract Number' : 'Invoice Number'}</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
           {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
+          {hasPaymentTerms && (
+            <View style={s.infoRow}><Text style={s.infoLabel}>Terms</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>See Payment Schedule above — Terms & Conditions on following pages</Text></View>
+          )}
         </View>
+
+        {/* Payment link */}
+        {data.paymentLink && (
+          <View style={s.payLinkBox} wrap={false}>
+            <Text style={s.payLinkTitle}>Pay Online</Text>
+            <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
+            <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
+          </View>
+        )}
+
         {data.notes && <NotesSection text={data.notes} />}
+
+        {/* Florida lien notice — required for contracts over $2,500 */}
+        {hasPaymentTerms && (
+          <View style={{ marginTop: 16, padding: 10, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }} wrap={false}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#E65100', marginBottom: 4, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+              Florida Construction Lien Law Notice
+            </Text>
+            <Text style={{ fontSize: 7, color: '#BF360C', lineHeight: 1.5 }}>
+              Under Florida&apos;s Construction Lien Law (Ch. 713, Florida Statutes), those who work on your property
+              or provide materials and are not paid have a right to enforce their claim for payment against your
+              property. This claim is known as a construction lien. If you fail to pay as agreed under this Contract,
+              a lien may be placed on your property. It is recommended that you consult an attorney if you have questions.
+            </Text>
+          </View>
+        )}
+
         <Footer />
       </Page>
+
+      {/* Page 2+: Legal Terms & Conditions — only for contracts */}
+      {hasPaymentTerms && <LegalTermsPages docNumber={data.invoiceNumber} />}
     </Document>
   );
 };

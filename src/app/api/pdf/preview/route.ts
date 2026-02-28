@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         totalAmount: Math.round((data.total || 0) * 100),
         paymentLink: data.payment_link || undefined,
         notes: data.notes || undefined,
+        paymentTerms: data.payment_terms || undefined,
       };
       pdfBuffer = await generateInvoicePDF(invoiceData);
     } else if (type === 'estimate') {
