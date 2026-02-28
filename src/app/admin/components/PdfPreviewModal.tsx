@@ -1,17 +1,84 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174";
+
+let pdfjsLoaded: Promise<any> | null = null;
+function loadPdfJs(): Promise<any> {
+  if (pdfjsLoaded) return pdfjsLoaded;
+  pdfjsLoaded = new Promise((resolve, reject) => {
+    if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
+    const s = document.createElement("script");
+    s.src = `${PDFJS_CDN}/pdf.min.js`;
+    s.onload = () => {
+      const lib = (window as any).pdfjsLib;
+      lib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.js`;
+      resolve(lib);
+    };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return pdfjsLoaded;
+}
 
 export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   pdfUrl: string | null;
   loading: boolean;
   onClose: () => void;
 }) {
+  const [pages, setPages] = useState<string[]>([]);
+  const [renderError, setRenderError] = useState(false);
+  const [rendering, setRendering] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Prevent body scroll while modal is open
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
+
+  // Render PDF pages to canvas images using pdf.js
+  const renderPdf = useCallback(async (url: string) => {
+    setRendering(true);
+    setRenderError(false);
+    setPages([]);
+
+    try {
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument(url).promise;
+      const pageImages: string[] = [];
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const scale = 2;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d")!;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pageImages.push(canvas.toDataURL("image/png"));
+      }
+
+      setPages(pageImages);
+    } catch (err) {
+      console.error("PDF render error:", err);
+      setRenderError(true);
+    }
+    setRendering(false);
+  }, []);
+
+  useEffect(() => {
+    if (pdfUrl && !loading) {
+      renderPdf(pdfUrl);
+    }
+  }, [pdfUrl, loading, renderPdf]);
+
+  const showSpinner = loading || rendering;
 
   return (
     <div
@@ -64,7 +131,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
                 PDF Preview
               </div>
               <div style={{ fontSize: 11, color: "rgba(144,202,249,0.6)" }}>
-                Review before sending
+                {pages.length > 0 ? `${pages.length} page${pages.length > 1 ? "s" : ""}` : "Review before sending"}
               </div>
             </div>
           </div>
@@ -85,8 +152,8 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
         </div>
 
         {/* PDF content area */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          {loading ? (
+        <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "auto", WebkitOverflowScrolling: "touch" }}>
+          {showSpinner ? (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               height: "100%", gap: 16,
@@ -97,21 +164,27 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
                 animation: "spin 0.8s linear infinite",
               }} />
               <div style={{ fontSize: 14, color: "#90CAF9", fontWeight: 600 }}>
-                Generating PDF...
+                {loading ? "Generating PDF..." : "Rendering pages..."}
               </div>
               <div style={{ fontSize: 12, color: "rgba(144,202,249,0.4)" }}>
                 This takes a few seconds
               </div>
             </div>
-          ) : pdfUrl ? (
-            <iframe
-              src={pdfUrl}
-              title="PDF Preview"
-              style={{
-                width: "100%", height: "100%", border: "none",
-                background: "#fff",
-              }}
-            />
+          ) : pages.length > 0 ? (
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+              {pages.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Page ${i + 1}`}
+                  style={{
+                    width: "100%", maxWidth: 800,
+                    borderRadius: 4,
+                    boxShadow: "0 2px 20px rgba(0,0,0,0.5)",
+                  }}
+                />
+              ))}
+            </div>
           ) : (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -119,7 +192,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
             }}>
               <div style={{ fontSize: 36 }}>⚠</div>
               <div style={{ fontSize: 14, color: "#ef9a9a", fontWeight: 600 }}>
-                Failed to generate PDF
+                {renderError ? "Failed to render PDF" : "Failed to generate PDF"}
               </div>
               <div style={{ fontSize: 12, color: "#5a8a5a" }}>
                 Try again or check your form data
