@@ -206,8 +206,16 @@ export default function PaymentPage() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [saveCard, setSaveCard] = useState(false);
-  const { userId: clerkUserId } = useAuth();
+  const { userId: clerkUserId, isSignedIn } = useAuth();
   const searchParams = useSearchParams();
+  const paymentLabel = searchParams.get("payment_label") || "";
+  const isDeposit = paymentLabel.toLowerCase().includes("deposit");
+
+  // Account creation for deposit payments
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = useState(false);
 
   // Auto-fill from invoice payment link params
   useEffect(() => {
@@ -246,8 +254,11 @@ export default function PaymentPage() {
         .then(data => {
           if (data.invoice) {
             setInvoiceData(data.invoice);
-            // Lock the amount to the real invoice total
-            setFormData(prev => ({ ...prev, amount: data.invoice.total.toFixed(2) }));
+            // Lock the amount to the real invoice total — UNLESS a specific amount was passed in URL (e.g. deposit)
+            const urlAmount = searchParams.get("amount");
+            if (!urlAmount) {
+              setFormData(prev => ({ ...prev, amount: data.invoice.total.toFixed(2) }));
+            }
           } else {
             setInvoiceError(data.error || "Could not load invoice details.");
           }
@@ -292,23 +303,28 @@ export default function PaymentPage() {
       formData.name && formData.phone && formData.email &&
       formData.address && formData.amount && parseFloat(formData.amount) > 0
     );
-    if (!valid) {
+    // Deposit payments require password when not signed in
+    const passwordValid = !isDeposit || isSignedIn || accountCreated || (password.length >= 8 && password === confirmPassword);
+    if (!valid || !passwordValid) {
       setShowErrors(true);
-      // Scroll to first missing required field in top-to-bottom order
-      const firstError =
-        !formData.name ? nameRef :
-        !formData.phone ? phoneRef :
-        !formData.email ? emailRef :
-        !formData.address ? addressRef :
-        amountRef;
-      firstError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Re-trigger shake animation (force reflow)
-      const inputs = firstError.current?.querySelectorAll(".pay-input, .amount-input-wrapper");
-      inputs?.forEach(el => {
-        (el as HTMLElement).style.animation = "none";
-        (el as HTMLElement).offsetHeight;
-        (el as HTMLElement).style.animation = "";
-      });
+      if (!valid) {
+        const firstError =
+          !formData.name ? nameRef :
+          !formData.phone ? phoneRef :
+          !formData.email ? emailRef :
+          !formData.address ? addressRef :
+          amountRef;
+        firstError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const inputs = firstError.current?.querySelectorAll(".pay-input, .amount-input-wrapper");
+        inputs?.forEach(el => {
+          (el as HTMLElement).style.animation = "none";
+          (el as HTMLElement).offsetHeight;
+          (el as HTMLElement).style.animation = "";
+        });
+      } else if (!passwordValid) {
+        if (password.length < 8) setAccountError("Password must be at least 8 characters");
+        else if (password !== confirmPassword) setAccountError("Passwords don't match");
+      }
       return;
     }
     setShowErrors(false);
@@ -322,8 +338,30 @@ export default function PaymentPage() {
     if (!squareCard || isProcessing) return;
     setIsProcessing(true);
     setPaymentError(null);
+    setAccountError(null);
 
     try {
+      // For deposit payments: create customer account first (if not signed in)
+      if (isDeposit && !isSignedIn && !accountCreated && password) {
+        const regRes = await fetch("/api/customer/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            password,
+            name: formData.name,
+            phone: formData.phone,
+          }),
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok) {
+          setAccountError(regData.error || "Failed to create account");
+          setIsProcessing(false);
+          return;
+        }
+        setAccountCreated(true);
+      }
+
       const result = await squareCard.tokenize();
 
       if (result.status !== "OK") {
@@ -740,10 +778,23 @@ export default function PaymentPage() {
                     Payment Received!
                   </h2>
                   <p style={{ color: "#8aba8a", fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
-                    Thank you, <strong style={{ color: "#e8f5e8" }}>{formData.name}</strong>. Your payment of{" "}
+                    Thank you, <strong style={{ color: "#e8f5e8" }}>{formData.name}</strong>. Your {isDeposit ? "deposit" : "payment"} of{" "}
                     <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${formData.amount}</strong>{" "}
                     has been processed successfully.
                   </p>
+
+                  {/* Deposit: prompt to go to their new account */}
+                  {isDeposit && accountCreated && (
+                    <div style={{
+                      background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+                      borderRadius: 14, padding: "16px 20px", marginTop: 20, marginBottom: 4,
+                    }}>
+                      <p style={{ color: "#4CAF50", fontSize: 14, fontWeight: 700, marginBottom: 6 }}>🎉 Your account has been created!</p>
+                      <p style={{ color: "#8aba8a", fontSize: 13, lineHeight: 1.6 }}>
+                        Sign in to your customer portal to view your payment plan, job details, and contract documents.
+                      </p>
+                    </div>
+                  )}
                   <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, marginTop: 24, marginBottom: 24 }}>
                     <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 16 }}>Payment confirmation:</p>
                     <div style={{
@@ -769,6 +820,23 @@ export default function PaymentPage() {
                   }}>
                     📞 407-686-9817
                   </a>
+
+                  {/* Dashboard link for deposit customers */}
+                  {isDeposit && accountCreated && (
+                    <div style={{ marginTop: 20 }}>
+                      <Link href="/sign-in?redirect_url=/account?welcome=true" style={{
+                        display: "block", textAlign: "center", padding: "16px",
+                        background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                        borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: "none",
+                        boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+                      }}>
+                        Sign In to Your Dashboard →
+                      </Link>
+                      <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 8 }}>
+                        Use the email and password you just created
+                      </p>
+                    </div>
+                  )}
                   <div style={{ marginTop: 24 }}>
                     <button onClick={() => { setStep("form"); setPaymentId(null); setSameBilling(true); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", billingAddress: "", billingCity: "", billingZip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
                       style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
@@ -869,7 +937,7 @@ export default function PaymentPage() {
                                   </div>
                                 )}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
-                                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>Total Due</span>
+                                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>{paymentLabel || "Total Due"}</span>
                                   <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
                                     ${invoiceData.total.toFixed(2)}
                                   </span>
@@ -913,6 +981,49 @@ export default function PaymentPage() {
                               onChange={(e) => updateField("email", e.target.value)} />
                             {showErrors && !formData.email && <span className="field-error-msg">Email is required</span>}
                           </div>
+
+                          {/* Create Account — for deposit payments when not signed in */}
+                          {isDeposit && !isSignedIn && !accountCreated && (
+                            <div style={{
+                              background: "rgba(76,175,80,0.06)",
+                              border: "1px solid rgba(76,175,80,0.2)",
+                              borderRadius: 14, padding: "20px 20px 16px",
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                                <span style={{ fontSize: 18 }}>🔐</span>
+                                <div>
+                                  <p style={{ color: "#e8f5e8", fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Create Your Account</p>
+                                  <p style={{ color: "#5a8a5a", fontSize: 12 }}>Set a password to access your customer portal after payment</p>
+                                </div>
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                <div className={showErrors && isDeposit && !password ? "field-invalid" : ""}>
+                                  <label style={labelStyle}>Password *</label>
+                                  <input className="pay-input" placeholder="Min 8 characters" type="password" value={password}
+                                    onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+                                  {showErrors && isDeposit && !password && <span className="field-error-msg">Password required</span>}
+                                </div>
+                                <div className={showErrors && isDeposit && password !== confirmPassword ? "field-invalid" : ""}>
+                                  <label style={labelStyle}>Confirm *</label>
+                                  <input className="pay-input" placeholder="Confirm password" type="password" value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+                                  {showErrors && isDeposit && password !== confirmPassword && <span className="field-error-msg">Passwords must match</span>}
+                                </div>
+                              </div>
+                              {accountError && <p style={{ color: "#ef5350", fontSize: 12, marginTop: 8 }}>{accountError}</p>}
+                            </div>
+                          )}
+                          {isDeposit && isSignedIn && (
+                            <div style={{
+                              background: "rgba(76,175,80,0.06)",
+                              border: "1px solid rgba(76,175,80,0.15)",
+                              borderRadius: 14, padding: "12px 16px",
+                              display: "flex", alignItems: "center", gap: 8,
+                            }}>
+                              <span style={{ color: "#4CAF50", fontSize: 14 }}>✓</span>
+                              <span style={{ color: "#8aba8a", fontSize: 13 }}>Signed in — payment will be linked to your account</span>
+                            </div>
+                          )}
 
                           {/* Generic mode only: Service + Description + Invoice# + Amount */}
                           {!invoiceMode && (
