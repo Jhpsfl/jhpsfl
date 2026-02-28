@@ -23,6 +23,86 @@ function loadPdfJs(): Promise<any> {
   return pdfjsLoaded;
 }
 
+// ─── Pinch-to-zoom hook ───
+function usePinchZoom(containerRef: React.RefObject<HTMLDivElement | null>) {
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const pinchRef = useRef({ startDist: 0, startScale: 1 });
+  const panRef = useRef({ startX: 0, startY: 0, startTx: 0, startTy: 0 });
+  const isPinching = useRef(false);
+  const isPanning = useRef(false);
+
+  const resetZoom = useCallback(() => {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const getDist = (t: TouchList) => {
+      const dx = t[1].clientX - t[0].clientX;
+      const dy = t[1].clientY - t[0].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        isPinching.current = true;
+        isPanning.current = false;
+        pinchRef.current.startDist = getDist(e.touches);
+        pinchRef.current.startScale = scale;
+      } else if (e.touches.length === 1 && scale > 1) {
+        // Pan when zoomed in
+        isPanning.current = true;
+        panRef.current.startX = e.touches[0].clientX;
+        panRef.current.startY = e.touches[0].clientY;
+        panRef.current.startTx = translate.x;
+        panRef.current.startTy = translate.y;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (isPinching.current && e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getDist(e.touches);
+        const newScale = Math.min(5, Math.max(1, pinchRef.current.startScale * (dist / pinchRef.current.startDist)));
+        setScale(newScale);
+        if (newScale <= 1) {
+          setTranslate({ x: 0, y: 0 });
+        }
+      } else if (isPanning.current && e.touches.length === 1 && scale > 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - panRef.current.startX;
+        const dy = e.touches[0].clientY - panRef.current.startY;
+        setTranslate({
+          x: panRef.current.startTx + dx,
+          y: panRef.current.startTy + dy,
+        });
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) isPinching.current = false;
+      if (e.touches.length < 1) isPanning.current = false;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [containerRef, scale, translate]);
+
+  return { scale, translate, resetZoom };
+}
+
 export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   pdfUrl: string | null;
   loading: boolean;
@@ -32,13 +112,13 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   const [renderError, setRenderError] = useState(false);
   const [rendering, setRendering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { scale, translate, resetZoom } = usePinchZoom(containerRef);
 
   // Prevent body scroll while modal is open + clean up blob URL on unmount
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
-      // Revoke the blob URL to free browser memory
       if (pdfUrl && pdfUrl.startsWith("blob:")) {
         URL.revokeObjectURL(pdfUrl);
       }
@@ -58,8 +138,8 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const scale = 2;
-        const viewport = page.getViewport({ scale });
+        const s = 2;
+        const viewport = page.getViewport({ scale: s });
 
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
@@ -85,6 +165,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   }, [pdfUrl, loading, renderPdf]);
 
   const showSpinner = loading || rendering;
+  const isZoomed = scale > 1.05;
 
   return (
     <div
@@ -137,28 +218,56 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
                 PDF Preview
               </div>
               <div style={{ fontSize: 11, color: "rgba(144,202,249,0.6)" }}>
-                {pages.length > 0 ? `${pages.length} page${pages.length > 1 ? "s" : ""}` : "Review before sending"}
+                {pages.length > 0 ? `${pages.length} page${pages.length > 1 ? "s" : ""} · pinch to zoom` : "Review before sending"}
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)",
-              color: "#ef9a9a", fontSize: 18, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.2s",
-            }}
-            onMouseOver={e => { e.currentTarget.style.background = "rgba(239,83,80,0.2)"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; }}
-            onMouseOut={e => { e.currentTarget.style.background = "rgba(239,83,80,0.1)"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.2)"; }}
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {isZoomed && (
+              <button
+                onClick={resetZoom}
+                style={{
+                  padding: "6px 10px", borderRadius: 8,
+                  background: "rgba(66,165,245,0.15)", border: "1px solid rgba(66,165,245,0.3)",
+                  color: "#90CAF9", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: "flex", alignItems: "center", gap: 4,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                {Math.round(scale * 100)}%
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: "rgba(239,83,80,0.1)", border: "1px solid rgba(239,83,80,0.2)",
+                color: "#ef9a9a", fontSize: 18, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.2s",
+              }}
+              onMouseOver={e => { e.currentTarget.style.background = "rgba(239,83,80,0.2)"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; }}
+              onMouseOut={e => { e.currentTarget.style.background = "rgba(239,83,80,0.1)"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.2)"; }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* PDF content area */}
-        <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div
+          ref={containerRef}
+          style={{
+            flex: 1, position: "relative",
+            overflow: isZoomed ? "hidden" : "auto",
+            WebkitOverflowScrolling: "touch",
+            touchAction: isZoomed ? "none" : "pan-y",
+          }}
+        >
           {showSpinner ? (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -177,16 +286,24 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
               </div>
             </div>
           ) : pages.length > 0 ? (
-            <div style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <div style={{
+              padding: 16,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+              transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
+              transformOrigin: "top center",
+              transition: isZoomed ? "none" : "transform 0.2s ease",
+            }}>
               {pages.map((src, i) => (
                 <img
                   key={i}
                   src={src}
                   alt={`Page ${i + 1}`}
+                  draggable={false}
                   style={{
                     width: "100%", maxWidth: 800,
                     borderRadius: 4,
                     boxShadow: "0 2px 20px rgba(0,0,0,0.5)",
+                    pointerEvents: "none",
                   }}
                 />
               ))}
