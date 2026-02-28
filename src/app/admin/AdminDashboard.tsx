@@ -147,6 +147,8 @@ export default function AdminDashboard() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [customersCollapsed, setCustomersCollapsed] = useState(false);
+  const [paymentsCollapsed, setPaymentsCollapsed] = useState(false);
 
   // Data
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -746,6 +748,16 @@ export default function AdminDashboard() {
             padding: 16px;
             padding-top: calc(env(safe-area-inset-top, 0px) + 68px) !important;
           }
+          .overview-welcome {
+            position: fixed;
+            top: calc(env(safe-area-inset-top, 0px) + 10px);
+            left: 78px; right: 16px;
+            z-index: 190;
+            margin-bottom: 0 !important;
+            pointer-events: none;
+          }
+          .overview-welcome h1 { font-size: 16px !important; margin-bottom: 0 !important; line-height: 1.2; }
+          .overview-welcome p { font-size: 10px !important; margin: 0; }
           .mobile-toggle { display: flex; }
           .mobile-back-btn { display: flex; }
           .mobile-overlay.open { display: block; }
@@ -993,7 +1005,7 @@ export default function AdminDashboard() {
                     {/* ─── OVERVIEW TAB ─── */}
                     {activeTab === "overview" && overview && (
                       <>
-                        <div style={{ marginBottom: 16 }}>
+                        <div className="overview-welcome" style={{ marginBottom: 16 }}>
                           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 800, marginBottom: 4 }}>
                             Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
                           </h1>
@@ -1088,37 +1100,57 @@ export default function AdminDashboard() {
                         </div>
 
                         <div style={{ marginBottom: 16 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
-                            <button className="quick-action" onClick={() => switchTab("customers")} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
+                          <div
+                            onClick={() => setCustomersCollapsed(!customersCollapsed)}
+                            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: customersCollapsed ? 0 : 8, cursor: "pointer", userSelect: "none" }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <svg width="10" height="10" viewBox="0 0 10 10" style={{ transition: "transform 0.2s", transform: customersCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                <path d="M2 3L5 6L8 3" stroke="#5a8a5a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                              </svg>
+                              <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Customers</h3>
+                            </div>
+                            <button className="quick-action" onClick={(e) => { e.stopPropagation(); switchTab("customers"); }} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
                           </div>
-                          <DataTable headers={["Name", "Email", "Phone", "Joined"]} emptyMessage="No customers yet. Share your site to get signups!">
-                            {customers.slice(0, 5).map((c) => (
-                              <TableRow key={c.id} onClick={() => loadCustomerDetail(c.id)}>
-                                <Td style={{ fontSize: 11 }}>{c.name || "—"}</Td>
-                                <Td style={{ fontSize: 11 }}>{c.email || "—"}</Td>
-                                <Td mono style={{ fontSize: 11 }}>{c.phone || "—"}</Td>
-                                <Td style={{ fontSize: 11 }}>{timeAgo(c.created_at)}</Td>
-                              </TableRow>
-                            ))}
-                          </DataTable>
+                          {!customersCollapsed && (
+                            <DataTable headers={["Name", "Email", "Phone", "Joined"]} emptyMessage="No customers yet. Share your site to get signups!">
+                              {customers.slice(0, 5).map((c) => (
+                                <TableRow key={c.id} onClick={() => loadCustomerDetail(c.id)}>
+                                  <Td style={{ fontSize: 11 }}>{c.name || "—"}</Td>
+                                  <Td style={{ fontSize: 11 }}>{c.email || "—"}</Td>
+                                  <Td mono style={{ fontSize: 11 }}>{c.phone || "—"}</Td>
+                                  <Td style={{ fontSize: 11 }}>{timeAgo(c.created_at)}</Td>
+                                </TableRow>
+                              ))}
+                            </DataTable>
+                          )}
                         </div>
 
                         {overview.recentPayments.length > 0 && (
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
-                              <button className="quick-action" onClick={() => switchTab("payments")} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
+                            <div
+                              onClick={() => setPaymentsCollapsed(!paymentsCollapsed)}
+                              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: paymentsCollapsed ? 0 : 8, cursor: "pointer", userSelect: "none" }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <svg width="10" height="10" viewBox="0 0 10 10" style={{ transition: "transform 0.2s", transform: paymentsCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                  <path d="M2 3L5 6L8 3" stroke="#5a8a5a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                                </svg>
+                                <h3 style={{ fontSize: 12, color: "#e8f5e8", fontWeight: 700 }}>Recent Payments</h3>
+                              </div>
+                              <button className="quick-action" onClick={(e) => { e.stopPropagation(); switchTab("payments"); }} style={{ fontSize: 10, padding: "4px 8px" }}>View all →</button>
                             </div>
-                            <DataTable headers={["Amount", "Status", "Date"]}>
-                              {overview.recentPayments.map((p, i) => (
-                                <TableRow key={i}>
-                                  <Td mono accent style={{ fontSize: 11 }}>{formatCurrency(p.amount)}</Td>
-                                  <Td style={{ fontSize: 11 }}><StatusBadge status={p.status} /></Td>
-                                  <Td style={{ fontSize: 11 }}>{formatDate(p.created_at)}</Td>
-                                </TableRow>
-                              ))}
-                            </DataTable>
+                            {!paymentsCollapsed && (
+                              <DataTable headers={["Amount", "Status", "Date"]}>
+                                {overview.recentPayments.map((p, i) => (
+                                  <TableRow key={i}>
+                                    <Td mono accent style={{ fontSize: 11 }}>{formatCurrency(p.amount)}</Td>
+                                    <Td style={{ fontSize: 11 }}><StatusBadge status={p.status} /></Td>
+                                    <Td style={{ fontSize: 11 }}>{formatDate(p.created_at)}</Td>
+                                  </TableRow>
+                                ))}
+                              </DataTable>
+                            )}
                           </div>
                         )}
                       </>
