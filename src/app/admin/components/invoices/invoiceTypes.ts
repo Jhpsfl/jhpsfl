@@ -3,6 +3,8 @@ export interface Customer {
   name: string | null;
   email: string | null;
   phone: string | null;
+  customer_type?: 'residential' | 'commercial';
+  company_name?: string | null;
 }
 
 export interface CustomerJob {
@@ -74,4 +76,11 @@ export interface Invoice {
 
   // ─── New: Payment Terms ───
   payment_terms?: PaymentTerms | null;
+
+  // ─── Verification settings (per-invoice overrides) ───
+  verification_settings?: {
+    allow_upload?: boolean;        // Allow file upload for residential (manager override)
+    verification_mode?: 'id' | 'document';  // 'id' for residential, 'document' for commercial
+    document_types?: string[];     // e.g. ['loa', 'business_license', 'coi', 'w9', 'purchase_order']
+  } | null;
 }

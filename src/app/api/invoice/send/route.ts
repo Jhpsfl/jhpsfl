@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           due_date: s.due_date,
         }));
 
-        const snapshot: QuoteSnapshot & { payment_link?: string } = {
+        const snapshot: QuoteSnapshot & { payment_link?: string; customer_type?: string; verification_settings?: Record<string, unknown> } = {
           quote_number: invoice.invoice_number,
           customer_name: customer.name || 'Customer',
           customer_email: customer.email || '',
@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
           deposit_amount: pt.deposit_amount || invoice.total * 0.5,
           notes: invoice.notes,
           payment_link: payment_link || undefined,
+          customer_type: customer.customer_type || 'residential',
+          verification_settings: invoice.verification_settings || {},
         };
 
         const agreementText = generateAgreementText(snapshot, schedule);

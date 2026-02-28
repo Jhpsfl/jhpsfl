@@ -207,9 +207,10 @@ function base64ToFile(dataUrl: string, name: string): File {
 
 
 // ─── Inline Camera ID Capture (never leaves the browser — no app switch) ───
-function IdUpload({ label, file, storageKey, onFileChange }: {
+function IdUpload({ label, file, storageKey, onFileChange, showUpload = false }: {
   label: string; file: File | null; storageKey: string;
   onFileChange: (f: File | null) => void;
+  showUpload?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -428,24 +429,26 @@ function IdUpload({ label, file, storageKey, onFileChange }: {
             </svg>
             <span style={{ fontWeight: 700 }}>Take Photo</span>
           </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} style={{
-            flex: 1, padding: "24px 12px", borderRadius: 12,
-            border: "2px dashed #d1d5db", background: "#f9fafb",
-            color: "#6b7280", fontSize: 13, cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-          }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span style={{ fontWeight: 600 }}>Upload File</span>
-          </button>
+          {showUpload && (
+            <button type="button" onClick={() => fileInputRef.current?.click()} style={{
+              flex: 1, padding: "24px 12px", borderRadius: 12,
+              border: "2px dashed #d1d5db", background: "#f9fafb",
+              color: "#6b7280", fontSize: 13, cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span style={{ fontWeight: 600 }}>Upload File</span>
+            </button>
+          )}
         </div>
       )}
       {cameraError === "camera_denied" && (
         <p style={{ fontSize: 12, color: "#DC2626", marginTop: 6 }}>
-          Camera access denied. Use &quot;Upload File&quot; instead.
+          Camera access denied. {showUpload ? 'Use "Upload File" instead.' : 'Please allow camera access in your browser settings and try again.'}
         </p>
       )}
       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/heic,image/heif" onChange={handleFileInput} style={{ display: "none" }} />
@@ -545,16 +548,23 @@ export default function AgreementPage() {
     setSubmitError(null);
     if (!signerName.trim()) { setSubmitError("Please enter your full legal name"); return; }
     if (!signatureData) { setSubmitError("Please sign above"); return; }
-    if (!idFront) { setSubmitError("Please upload the front of your ID"); return; }
-    if (!idBack) { setSubmitError("Please upload the back of your ID"); return; }
+
+    // Determine customer type from snapshot
+    const snap = agreement?.quote_snapshot as unknown as Record<string, unknown> | null;
+    const customerType = (snap?.customer_type as string) || 'residential';
+    const isCommercial = customerType === 'commercial';
+
+    if (!idFront) {
+      setSubmitError(isCommercial ? "Please upload your business authorization document" : "Please take a photo of the front of your ID");
+      return;
+    }
+    if (!isCommercial && !idBack) { setSubmitError("Please take a photo of the back of your ID"); return; }
     if (!agreedToTerms) { setSubmitError("Please agree to the terms"); return; }
 
     setSubmitting(true);
     try {
-      const [frontBase64, backBase64] = await Promise.all([
-        fileToBase64(idFront),
-        fileToBase64(idBack),
-      ]);
+      const frontBase64 = await fileToBase64(idFront);
+      const backBase64 = idBack ? await fileToBase64(idBack) : null;
 
       const res = await fetch("/api/agreement/sign", {
         method: "POST",
@@ -924,43 +934,105 @@ export default function AgreementPage() {
           </div>
         </div>
 
-        {/* ─── ID Upload ─── */}
-        <div style={cardStyle}>
-          <div style={sectionLabel}>Government-Issued ID *</div>
-          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
-            Please upload clear photos of the front and back of a valid government-issued ID for identity verification.
-          </p>
+        {/* ─── Verification Section (adapts to customer type) ─── */}
+        {(() => {
+          const snap = agreement?.quote_snapshot as unknown as Record<string, unknown> | null;
+          const customerType = (snap?.customer_type as string) || 'residential';
+          const vSettings = (snap?.verification_settings as Record<string, unknown>) || {};
+          const allowUpload = !!vSettings.allow_upload;
+          const isCommercial = customerType === 'commercial';
 
-          {/* ID Type selector */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            {[
-              { value: "drivers_license", label: "Driver's License" },
-              { value: "state_id", label: "State ID" },
-              { value: "passport", label: "Passport" },
-              { value: "military_id", label: "Military ID" },
-            ].map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setIdType(opt.value)}
-                style={{
-                  padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  border: idType === opt.value ? "2px solid #4CAF50" : "1px solid #d1d5db",
-                  background: idType === opt.value ? "#f0fdf4" : "#fff",
-                  color: idType === opt.value ? "#2E7D32" : "#6b7280",
-                  cursor: "pointer",
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          if (isCommercial) {
+            // ─── Commercial: Document upload ───
+            return (
+              <div style={cardStyle}>
+                <div style={sectionLabel}>Business Authorization *</div>
+                <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
+                  Please upload documentation authorizing you to approve work on behalf of the business. Accepted documents include:
+                </p>
+                <div style={{ fontSize: 12, color: "#4b5563", marginBottom: 16, lineHeight: 1.7, paddingLeft: 12 }}>
+                  • Letter of Authorization (LOA) on company letterhead<br/>
+                  • Business license or certificate of registration<br/>
+                  • Certificate of Insurance (COI)<br/>
+                  • W-9 form<br/>
+                  • Purchase Order (PO)
+                </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <IdUpload label="Front of ID" file={idFront} storageKey="idFront" onFileChange={setIdFront} />
-            <IdUpload label="Back of ID" file={idBack} storageKey="idBack" onFileChange={setIdBack} />
-          </div>
-        </div>
+                {/* Doc type selector */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                  {[
+                    { value: "loa", label: "Letter of Auth" },
+                    { value: "business_license", label: "Business License" },
+                    { value: "coi", label: "Certificate of Ins." },
+                    { value: "w9", label: "W-9" },
+                    { value: "purchase_order", label: "Purchase Order" },
+                    { value: "other", label: "Other" },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setIdType(opt.value)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        border: idType === opt.value ? "2px solid #1565C0" : "1px solid #d1d5db",
+                        background: idType === opt.value ? "#e3f2fd" : "#fff",
+                        color: idType === opt.value ? "#1565C0" : "#6b7280",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <IdUpload label="Document (Front/Page 1)" file={idFront} storageKey="idFront" onFileChange={setIdFront} showUpload={true} />
+                  <IdUpload label="Additional Page (Optional)" file={idBack} storageKey="idBack" onFileChange={setIdBack} showUpload={true} />
+                </div>
+              </div>
+            );
+          }
+
+          // ─── Residential: Camera-only by default, upload if manager approved ───
+          return (
+            <div style={cardStyle}>
+              <div style={sectionLabel}>Government-Issued ID *</div>
+              <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
+                Please take clear photos of the front and back of a valid government-issued ID for identity verification.
+              </p>
+
+              {/* ID Type selector */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                {[
+                  { value: "drivers_license", label: "Driver\u2019s License" },
+                  { value: "state_id", label: "State ID" },
+                  { value: "passport", label: "Passport" },
+                  { value: "military_id", label: "Military ID" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setIdType(opt.value)}
+                    style={{
+                      padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      border: idType === opt.value ? "2px solid #4CAF50" : "1px solid #d1d5db",
+                      background: idType === opt.value ? "#f0fdf4" : "#fff",
+                      color: idType === opt.value ? "#2E7D32" : "#6b7280",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <IdUpload label="Front of ID" file={idFront} storageKey="idFront" onFileChange={setIdFront} showUpload={allowUpload} />
+                <IdUpload label="Back of ID" file={idBack} storageKey="idBack" onFileChange={setIdBack} showUpload={allowUpload} />
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ─── Signature ─── */}
         <div style={cardStyle}>

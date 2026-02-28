@@ -7,7 +7,7 @@ import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconSend, IconCopy, IconEdit, IconTrash, IconBack } from "./InvoiceIcons";
 import PaymentScheduleView from "./PaymentScheduleView";
 
-export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf }: {
+export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf, onUpdateSettings }: {
   invoice: Invoice;
   isMobile: boolean;
   copiedLink: boolean;
@@ -20,6 +20,7 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   onNavigate?: () => void;
   onRecordPayment?: (scheduleItem: PaymentScheduleItem) => void;
   onPreviewPdf?: () => void;
+  onUpdateSettings?: (settings: Record<string, unknown>) => void;
 }) {
   const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
 
@@ -312,6 +313,29 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
                 <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>
                   {invoice.payment_terms.schedule.filter(s => s.status === "paid").length} of {invoice.payment_terms.schedule.length} payments received
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Verification settings — for contract invoices */}
+          {hasPaymentTerms && onUpdateSettings && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #1a3a1a" }}>
+              <div style={{ fontSize: 10, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+                🔒 Verification Settings
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!!invoice.verification_settings?.allow_upload}
+                  onChange={e => onUpdateSettings({
+                    verification_settings: { ...invoice.verification_settings, allow_upload: e.target.checked }
+                  })}
+                  style={{ accentColor: "#4CAF50", width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: 12, color: "#c8e0c8" }}>Allow file upload (manager override)</span>
+              </label>
+              <div style={{ fontSize: 10, color: "#5a8a5a", lineHeight: 1.5 }}>
+                Default: camera-only for residential. Enable this if the customer calls and needs to upload a file instead.
               </div>
             </div>
           )}

@@ -746,6 +746,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           onNavigate={onNavigate}
           onRecordPayment={(item) => setRecordPaymentItem(item)}
           onPreviewPdf={() => handlePreviewInvoicePdf(selectedInvoice)}
+          onUpdateSettings={async (settings) => {
+            await adminPost("invoices", "update", { id: selectedInvoice.id, ...settings });
+            await loadInvoices();
+          }}
         />
       )}
 
