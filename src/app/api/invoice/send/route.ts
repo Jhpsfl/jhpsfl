@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail } from '@/lib/email';
 import { generateInvoicePDF, getInvoiceFilename } from '@/lib/receipt-generator';
 import type { InvoiceData } from '@/lib/receipt-generator';
+import { generateAgreementText, type QuoteSnapshot, type PaymentScheduleSnapshot } from '@/lib/agreement';
 import { randomUUID } from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -28,21 +29,77 @@ export async function POST(req: NextRequest) {
   const isContract = invoice.payment_terms && invoice.payment_terms.type !== 'full' && invoice.payment_terms.schedule?.length > 0;
   let agreementUrl: string | null = null;
 
-  // For contracts: create financing agreement and get signing link
-  if (isContract) {
+  // For contracts: create financing agreement directly (inline, no self-fetch)
+  if (isContract && invoice.payment_terms) {
     try {
-      const origin = req.headers.get('origin') || 'https://jhpsfl.com';
-      const agreementRes = await fetch(`${origin}/api/agreement`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clerk_user_id,
-          invoice_id: invoice.id,
-        }),
-      });
-      const agreementData = await agreementRes.json();
-      if (agreementData.success && agreementData.url) {
-        agreementUrl = agreementData.url;
+      // Check for existing active agreement for this customer
+      const { data: existing } = await supabase
+        .from('financing_agreements')
+        .select('id, token, status')
+        .eq('customer_id', invoice.customer_id)
+        .in('status', ['pending', 'viewed'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existing) {
+        agreementUrl = `https://jhpsfl.com/agreement/${existing.token}`;
+      } else {
+        // Build snapshot from invoice data
+        const pt = invoice.payment_terms;
+        const schedule: PaymentScheduleSnapshot[] = (pt.schedule || []).map((s: { label: string; amount: number; due_date: string | null }) => ({
+          label: s.label,
+          amount: s.amount,
+          due_date: s.due_date,
+        }));
+
+        const snapshot: QuoteSnapshot & { payment_link?: string } = {
+          quote_number: invoice.invoice_number,
+          customer_name: customer.name || 'Customer',
+          customer_email: customer.email || '',
+          customer_phone: customer.phone || '',
+          line_items: (invoice.line_items || []).map((li: { description: string; quantity: number; unit_price: number; amount: number }) => ({
+            description: li.description,
+            quantity: li.quantity,
+            unit_price: li.unit_price,
+            amount: li.amount,
+          })),
+          subtotal: invoice.subtotal,
+          tax_amount: invoice.tax_amount,
+          total: invoice.total,
+          payment_terms_type: pt.type || 'deposit_balance',
+          deposit_amount: pt.deposit_amount || invoice.total * 0.5,
+          notes: invoice.notes,
+        };
+
+        const agreementText = generateAgreementText(snapshot, schedule);
+        const token = randomUUID();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        const { data: newAgreement, error: agErr } = await supabase
+          .from('financing_agreements')
+          .insert({
+            quote_id: null,
+            customer_id: invoice.customer_id || null,
+            token,
+            status: 'pending',
+            agreement_text: agreementText,
+            payment_schedule: schedule,
+            quote_snapshot: snapshot,
+            expires_at: expiresAt.toISOString(),
+            signer_name: customer.name || null,
+            signer_email: customer.email || null,
+            signer_phone: customer.phone || null,
+          })
+          .select()
+          .single();
+
+        if (!agErr && newAgreement) {
+          agreementUrl = `https://jhpsfl.com/agreement/${newAgreement.token}`;
+        } else {
+          console.error('AGREEMENT_INSERT_ERROR:', agErr);
+        }
       }
     } catch (err) {
       console.error('AGREEMENT_CREATE_ERROR:', err);
