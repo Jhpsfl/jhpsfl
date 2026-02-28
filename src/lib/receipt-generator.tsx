@@ -146,7 +146,7 @@ const C = {
 // ═══════════════════════════════════════════════════════════════
 
 const s = StyleSheet.create({
-  page: { backgroundColor: C.white, paddingTop: 40, paddingBottom: 60, paddingHorizontal: 50, fontFamily: 'Helvetica', fontSize: 10, color: C.dark },
+  page: { backgroundColor: C.white, paddingTop: 75, paddingBottom: 60, paddingHorizontal: 50, fontFamily: 'Helvetica', fontSize: 10, color: C.dark },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 18, borderBottomWidth: 2.5, borderBottomColor: C.primary },
   headerLeft: { flexDirection: 'column', maxWidth: '60%' },
   logo: { width: 160, height: 50, marginBottom: 6, objectFit: 'contain' },
@@ -223,13 +223,42 @@ const CompanyHeader: React.FC<{ logoUrl?: string }> = ({ logoUrl }) => (
   </View>
 );
 
+/** Table column header row — used inline on page 1 and in the fixed continuation bar */
+const TableColumnHeaders: React.FC = () => (
+  <View style={s.tHead}>
+    <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
+    <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
+    <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
+    <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
+  </View>
+);
+
+/** Fixed continuation bar — repeats at the top of every page */
+const ContinuationHeader: React.FC<{ docType: string; docNumber: string }> = ({ docType, docNumber }) => (
+  <View fixed style={{
+    position: 'absolute', top: 12, left: 50, right: 50,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingBottom: 8, borderBottomWidth: 1.5, borderBottomColor: C.primary,
+  }}>
+    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 1 }}>
+      {BRAND.shortName}
+    </Text>
+    <Text style={{ fontSize: 8, color: C.mid }}>
+      {docType} #{docNumber}
+    </Text>
+  </View>
+);
+
+/**
+ * Items table — renders rows individually so @react-pdf can break between
+ * any two rows instead of treating the whole table as one block.
+ * The column header is rendered inline (page 1) and also appears in the
+ * fixed ContinuationHeader on subsequent pages.
+ */
 const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
-  <View style={s.table}>
-    <View style={s.tHead}>
-      <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
-      <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
-      <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
-      <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
+  <>
+    <View style={{ marginTop: 8 }}>
+      <TableColumnHeaders />
     </View>
     {items.map((item, i) => (
       <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
@@ -242,7 +271,8 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
         <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
       </View>
     ))}
-  </View>
+    <View style={{ marginBottom: 20 }} />
+  </>
 );
 
 const TotalsBlock: React.FC<{
@@ -294,7 +324,10 @@ const Footer: React.FC = () => (
     <Text style={s.footerLine}>Thank you for choosing {BRAND.name}!</Text>
     <Text style={s.footerLine}>Questions? Call {BRAND.phone} or email {BRAND.email}</Text>
     <Text style={s.footerLine}>Please keep this document for your records.</Text>
-    <Text style={s.footerBrand}>{BRAND.shortName} · {BRAND.tagline}</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+      <Text style={s.footerBrand}>{BRAND.shortName} · {BRAND.tagline}</Text>
+      <Text style={{ fontSize: 7, color: C.light }} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+    </View>
   </View>
 );
 
@@ -307,6 +340,7 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
   return (
   <Document title={`JHPS Receipt - ${refNum}`} author={BRAND.name} subject="Payment Receipt">
     <Page size="LETTER" style={s.page}>
+      <ContinuationHeader docType="RECEIPT" docNumber={refNum} />
       <View style={s.header}>
         <CompanyHeader logoUrl={logoUrl} />
         <View style={s.headerRight}>
@@ -363,6 +397,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   return (
     <Document title={`JHPS Invoice - ${data.invoiceNumber}`} author={BRAND.name} subject="Service Invoice">
       <Page size="LETTER" style={s.page}>
+        <ContinuationHeader docType="INVOICE" docNumber={data.invoiceNumber} />
         <View style={s.header}>
           <CompanyHeader logoUrl={logoUrl} />
           <View style={s.headerRight}>
@@ -433,6 +468,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
   return (
     <Document title={`JHPS Estimate - ${data.quoteNumber}`} author={BRAND.name} subject="Service Estimate">
       <Page size="LETTER" style={s.page}>
+        <ContinuationHeader docType="ESTIMATE" docNumber={data.quoteNumber} />
         <View style={s.header}>
           <CompanyHeader logoUrl={logoUrl} />
           <View style={s.headerRight}>
