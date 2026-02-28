@@ -32,15 +32,16 @@ export async function POST(req: NextRequest) {
   // For contracts: create financing agreement directly (inline, no self-fetch)
   if (isContract && invoice.payment_terms) {
     try {
-      // Check for existing active agreement for this customer
-      const { data: existing } = await supabase
+      // Check for existing active agreement for this invoice
+      const { data: existingList } = await supabase
         .from('financing_agreements')
         .select('id, token, status')
-        .eq('customer_id', invoice.customer_id)
+        .or(`invoice_id.eq.${invoice.id},customer_id.eq.${invoice.customer_id}`)
         .in('status', ['pending', 'viewed'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+
+      const existing = existingList?.[0];
 
       if (existing) {
         agreementUrl = `https://jhpsfl.com/agreement/${existing.token}`;
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
           payment_terms_type: pt.type || 'deposit_balance',
           deposit_amount: pt.deposit_amount || invoice.total * 0.5,
           notes: invoice.notes,
+          payment_link: payment_link || undefined,
         };
 
         const agreementText = generateAgreementText(snapshot, schedule);
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
           .from('financing_agreements')
           .insert({
             quote_id: null,
+            invoice_id: invoice.id || null,
             customer_id: invoice.customer_id || null,
             token,
             status: 'pending',
