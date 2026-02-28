@@ -80,6 +80,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const [agreementDetail, setAgreementDetail] = useState<any | null>(null);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
   const [sendingAgreement, setSendingAgreement] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // ─── Back button ───
   if (backRef) {
@@ -547,7 +548,26 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     }
   }, [view, selectedQuote, fetchAgreementStatus]);
 
-  // ─── Agreement: Send agreement link ───
+  // ─── Copy shareable estimate link ───
+  const handleCopyLink = async (quote: Quote) => {
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+    if (quote.public_token) {
+      // Use the public estimate page
+      const link = `${baseUrl}/estimate/${quote.public_token}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast("Estimate link copied!");
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 3000);
+      } catch {
+        showToast("Failed to copy link", "error");
+      }
+    } else {
+      showToast("No public link available — try resending the estimate", "error");
+    }
+  };
+
   const handleSendAgreement = async (quote: Quote) => {
     setSendingAgreement(true);
     try {
@@ -716,8 +736,10 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
         <QuoteDetailView
           quote={selectedQuote}
           isMobile={isMobile}
+          copiedLink={copiedLink}
           onBack={() => { setView("list"); setSelectedQuote(null); }}
           onSend={() => setShowSendModal(true)}
+          onCopyLink={handleCopyLink}
           onEdit={startEditQuote}
           onDelete={handleDeleteQuote}
           onMarkAccepted={handleMarkAccepted}

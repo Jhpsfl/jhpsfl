@@ -51,5 +51,6 @@ export interface Quote {
   converted_invoice_id: string | null;
   created_at: string;
   updated_at: string;
+  public_token?: string;
   customers?: { name: string | null; email: string | null; phone: string | null };
 }

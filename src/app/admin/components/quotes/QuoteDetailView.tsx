@@ -7,11 +7,13 @@ import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconSend, IconEdit, IconTrash, IconBack } from "../invoices/InvoiceIcons";
 import PaymentScheduleView from "../invoices/PaymentScheduleView";
 
-export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf, agreementStatus, onSendAgreement, onViewAgreement, sendingAgreement }: {
+export default function QuoteDetailView({ quote, isMobile, copiedLink, onBack, onSend, onCopyLink, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf, agreementStatus, onSendAgreement, onViewAgreement, sendingAgreement }: {
   quote: Quote;
   isMobile: boolean;
+  copiedLink?: boolean;
   onBack: () => void;
   onSend: () => void;
+  onCopyLink?: (q: Quote) => void;
   onEdit: (q: Quote) => void;
   onDelete: (q: Quote) => void;
   onMarkAccepted: (q: Quote) => void;
@@ -265,18 +267,36 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
 
             {/* Send / Resend */}
             {["draft", "sent"].includes(quote.status) && (
-              <button
-                onClick={() => { onNavigate?.(); onSend(); }}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  padding: "12px", borderRadius: 12, border: "none",
-                  background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
-                  fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
-                }}
-              >
-                <IconSend /> {quote.status === "draft" ? "Send Estimate" : "Resend Estimate"}
-              </button>
+              <div style={{ display: "grid", gridTemplateColumns: onCopyLink ? "1fr 1fr" : "1fr", gap: 8 }}>
+                <button
+                  onClick={() => { onNavigate?.(); onSend(); }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    padding: "12px", borderRadius: 12, border: "none",
+                    background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+                  }}
+                >
+                  <IconSend /> {quote.status === "draft" ? "Send" : "Resend"}
+                </button>
+                {onCopyLink && (
+                  <button
+                    onClick={() => { onNavigate?.(); onCopyLink(quote); }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      padding: "12px", borderRadius: 12,
+                      border: "1px solid rgba(76,175,80,0.3)",
+                      background: copiedLink ? "rgba(76,175,80,0.15)" : "rgba(76,175,80,0.06)",
+                      color: copiedLink ? "#66bb6a" : "#4CAF50",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                      transition: "all 0.3s",
+                    }}
+                  >
+                    {copiedLink ? "✓ Copied!" : "🔗 Copy Link"}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Mark Accepted */}
