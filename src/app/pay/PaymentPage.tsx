@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
 
 // Square Web Payments SDK type shim
 declare global {
@@ -207,6 +207,8 @@ export default function PaymentPage() {
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [saveCard, setSaveCard] = useState(false);
   const { userId: clerkUserId, isSignedIn } = useAuth();
+  const { signIn } = useSignIn();
+  const { signUp } = useSignUp();
   const searchParams = useSearchParams();
   const paymentLabel = searchParams.get("payment_label") || "";
   const isDeposit = paymentLabel.toLowerCase().includes("deposit");
@@ -215,8 +217,10 @@ export default function PaymentPage() {
   // Account creation for deposit payments
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [accountCreated, setAccountCreated] = useState(false);
+  const [accountCreating, setAccountCreating] = useState(false);
 
   // Auto-fill from invoice payment link params
   useEffect(() => {
@@ -335,6 +339,78 @@ export default function PaymentPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Create Clerk account and sign in using frontend SDK
+  const createAndSignIn = async (): Promise<boolean> => {
+    if (!signUp || !signIn) return false;
+    setAccountError(null);
+    setAccountCreating(true);
+    try {
+      // Try to create the account via Clerk frontend SDK
+      const result = await signUp.create({
+        emailAddress: formData.email,
+        password,
+        firstName: formData.name.split(" ")[0] || "",
+        lastName: formData.name.split(" ").slice(1).join(" ") || "",
+      });
+
+      if (result.status === "complete") {
+        // Account created — set active session
+        if (result.createdSessionId) {
+          await signIn.create({ transfer: true });
+        }
+        // Also link to customer record via backend
+        fetch("/api/customer/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email, password, name: formData.name, phone: formData.phone,
+          }),
+        }).catch(() => {}); // fire-and-forget, non-blocking
+        setAccountCreated(true);
+        setAccountCreating(false);
+        return true;
+      }
+
+      // Handle email verification if Clerk requires it
+      if (result.status === "missing_requirements") {
+        // Clerk might need email verification — try to prepare it
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+        setAccountError("Please check your email for a verification code. You can complete verification after payment.");
+        setAccountCreated(true); // Let them proceed
+        setAccountCreating(false);
+        return true;
+      }
+
+      setAccountError("Account creation incomplete. Please try again.");
+      setAccountCreating(false);
+      return false;
+    } catch (err: unknown) {
+      // If account already exists, try to sign in instead
+      const clerkErr = err as { errors?: { code: string; message: string }[] };
+      if (clerkErr.errors?.some(e => e.code === "form_identifier_exists")) {
+        try {
+          const signInResult = await signIn.create({
+            identifier: formData.email,
+            password,
+          });
+          if (signInResult.status === "complete") {
+            setAccountCreated(true);
+            setAccountCreating(false);
+            return true;
+          }
+        } catch {
+          setAccountError("Account exists but password is incorrect. Please use the correct password or reset it.");
+          setAccountCreating(false);
+          return false;
+        }
+      }
+      const msg = clerkErr.errors?.[0]?.message || "Failed to create account";
+      setAccountError(msg);
+      setAccountCreating(false);
+      return false;
+    }
+  };
+
   const handlePayment = async () => {
     if (!squareCard || isProcessing) return;
     setIsProcessing(true);
@@ -342,25 +418,10 @@ export default function PaymentPage() {
     setAccountError(null);
 
     try {
-      // For deposit payments: create customer account first (if not signed in)
+      // For deposit payments: create account + sign in FIRST
       if (isDeposit && !isSignedIn && !accountCreated && password) {
-        const regRes = await fetch("/api/customer/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: formData.email,
-            password,
-            name: formData.name,
-            phone: formData.phone,
-          }),
-        });
-        const regData = await regRes.json();
-        if (!regRes.ok) {
-          setAccountError(regData.error || "Failed to create account");
-          setIsProcessing(false);
-          return;
-        }
-        setAccountCreated(true);
+        const ok = await createAndSignIn();
+        if (!ok) { setIsProcessing(false); return; }
       }
 
       const result = await squareCard.tokenize();
@@ -436,6 +497,10 @@ export default function PaymentPage() {
         }
         .field-invalid .amount-input-wrapper { border: 1px solid #ef5350; border-radius: 12px; }
         .field-error-msg { font-size: 12px; color: #ef9a9a; margin-top: 5px; display: block; }
+        .pay-input.input-error {
+          border-color: #ef5350 !important;
+          box-shadow: 0 0 0 3px rgba(239,83,80,0.2) !important;
+        }
         @keyframes shimmer {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -822,20 +887,17 @@ export default function PaymentPage() {
                     📞 407-686-9817
                   </a>
 
-                  {/* Dashboard link for deposit customers */}
+                  {/* Dashboard link for deposit customers — already signed in via Clerk */}
                   {isDeposit && accountCreated && (
                     <div style={{ marginTop: 20 }}>
-                      <Link href="/sign-in?redirect_url=/account?welcome=true" style={{
+                      <Link href="/account?welcome=true" style={{
                         display: "block", textAlign: "center", padding: "16px",
                         background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
                         borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: "none",
                         boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
                       }}>
-                        Sign In to Your Dashboard →
+                        Go to Your Dashboard →
                       </Link>
-                      <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 8 }}>
-                        Use the email and password you just created
-                      </p>
                     </div>
                   )}
                   <div style={{ marginTop: 24 }}>
@@ -1004,8 +1066,9 @@ export default function PaymentPage() {
                           {isDeposit && !isSignedIn && !accountCreated && (
                             <div style={{
                               background: "rgba(76,175,80,0.06)",
-                              border: "1px solid rgba(76,175,80,0.2)",
+                              border: `1px solid ${showErrors && isDeposit && (!password || password.length < 8 || password !== confirmPassword) ? "rgba(239,83,80,0.5)" : "rgba(76,175,80,0.2)"}`,
                               borderRadius: 14, padding: "20px 20px 16px",
+                              transition: "border-color 0.3s",
                             }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                                 <span style={{ fontSize: 18 }}>🔐</span>
@@ -1015,20 +1078,47 @@ export default function PaymentPage() {
                                 </div>
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                <div className={showErrors && isDeposit && !password ? "field-invalid" : ""}>
+                                <div>
                                   <label style={labelStyle}>Password *</label>
-                                  <input className="pay-input" placeholder="Min 8 characters" type="password" value={password}
-                                    onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-                                  {showErrors && isDeposit && !password && <span className="field-error-msg">Password required</span>}
+                                  <div style={{ position: "relative" }}>
+                                    <input
+                                      className={`pay-input ${showErrors && (!password || password.length < 8) ? "input-error" : ""}`}
+                                      placeholder="Min 8 characters"
+                                      type={showPassword ? "text" : "password"}
+                                      value={password}
+                                      onChange={(e) => { setPassword(e.target.value); setAccountError(null); }}
+                                      autoComplete="new-password"
+                                      style={{ paddingRight: 44 }}
+                                    />
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
+                                      position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                                      background: "none", border: "none", cursor: "pointer", padding: 4,
+                                      fontSize: 13, color: "#5a8a5a",
+                                    }}>
+                                      {showPassword ? "Hide" : "Show"}
+                                    </button>
+                                  </div>
+                                  {showErrors && !password && <span className="field-error-msg">Password is required</span>}
+                                  {showErrors && password && password.length < 8 && <span className="field-error-msg">Minimum 8 characters</span>}
                                 </div>
-                                <div className={showErrors && isDeposit && password !== confirmPassword ? "field-invalid" : ""}>
+                                <div>
                                   <label style={labelStyle}>Confirm *</label>
-                                  <input className="pay-input" placeholder="Confirm password" type="password" value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
-                                  {showErrors && isDeposit && password !== confirmPassword && <span className="field-error-msg">Passwords must match</span>}
+                                  <input
+                                    className={`pay-input ${showErrors && password && confirmPassword && password !== confirmPassword ? "input-error" : ""}`}
+                                    placeholder="Confirm password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={confirmPassword}
+                                    onChange={(e) => { setConfirmPassword(e.target.value); setAccountError(null); }}
+                                    autoComplete="new-password"
+                                  />
+                                  {showErrors && password && confirmPassword && password !== confirmPassword && <span className="field-error-msg">Passwords don&apos;t match</span>}
                                 </div>
                               </div>
-                              {accountError && <p style={{ color: "#ef5350", fontSize: 12, marginTop: 8 }}>{accountError}</p>}
+                              {accountError && (
+                                <p style={{ color: "#ef5350", fontSize: 12, marginTop: 8, padding: "8px 12px", background: "rgba(239,83,80,0.08)", borderRadius: 8 }}>
+                                  {accountError}
+                                </p>
+                              )}
                             </div>
                           )}
                           {isDeposit && isSignedIn && (
@@ -1310,27 +1400,19 @@ export default function PaymentPage() {
                           className="cta-pay"
                           onClick={async () => {
                             setIsProcessing(true);
-                            // Create account if deposit
+                            // Create account + sign in if deposit
                             if (isDeposit && !isSignedIn && !accountCreated && password) {
-                              const regRes = await fetch("/api/customer/register", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  email: formData.email, password,
-                                  name: formData.name, phone: formData.phone,
-                                }),
-                              });
-                              const regData = await regRes.json();
-                              if (regRes.ok) setAccountCreated(true);
-                              else { setAccountError(regData.error); setIsProcessing(false); return; }
+                              const ok = await createAndSignIn();
+                              if (!ok) { setIsProcessing(false); return; }
                             }
                             setPaymentId("TEST-" + Date.now());
                             setStep("confirm");
                             setIsProcessing(false);
                           }}
+                          disabled={isProcessing || accountCreating}
                           style={{ background: "linear-gradient(135deg, #ff9800, #e65100)", marginTop: 8 }}
                         >
-                          ⚡ TEST: Skip Payment →
+                          {accountCreating ? "Creating account..." : "⚡ TEST: Skip Payment →"}
                         </button>
                       )}
                     </div>
