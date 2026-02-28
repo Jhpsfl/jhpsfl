@@ -565,14 +565,41 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         <ItemsTable items={data.lineItems} />
         <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel={hasPaymentTerms ? 'Total Contract Price' : 'Amount Due'} />
 
-        {/* Payment Schedule — only for contracts with financing */}
-        {hasPaymentTerms && data.paymentTerms && (
-          <View style={{ marginTop: 14 }} wrap={false}>
+        {/* Regular invoice: everything stays on one page */}
+        {!hasPaymentTerms && (
+          <>
+            <View style={s.infoBox} wrap={false}>
+              <Text style={s.infoTitle}>Invoice Information</Text>
+              <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
+              <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
+              <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
+              {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
+            </View>
+            {data.paymentLink && (
+              <View style={s.payLinkBox} wrap={false}>
+                <Text style={s.payLinkTitle}>Pay Online</Text>
+                <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
+                <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
+              </View>
+            )}
+            {data.notes && <NotesSection text={data.notes} />}
+          </>
+        )}
+
+        <Footer />
+      </Page>
+
+      {/* ══════ CONTRACT PAGE 2: Payment Schedule + Info + Lien Notice ══════ */}
+      {hasPaymentTerms && data.paymentTerms && (
+        <Page size="LETTER" style={s.page}>
+          <ContinuationHeader docType="CONTRACT" docNumber={data.invoiceNumber} />
+
+          {/* Payment Schedule table */}
+          <View style={{ marginTop: 4 }}>
             <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
             </View>
             <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
-              {/* Header row */}
               <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 6, paddingHorizontal: 12 }}>
                 <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>PAYMENT</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
@@ -594,47 +621,30 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
                   </View>
                 );
               })}
-              {/* Deposit due now callout */}
               <View style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
-                    DEPOSIT DUE NOW
-                  </Text>
-                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
-                    {fmt(Math.round(data.paymentTerms.deposit_amount * 100))}
-                  </Text>
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>DEPOSIT DUE NOW</Text>
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>{fmt(Math.round(data.paymentTerms.deposit_amount * 100))}</Text>
                 </View>
               </View>
             </View>
           </View>
-        )}
 
-        {/* Contract info box */}
-        <View style={[s.infoBox, { marginTop: 12 }]}>
-          <Text style={s.infoTitle}>{hasPaymentTerms ? 'Contract Information' : 'Invoice Information'}</Text>
-          <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
-          <View style={s.infoRow}><Text style={s.infoLabel}>{hasPaymentTerms ? 'Contract Number' : 'Invoice Number'}</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
-          <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
-          {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
-          {hasPaymentTerms && (
-            <View style={s.infoRow}><Text style={s.infoLabel}>Terms</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>See Payment Schedule above — Terms & Conditions on following pages</Text></View>
-          )}
-        </View>
-
-        {/* Payment link — regular invoices only, NOT contracts (URL is too long for print) */}
-        {!hasPaymentTerms && data.paymentLink && (
-          <View style={s.payLinkBox} wrap={false}>
-            <Text style={s.payLinkTitle}>Pay Online</Text>
-            <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
-            <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
+          {/* Contract info */}
+          <View style={[s.infoBox, { marginTop: 16 }]}>
+            <Text style={s.infoTitle}>Contract Information</Text>
+            <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
+            <View style={s.infoRow}><Text style={s.infoLabel}>Contract Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
+            <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
+            {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
+            <View style={s.infoRow}><Text style={s.infoLabel}>Terms</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>See Terms & Conditions on following pages</Text></View>
           </View>
-        )}
 
-        {data.notes && <NotesSection text={data.notes} />}
+          {/* Notes */}
+          {data.notes && <NotesSection text={data.notes} />}
 
-        {/* Florida lien notice — on page 1 right after notes for tight layout */}
-        {hasPaymentTerms && (
-          <View style={{ marginTop: 10, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }}>
+          {/* Florida lien notice */}
+          <View style={{ marginTop: 12, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }}>
             <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#E65100', marginBottom: 3, letterSpacing: 0.8, textTransform: 'uppercase' }}>
               Florida Construction Lien Law Notice
             </Text>
@@ -642,10 +652,10 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               {"Under Florida\u2019s Construction Lien Law (Ch. 713, Florida Statutes), those who work on your property or provide materials and are not paid have a right to enforce their claim for payment against your property. This claim is known as a construction lien. If you fail to pay as agreed under this Contract, a lien may be placed on your property. It is recommended that you consult an attorney if you have questions."}
             </Text>
           </View>
-        )}
 
-        <Footer />
-      </Page>
+          <Footer />
+        </Page>
+      )}
 
       {/* Page 2+: Legal Terms & Conditions — only for contracts */}
       {hasPaymentTerms && <LegalTermsPages docNumber={data.invoiceNumber} />}
