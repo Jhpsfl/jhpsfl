@@ -568,12 +568,12 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         {/* Payment Schedule — only for contracts with financing */}
         {hasPaymentTerms && data.paymentTerms && (
           <View style={{ marginTop: 20 }} wrap={false}>
-            <View style={{ backgroundColor: '#1E3A5F', padding: '8 12', borderRadius: '4 4 0 0' }}>
+            <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
             </View>
-            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderRadius: '0 0 4 4' }}>
+            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
               {/* Header row */}
-              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', padding: '6 12' }}>
+              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 6, paddingHorizontal: 12 }}>
                 <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>PAYMENT</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
@@ -581,7 +581,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               {data.paymentTerms.schedule.map((item, i) => {
                 const isDeposit = i === 0;
                 return (
-                  <View key={i} style={{ flexDirection: 'row', padding: '7 12', borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
+                  <View key={i} style={{ flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
                     <Text style={{ flex: 2, fontSize: 9, color: '#2D3748', fontFamily: isDeposit ? 'Helvetica-Bold' : 'Helvetica' }}>
                       {item.label}{isDeposit ? ' (Non-Refundable)' : ''}
                     </Text>
@@ -595,7 +595,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
                 );
               })}
               {/* Deposit due now callout */}
-              <View style={{ padding: '10 12', backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
+              <View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
                     DEPOSIT DUE NOW
@@ -638,10 +638,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               Florida Construction Lien Law Notice
             </Text>
             <Text style={{ fontSize: 7, color: '#BF360C', lineHeight: 1.5 }}>
-              Under Florida&apos;s Construction Lien Law (Ch. 713, Florida Statutes), those who work on your property
-              or provide materials and are not paid have a right to enforce their claim for payment against your
-              property. This claim is known as a construction lien. If you fail to pay as agreed under this Contract,
-              a lien may be placed on your property. It is recommended that you consult an attorney if you have questions.
+              {"Under Florida\u2019s Construction Lien Law (Ch. 713, Florida Statutes), those who work on your property or provide materials and are not paid have a right to enforce their claim for payment against your property. This claim is known as a construction lien. If you fail to pay as agreed under this Contract, a lien may be placed on your property. It is recommended that you consult an attorney if you have questions."}
             </Text>
           </View>
         )}
@@ -715,18 +712,18 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
 
         {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
           <View style={{ marginTop: 20 }} wrap={false}>
-            <View style={{ backgroundColor: '#1E3A5F', padding: '8 12', borderRadius: '4 4 0 0' }}>
+            <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
             </View>
-            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderRadius: '0 0 4 4' }}>
+            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
               {/* Header row */}
-              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', padding: '6 12' }}>
+              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 6, paddingHorizontal: 12 }}>
                 <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>DESCRIPTION</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
               </View>
               {data.paymentTerms.schedule.map((item, i) => (
-                <View key={i} style={{ flexDirection: 'row', padding: '7 12', borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
+                <View key={i} style={{ flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
                   <Text style={{ flex: 2, fontSize: 9, color: '#2D3748' }}>{item.label}</Text>
                   <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{item.due_date ? formatDateShort(new Date(item.due_date)) : 'TBD'}</Text>
                   <Text style={{ flex: 1, fontSize: 9, color: '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{fmt(Math.round(item.amount * 100))}</Text>
