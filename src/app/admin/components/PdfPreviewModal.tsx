@@ -23,106 +23,6 @@ function loadPdfJs(): Promise<any> {
   return pdfjsLoaded;
 }
 
-// ─── Pinch-to-zoom hook (ref-based to avoid stale closures) ───
-function usePinchZoom(contentRef: React.RefObject<HTMLDivElement | null>) {
-  const scaleRef = useRef(1);
-  const txRef = useRef(0);
-  const tyRef = useRef(0);
-  const [, forceRender] = useState(0);
-  const rerender = useCallback(() => forceRender(n => n + 1), []);
-
-  const pinchStartDist = useRef(0);
-  const pinchStartScale = useRef(1);
-  const panStartX = useRef(0);
-  const panStartY = useRef(0);
-  const panStartTx = useRef(0);
-  const panStartTy = useRef(0);
-  const isPinching = useRef(false);
-  const isPanning = useRef(false);
-
-  const applyTransform = useCallback(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    const s = scaleRef.current;
-    const tx = txRef.current;
-    const ty = tyRef.current;
-    el.style.transform = s <= 1
-      ? "none"
-      : `scale(${s}) translate(${tx / s}px, ${ty / s}px)`;
-  }, [contentRef]);
-
-  const resetZoom = useCallback(() => {
-    scaleRef.current = 1;
-    txRef.current = 0;
-    tyRef.current = 0;
-    applyTransform();
-    rerender();
-  }, [applyTransform, rerender]);
-
-  useEffect(() => {
-    const el = contentRef.current?.parentElement; // the scroll container
-    if (!el) return;
-
-    const getDist = (t: TouchList) => {
-      const dx = t[1].clientX - t[0].clientX;
-      const dy = t[1].clientY - t[0].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        isPinching.current = true;
-        isPanning.current = false;
-        pinchStartDist.current = getDist(e.touches);
-        pinchStartScale.current = scaleRef.current;
-      } else if (e.touches.length === 1 && scaleRef.current > 1) {
-        isPanning.current = true;
-        panStartX.current = e.touches[0].clientX;
-        panStartY.current = e.touches[0].clientY;
-        panStartTx.current = txRef.current;
-        panStartTy.current = tyRef.current;
-      }
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (isPinching.current && e.touches.length === 2) {
-        e.preventDefault();
-        const dist = getDist(e.touches);
-        const newScale = Math.min(5, Math.max(1, pinchStartScale.current * (dist / pinchStartDist.current)));
-        scaleRef.current = newScale;
-        if (newScale <= 1) { txRef.current = 0; tyRef.current = 0; }
-        applyTransform();
-      } else if (isPanning.current && e.touches.length === 1 && scaleRef.current > 1) {
-        e.preventDefault();
-        txRef.current = panStartTx.current + (e.touches[0].clientX - panStartX.current);
-        tyRef.current = panStartTy.current + (e.touches[0].clientY - panStartY.current);
-        applyTransform();
-      }
-    };
-
-    const onTouchEnd = () => {
-      if (isPinching.current) {
-        isPinching.current = false;
-        rerender(); // update UI (reset button, touch-action, etc.)
-      }
-      isPanning.current = false;
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: false });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd);
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [contentRef, applyTransform, rerender]);
-
-  return { getScale: () => scaleRef.current, resetZoom };
-}
-
 export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   pdfUrl: string | null;
   loading: boolean;
@@ -131,10 +31,46 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   const [pages, setPages] = useState<string[]>([]);
   const [renderError, setRenderError] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const { getScale, resetZoom } = usePinchZoom(contentRef);
-  const scale = getScale();
-  const isZoomed = scale > 1.05;
+
+  // Refs for pinch/pan state (no re-renders during gesture)
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+  const gestureRef = useRef({
+    isPinching: false,
+    isPanning: false,
+    isScrolling: false,
+    startDist: 0,
+    startScale: 1,
+    panStartX: 0,
+    panStartY: 0,
+    panStartTx: 0,
+    panStartTy: 0,
+    scrollStartY: 0,
+    scrollStartTop: 0,
+  });
+
+  const applyTransform = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const s = scaleRef.current;
+    if (s <= 1) {
+      el.style.transform = "none";
+    } else {
+      el.style.transform = `scale(${s}) translate(${txRef.current / s}px, ${tyRef.current / s}px)`;
+    }
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    scaleRef.current = 1;
+    txRef.current = 0;
+    tyRef.current = 0;
+    applyTransform();
+    setZoomLevel(1);
+  }, [applyTransform]);
 
   // Prevent body scroll while modal is open + clean up blob URL on unmount
   useEffect(() => {
@@ -146,6 +82,93 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
       }
     };
   }, [pdfUrl]);
+
+  // ─── Touch event handling ───
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl || pages.length === 0) return;
+
+    const getDist = (t: TouchList) => {
+      const dx = t[1].clientX - t[0].clientX;
+      const dy = t[1].clientY - t[0].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const g = gestureRef.current;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        // Pinch start
+        e.preventDefault();
+        g.isPinching = true;
+        g.isPanning = false;
+        g.isScrolling = false;
+        g.startDist = getDist(e.touches);
+        g.startScale = scaleRef.current;
+      } else if (e.touches.length === 1) {
+        if (scaleRef.current > 1.05) {
+          // Pan when zoomed in
+          e.preventDefault();
+          g.isPanning = true;
+          g.isScrolling = false;
+          g.panStartX = e.touches[0].clientX;
+          g.panStartY = e.touches[0].clientY;
+          g.panStartTx = txRef.current;
+          g.panStartTy = tyRef.current;
+        } else {
+          // Normal scroll at 1x — let it through but track in case 2nd finger added
+          g.isScrolling = true;
+          g.isPanning = false;
+        }
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (g.isPinching && e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getDist(e.touches);
+        const newScale = Math.min(5, Math.max(1, g.startScale * (dist / g.startDist)));
+        scaleRef.current = newScale;
+        if (newScale <= 1.01) {
+          txRef.current = 0;
+          tyRef.current = 0;
+        }
+        applyTransform();
+      } else if (g.isPanning && e.touches.length === 1 && scaleRef.current > 1.05) {
+        e.preventDefault();
+        txRef.current = g.panStartTx + (e.touches[0].clientX - g.panStartX);
+        tyRef.current = g.panStartTy + (e.touches[0].clientY - g.panStartY);
+        applyTransform();
+      }
+      // isScrolling: don't preventDefault, let browser handle native scroll
+    };
+
+    const onTouchEnd = () => {
+      if (g.isPinching) {
+        g.isPinching = false;
+        // Snap to 1x if close
+        if (scaleRef.current < 1.05) {
+          scaleRef.current = 1;
+          txRef.current = 0;
+          tyRef.current = 0;
+          applyTransform();
+        }
+        setZoomLevel(scaleRef.current);
+      }
+      g.isPanning = false;
+      g.isScrolling = false;
+    };
+
+    scrollEl.addEventListener("touchstart", onTouchStart, { passive: false });
+    scrollEl.addEventListener("touchmove", onTouchMove, { passive: false });
+    scrollEl.addEventListener("touchend", onTouchEnd);
+
+    return () => {
+      scrollEl.removeEventListener("touchstart", onTouchStart);
+      scrollEl.removeEventListener("touchmove", onTouchMove);
+      scrollEl.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [pages.length, applyTransform]);
 
   // Render PDF pages to canvas images using pdf.js
   const renderPdf = useCallback(async (url: string) => {
@@ -186,6 +209,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   }, [pdfUrl, loading, renderPdf]);
 
   const showSpinner = loading || rendering;
+  const isZoomed = zoomLevel > 1.05;
 
   return (
     <div
@@ -254,11 +278,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
                   display: "flex", alignItems: "center", gap: 4,
                 }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="8" y1="11" x2="14" y2="11" />
-                </svg>
-                {Math.round(scale * 100)}%
+                {Math.round(zoomLevel * 100)}% ✕
               </button>
             )}
             <button
@@ -278,12 +298,14 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
           </div>
         </div>
 
-        {/* PDF content area — scroll container */}
+        {/* PDF content area */}
         <div
+          ref={scrollRef}
           style={{
             flex: 1, position: "relative",
             overflow: isZoomed ? "hidden" : "auto",
-            WebkitOverflowScrolling: "touch",
+            WebkitOverflowScrolling: isZoomed ? undefined : "touch",
+            touchAction: pages.length > 0 ? "none" : "auto",
           }}
         >
           {showSpinner ? (
