@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import type { Quote, QuoteLineItem, Customer, CustomerJob } from "./quoteTypes";
+import type { Quote, QuoteLineItem, Customer, CustomerJob, PaymentTerms } from "./quoteTypes";
 import { formatCurrency, formatDate, FINANCING_MESSAGE } from "./quoteHelpers";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconPlus, IconSend, IconTrash, IconBack } from "../invoices/InvoiceIcons";
+import PaymentTermsConfig from "../invoices/PaymentTermsConfig";
 
 export default function QuoteForm({
   view, isMobile, form, setForm, customers, selectedQuote,
@@ -26,6 +27,7 @@ export default function QuoteForm({
     notes: string;
     line_items: QuoteLineItem[];
     show_financing: boolean;
+    payment_terms: PaymentTerms | null;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -464,6 +466,15 @@ export default function QuoteForm({
               placeholder="Scope of work, terms, or special instructions..."
               rows={3}
               style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+
+          {/* Payment Terms */}
+          <div style={{ marginTop: 8, paddingTop: 20, borderTop: "1px solid #1a3a1a" }}>
+            <PaymentTermsConfig
+              terms={form.payment_terms}
+              total={total}
+              onChange={terms => setForm(prev => ({ ...prev, payment_terms: terms }))}
             />
           </div>
 
