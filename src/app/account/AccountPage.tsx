@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   SignedIn,
   SignedOut,
@@ -62,6 +63,11 @@ interface Invoice {
   status: string;
   line_items: { description: string; amount: number }[] | null;
   payment_link: string | null;
+  payment_terms?: {
+    type: string;
+    deposit_amount: number;
+    schedule: { label: string; amount: number; due_date: string | null; status: string }[];
+  } | null;
   created_at: string;
 }
 interface StoredCard {
@@ -72,6 +78,21 @@ interface StoredCard {
   exp_year: number | null;
   is_default: boolean;
 }
+interface Agreement {
+  id: string;
+  status: string;
+  signed_at: string | null;
+  agreement_text: string;
+  payment_schedule: { label: string; amount: number; due_date: string | null }[] | null;
+  quote_snapshot: {
+    quote_number: string;
+    customer_name: string;
+    line_items: { description: string; amount: number }[];
+    total: number;
+    deposit_amount: number;
+    payment_terms_type: string;
+  } | null;
+}
 
 interface DashboardData {
   customer: Customer | null;
@@ -80,6 +101,7 @@ interface DashboardData {
   payments: Payment[];
   subscriptions: Subscription[];
   invoices: Invoice[];
+  agreements: Agreement[];
 }
 
 const clerkAppearance = {
@@ -170,6 +192,9 @@ function buildPayUrl(
 function DashboardView() {
   const { userId } = useAuth();
   const { user } = useUser();
+  const searchParams = useSearchParams();
+  const isWelcome = searchParams.get("welcome") === "true";
+  const [showWelcome, setShowWelcome] = useState(isWelcome);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<StoredCard[]>([]);
@@ -384,6 +409,217 @@ function DashboardView() {
           <UserButton appearance={{ elements: { avatarBox: { width: 52, height: 52 } } }} />
         </div>
       </div>
+
+      {/* ─── Welcome Modal (first-time after deposit payment) ─── */}
+      {showWelcome && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9998,
+          background: "rgba(0,0,0,0.85)", backdropFilter: "blur(10px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24, animation: "fadeIn 0.4s ease",
+        }}>
+          <div style={{
+            background: "linear-gradient(160deg, #0d1f0d, #091409)",
+            border: "1px solid rgba(76,175,80,0.3)", borderRadius: 24,
+            padding: "48px 36px", maxWidth: 460, width: "100%",
+            textAlign: "center", animation: "slideUp 0.5s ease",
+          }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: "50%", margin: "0 auto 20px",
+              background: "linear-gradient(135deg, rgba(76,175,80,0.25), rgba(46,125,50,0.15))",
+              border: "2px solid #4CAF50",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 40,
+            }}>🎉</div>
+            <h2 style={{
+              fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8",
+              fontWeight: 800, marginBottom: 8,
+            }}>
+              Welcome to JHPS!
+            </h2>
+            <p style={{ color: "#8aba8a", fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>
+              Thank you for choosing Jenkins Home & Property Solutions.
+              Your account is all set up and your deposit has been received.
+            </p>
+            <div style={{
+              background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+              borderRadius: 14, padding: "16px 20px", marginBottom: 28, textAlign: "left",
+            }}>
+              <p style={{ fontSize: 12, color: "#4CAF50", fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>YOUR DASHBOARD INCLUDES:</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[
+                  { icon: "📋", text: "Job details & project scope" },
+                  { icon: "💳", text: "Payment plan & schedule" },
+                  { icon: "📄", text: "Contract & documents" },
+                  { icon: "📞", text: "Direct contact with our team" },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>{item.icon}</span>
+                    <span style={{ color: "#c8e0c8", fontSize: 14 }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setShowWelcome(false);
+                // Remove ?welcome=true from URL without reload
+                window.history.replaceState({}, "", "/account");
+              }}
+              style={{
+                width: "100%", padding: "16px", borderRadius: 14, border: "none",
+                background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                fontSize: 16, fontWeight: 700, cursor: "pointer",
+                boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+              }}
+            >
+              Explore My Dashboard →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Payment Plan / Service Contract ─── */}
+      {data?.agreements && data.agreements.length > 0 && (() => {
+        const agreement = data.agreements[0]; // Most recent
+        const snap = agreement.quote_snapshot;
+        if (!snap) return null;
+        const schedule = agreement.payment_schedule || [];
+        // Find matching invoice for payment status
+        const matchingInvoice = data.invoices.find(inv => inv.invoice_number === snap.quote_number);
+        const paymentTerms = matchingInvoice?.payment_terms;
+        const paidItems = paymentTerms?.schedule?.filter(s => s.status === "paid") || [];
+        const totalPaid = matchingInvoice?.amount_paid || paidItems.reduce((sum, s) => sum + s.amount, 0);
+        const totalContract = snap.total;
+        const paidPercent = totalContract > 0 ? Math.min(100, Math.round((totalPaid / totalContract) * 100)) : 0;
+
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ fontSize: 13, letterSpacing: 2, color: "#4CAF50", fontWeight: 700, marginBottom: 12 }}>SERVICE CONTRACT</h3>
+            <div style={{
+              background: "linear-gradient(160deg, #0d1f0d, #091409)",
+              border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 28px",
+            }}>
+              {/* Project title */}
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ color: "#e8f5e8", fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
+                  {snap.line_items?.[0]?.description || "Service Contract"}
+                </p>
+                <p style={{ color: "#5a8a5a", fontSize: 13 }}>Contract #{snap.quote_number}</p>
+                {agreement.signed_at && (
+                  <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 4 }}>
+                    Signed {new Date(agreement.signed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                  </p>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: "#8aba8a", fontWeight: 600 }}>Payment Progress</span>
+                  <span style={{ fontSize: 12, color: "#4CAF50", fontWeight: 700 }}>{paidPercent}%</span>
+                </div>
+                <div style={{
+                  height: 10, borderRadius: 5, background: "rgba(255,255,255,0.06)",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%", borderRadius: 5,
+                    background: "linear-gradient(90deg, #4CAF50, #81C784)",
+                    width: `${paidPercent}%`,
+                    transition: "width 1s ease",
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: "#5a8a5a" }}>
+                    Paid: <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  </span>
+                  <span style={{ fontSize: 12, color: "#5a8a5a" }}>
+                    Total: <strong style={{ color: "#c8e0c8", fontFamily: "'JetBrains Mono', monospace" }}>${totalContract.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment schedule */}
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>PAYMENT SCHEDULE</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {schedule.map((item, i) => {
+                    const paidItem = paymentTerms?.schedule?.[i];
+                    const isPaid = paidItem?.status === "paid";
+                    const isNext = !isPaid && (i === 0 || paymentTerms?.schedule?.[i - 1]?.status === "paid");
+                    return (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px 14px", borderRadius: 10,
+                        background: isPaid ? "rgba(76,175,80,0.08)" : isNext ? "rgba(255,183,77,0.08)" : "rgba(255,255,255,0.02)",
+                        border: `1px solid ${isPaid ? "rgba(76,175,80,0.2)" : isNext ? "rgba(255,183,77,0.2)" : "rgba(255,255,255,0.05)"}`,
+                      }}>
+                        <div>
+                          <span style={{ fontSize: 13, color: isPaid ? "#66bb6a" : "#c8e0c8", fontWeight: 600 }}>
+                            {isPaid ? "✓ " : isNext ? "→ " : ""}{item.label}
+                          </span>
+                          {item.due_date && (
+                            <span style={{ fontSize: 11, color: "#5a8a5a", marginLeft: 8 }}>
+                              {new Date(item.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700,
+                          color: isPaid ? "#4CAF50" : isNext ? "#ffa726" : "#8aba8a",
+                        }}>
+                          ${item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Pay next installment button */}
+              {(() => {
+                const nextIdx = paymentTerms?.schedule?.findIndex(s => s.status !== "paid") ?? -1;
+                if (nextIdx < 0 || !schedule[nextIdx]) return null;
+                const nextItem = schedule[nextIdx];
+                const payUrl = buildPayUrl(
+                  { ...matchingInvoice!, total: nextItem.amount, amount_paid: 0 },
+                  data.customer,
+                  data.jobSites,
+                );
+                return (
+                  <Link href={`${payUrl}&payment_label=${encodeURIComponent(nextItem.label)}`} style={{
+                    display: "block", textAlign: "center", padding: "14px",
+                    background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                    borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: "none",
+                    boxShadow: "0 4px 14px rgba(76,175,80,0.3)", marginBottom: 12,
+                  }}>
+                    Pay {nextItem.label} — ${nextItem.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} →
+                  </Link>
+                );
+              })()}
+
+              {/* Contract PDF download */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <Link href={`/api/pdf/preview?type=invoice&data=${encodeURIComponent(JSON.stringify({ invoice_number: snap.quote_number }))}`} target="_blank" style={{
+                  flex: 1, textAlign: "center", padding: "10px",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid #1a3a1a",
+                  borderRadius: 10, color: "#8aba8a", fontSize: 13, fontWeight: 600, textDecoration: "none",
+                }}>
+                  📄 View Contract
+                </Link>
+                <a href="tel:4076869817" style={{
+                  flex: 1, textAlign: "center", padding: "10px",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid #1a3a1a",
+                  borderRadius: 10, color: "#8aba8a", fontSize: 13, fontWeight: 600, textDecoration: "none",
+                }}>
+                  📞 Contact JHPS
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Profile Edit Panel */}
       {showProfile && (

@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
     const customerId = customer.id;
 
     // Fetch all related data in parallel
-    const [jobSitesRes, jobsRes, paymentsRes, subscriptionsRes, invoicesRes] =
+    const [jobSitesRes, jobsRes, paymentsRes, subscriptionsRes, invoicesRes, agreementsRes] =
       await Promise.all([
         supabase
           .from("job_sites")
@@ -167,6 +167,13 @@ export async function GET(req: NextRequest) {
           .eq("customer_id", customerId)
           .order("created_at", { ascending: false })
           .limit(50),
+        supabase
+          .from("financing_agreements")
+          .select("id, status, signed_at, agreement_text, payment_schedule, quote_snapshot")
+          .eq("customer_id", customerId)
+          .in("status", ["signed", "pending", "viewed"])
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
 
     return NextResponse.json({
@@ -176,6 +183,7 @@ export async function GET(req: NextRequest) {
       payments: paymentsRes.data || [],
       subscriptions: subscriptionsRes.data || [],
       invoices: invoicesRes.data || [],
+      agreements: agreementsRes.data || [],
     });
   } catch (err) {
     console.error("Dashboard API error:", err);
