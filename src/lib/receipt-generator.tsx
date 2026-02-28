@@ -404,7 +404,7 @@ const LEGAL_SECTIONS = [
   },
   {
     title: '2. LATE PAYMENT & ACCELERATION',
-    text: 'A late fee of 1.5% per month (18% annual percentage rate) shall be assessed on any amount not received within seven (7) calendar days of its scheduled due date. If any payment is more than fourteen (14) calendar days past due, the entire remaining unpaid balance shall become immediately due and payable in full ("Acceleration"). The Company reserves the right to suspend or halt all work on the project if any payment is more than seven (7) days past due, and to resume only upon full cure of the delinquency.',
+    text: 'A late fee of Fifty Dollars ($50.00) shall be assessed on any payment not received within seven (7) calendar days of its scheduled due date. In addition, interest of 1.5% per month (18% annual percentage rate) shall accrue on any unpaid balance beginning on the eighth (8th) day after the due date. If any payment is more than fourteen (14) calendar days past due, the entire remaining unpaid balance shall become immediately due and payable in full ("Acceleration"). The Company reserves the right to suspend or halt all work on the project if any payment is more than seven (7) days past due, and to resume only upon full cure of the delinquency including payment of all accrued late fees and interest.',
   },
   {
     title: '3. CONSTRUCTION LIEN RIGHTS — FLORIDA STATUTE CH. 713',
@@ -567,7 +567,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
 
         {/* Payment Schedule — only for contracts with financing */}
         {hasPaymentTerms && data.paymentTerms && (
-          <View style={{ marginTop: 20 }} wrap={false}>
+          <View style={{ marginTop: 16 }}>
             <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
             </View>
@@ -609,7 +609,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </View>
         )}
 
-        <View style={s.infoBox} wrap={false}>
+        <View style={[s.infoBox, { marginTop: 12 }]}>
           <Text style={s.infoTitle}>{hasPaymentTerms ? 'Contract Information' : 'Invoice Information'}</Text>
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>{hasPaymentTerms ? 'Contract Number' : 'Invoice Number'}</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
@@ -620,8 +620,8 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           )}
         </View>
 
-        {/* Payment link */}
-        {data.paymentLink && (
+        {/* Payment link — regular invoices only, NOT contracts (URL is too long for print) */}
+        {!hasPaymentTerms && data.paymentLink && (
           <View style={s.payLinkBox} wrap={false}>
             <Text style={s.payLinkTitle}>Pay Online</Text>
             <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
@@ -631,10 +631,10 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
 
         {data.notes && <NotesSection text={data.notes} />}
 
-        {/* Florida lien notice — required for contracts over $2,500 */}
+        {/* Florida lien notice — on page 1 right after notes for tight layout */}
         {hasPaymentTerms && (
-          <View style={{ marginTop: 16, padding: 10, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }} wrap={false}>
-            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#E65100', marginBottom: 4, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+          <View style={{ marginTop: 10, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#E65100', marginBottom: 3, letterSpacing: 0.8, textTransform: 'uppercase' }}>
               Florida Construction Lien Law Notice
             </Text>
             <Text style={{ fontSize: 7, color: '#BF360C', lineHeight: 1.5 }}>

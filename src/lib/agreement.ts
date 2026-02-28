@@ -122,7 +122,7 @@ The deposit of ${formatCurrency(snapshot.deposit_amount)} is due upon execution 
 
 a) All payments are due on or before the scheduled due dates listed above.
 b) Payments may be made via credit/debit card, cash, check, Zelle, or Venmo.
-c) A late fee of 1.5% per month (18% APR) will be assessed on any amount past due more than seven (7) calendar days.
+c) A late fee of Fifty Dollars ($50.00) will be assessed on any payment not received within seven (7) calendar days of its due date. In addition, interest of 1.5% per month (18% APR) will accrue on any unpaid balance beginning on the eighth (8th) day after the due date.
 ${isInstallment ? `d) If any installment payment is more than fourteen (14) calendar days past due, the entire remaining balance shall become immediately due and payable in full ("Acceleration Clause").
 e) The Company reserves the right to suspend or halt work on the project if any payment is more than seven (7) days past due.` : `d) The Company reserves the right to suspend or halt work on the project if any payment is more than seven (7) days past due.`}
 
