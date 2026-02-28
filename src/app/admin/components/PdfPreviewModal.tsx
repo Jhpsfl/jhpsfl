@@ -23,22 +23,44 @@ function loadPdfJs(): Promise<any> {
   return pdfjsLoaded;
 }
 
-// ─── Pinch-to-zoom hook ───
-function usePinchZoom(containerRef: React.RefObject<HTMLDivElement | null>) {
-  const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const pinchRef = useRef({ startDist: 0, startScale: 1 });
-  const panRef = useRef({ startX: 0, startY: 0, startTx: 0, startTy: 0 });
+// ─── Pinch-to-zoom hook (ref-based to avoid stale closures) ───
+function usePinchZoom(contentRef: React.RefObject<HTMLDivElement | null>) {
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+  const [, forceRender] = useState(0);
+  const rerender = useCallback(() => forceRender(n => n + 1), []);
+
+  const pinchStartDist = useRef(0);
+  const pinchStartScale = useRef(1);
+  const panStartX = useRef(0);
+  const panStartY = useRef(0);
+  const panStartTx = useRef(0);
+  const panStartTy = useRef(0);
   const isPinching = useRef(false);
   const isPanning = useRef(false);
 
+  const applyTransform = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const s = scaleRef.current;
+    const tx = txRef.current;
+    const ty = tyRef.current;
+    el.style.transform = s <= 1
+      ? "none"
+      : `scale(${s}) translate(${tx / s}px, ${ty / s}px)`;
+  }, [contentRef]);
+
   const resetZoom = useCallback(() => {
-    setScale(1);
-    setTranslate({ x: 0, y: 0 });
-  }, []);
+    scaleRef.current = 1;
+    txRef.current = 0;
+    tyRef.current = 0;
+    applyTransform();
+    rerender();
+  }, [applyTransform, rerender]);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = contentRef.current?.parentElement; // the scroll container
     if (!el) return;
 
     const getDist = (t: TouchList) => {
@@ -52,15 +74,14 @@ function usePinchZoom(containerRef: React.RefObject<HTMLDivElement | null>) {
         e.preventDefault();
         isPinching.current = true;
         isPanning.current = false;
-        pinchRef.current.startDist = getDist(e.touches);
-        pinchRef.current.startScale = scale;
-      } else if (e.touches.length === 1 && scale > 1) {
-        // Pan when zoomed in
+        pinchStartDist.current = getDist(e.touches);
+        pinchStartScale.current = scaleRef.current;
+      } else if (e.touches.length === 1 && scaleRef.current > 1) {
         isPanning.current = true;
-        panRef.current.startX = e.touches[0].clientX;
-        panRef.current.startY = e.touches[0].clientY;
-        panRef.current.startTx = translate.x;
-        panRef.current.startTy = translate.y;
+        panStartX.current = e.touches[0].clientX;
+        panStartY.current = e.touches[0].clientY;
+        panStartTx.current = txRef.current;
+        panStartTy.current = tyRef.current;
       }
     };
 
@@ -68,25 +89,24 @@ function usePinchZoom(containerRef: React.RefObject<HTMLDivElement | null>) {
       if (isPinching.current && e.touches.length === 2) {
         e.preventDefault();
         const dist = getDist(e.touches);
-        const newScale = Math.min(5, Math.max(1, pinchRef.current.startScale * (dist / pinchRef.current.startDist)));
-        setScale(newScale);
-        if (newScale <= 1) {
-          setTranslate({ x: 0, y: 0 });
-        }
-      } else if (isPanning.current && e.touches.length === 1 && scale > 1) {
+        const newScale = Math.min(5, Math.max(1, pinchStartScale.current * (dist / pinchStartDist.current)));
+        scaleRef.current = newScale;
+        if (newScale <= 1) { txRef.current = 0; tyRef.current = 0; }
+        applyTransform();
+      } else if (isPanning.current && e.touches.length === 1 && scaleRef.current > 1) {
         e.preventDefault();
-        const dx = e.touches[0].clientX - panRef.current.startX;
-        const dy = e.touches[0].clientY - panRef.current.startY;
-        setTranslate({
-          x: panRef.current.startTx + dx,
-          y: panRef.current.startTy + dy,
-        });
+        txRef.current = panStartTx.current + (e.touches[0].clientX - panStartX.current);
+        tyRef.current = panStartTy.current + (e.touches[0].clientY - panStartY.current);
+        applyTransform();
       }
     };
 
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) isPinching.current = false;
-      if (e.touches.length < 1) isPanning.current = false;
+    const onTouchEnd = () => {
+      if (isPinching.current) {
+        isPinching.current = false;
+        rerender(); // update UI (reset button, touch-action, etc.)
+      }
+      isPanning.current = false;
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: false });
@@ -98,9 +118,9 @@ function usePinchZoom(containerRef: React.RefObject<HTMLDivElement | null>) {
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
     };
-  }, [containerRef, scale, translate]);
+  }, [contentRef, applyTransform, rerender]);
 
-  return { scale, translate, resetZoom };
+  return { getScale: () => scaleRef.current, resetZoom };
 }
 
 export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
@@ -111,8 +131,10 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   const [pages, setPages] = useState<string[]>([]);
   const [renderError, setRenderError] = useState(false);
   const [rendering, setRendering] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scale, translate, resetZoom } = usePinchZoom(containerRef);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const { getScale, resetZoom } = usePinchZoom(contentRef);
+  const scale = getScale();
+  const isZoomed = scale > 1.05;
 
   // Prevent body scroll while modal is open + clean up blob URL on unmount
   useEffect(() => {
@@ -138,8 +160,7 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const s = 2;
-        const viewport = page.getViewport({ scale: s });
+        const viewport = page.getViewport({ scale: 2 });
 
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
@@ -165,7 +186,6 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   }, [pdfUrl, loading, renderPdf]);
 
   const showSpinner = loading || rendering;
-  const isZoomed = scale > 1.05;
 
   return (
     <div
@@ -258,14 +278,12 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
           </div>
         </div>
 
-        {/* PDF content area */}
+        {/* PDF content area — scroll container */}
         <div
-          ref={containerRef}
           style={{
             flex: 1, position: "relative",
             overflow: isZoomed ? "hidden" : "auto",
             WebkitOverflowScrolling: "touch",
-            touchAction: isZoomed ? "none" : "pan-y",
           }}
         >
           {showSpinner ? (
@@ -286,13 +304,14 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
               </div>
             </div>
           ) : pages.length > 0 ? (
-            <div style={{
-              padding: 16,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-              transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
-              transformOrigin: "top center",
-              transition: isZoomed ? "none" : "transform 0.2s ease",
-            }}>
+            <div
+              ref={contentRef}
+              style={{
+                padding: 16,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+                transformOrigin: "top center",
+              }}
+            >
               {pages.map((src, i) => (
                 <img
                   key={i}
@@ -304,6 +323,8 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
                     borderRadius: 4,
                     boxShadow: "0 2px 20px rgba(0,0,0,0.5)",
                     pointerEvents: "none",
+                    userSelect: "none",
+                    WebkitUserSelect: "none",
                   }}
                 />
               ))}
