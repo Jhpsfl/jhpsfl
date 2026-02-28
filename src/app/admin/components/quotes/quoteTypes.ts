@@ -27,6 +27,10 @@ export interface QuoteLineItem {
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "expired" | "converted";
 
+// Re-use invoice payment terms types (identical structure)
+export type { PaymentTerms, PaymentTermsType, PaymentScheduleItem } from "../invoices/invoiceTypes";
+import type { PaymentTerms } from "../invoices/invoiceTypes";
+
 export interface Quote {
   id: string;
   customer_id: string | null;
@@ -40,6 +44,7 @@ export interface Quote {
   notes: string | null;
   line_items: QuoteLineItem[];
   show_financing: boolean;
+  payment_terms?: PaymentTerms | null;
   sent_at: string | null;
   accepted_at: string | null;
   declined_at: string | null;

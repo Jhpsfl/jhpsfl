@@ -572,6 +572,7 @@ export async function POST(request: NextRequest) {
                 notes: payload.notes || null,
                 line_items: payload.line_items || [],
                 show_financing: payload.show_financing || false,
+                payment_terms: payload.payment_terms || null,
                 sent_at: payload.sent_at || null,
               })
               .select(`*, customers ( name, email, phone )`)
@@ -584,7 +585,7 @@ export async function POST(request: NextRequest) {
             const allowedFields = [
               "customer_id", "quote_number", "status", "subtotal",
               "tax_rate", "tax_amount", "total", "expiration_date",
-              "notes", "line_items", "show_financing",
+              "notes", "line_items", "show_financing", "payment_terms",
               "sent_at", "accepted_at", "declined_at", "converted_invoice_id"
             ];
             for (const field of allowedFields) {

@@ -5,6 +5,7 @@ import type { Quote } from "./quoteTypes";
 import { formatCurrency, formatDate, FINANCING_MESSAGE } from "./quoteHelpers";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconSend, IconEdit, IconTrash, IconBack } from "../invoices/InvoiceIcons";
+import PaymentScheduleView from "../invoices/PaymentScheduleView";
 
 export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf }: {
   quote: Quote;
@@ -160,6 +161,14 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
                 <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
                 <div style={{ fontSize: 13, color: "#8aba8a", lineHeight: 1.6 }}>{quote.notes}</div>
               </div>
+            )}
+
+            {/* Payment Schedule */}
+            {quote.payment_terms && quote.payment_terms.type !== "full" && (
+              <PaymentScheduleView
+                terms={quote.payment_terms}
+                total={quote.total}
+              />
             )}
           </div>
         </div>

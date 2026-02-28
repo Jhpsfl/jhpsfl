@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Quote, QuoteLineItem, Customer, CustomerJob } from "./components/quotes/quoteTypes";
+import type { Quote, QuoteLineItem, Customer, CustomerJob, PaymentTerms } from "./components/quotes/quoteTypes";
 import { generateQuoteNumber, formatCurrency, getDefaultExpirationDate, createLineItemId } from "./components/quotes/quoteHelpers";
 import QuoteListView from "./components/quotes/QuoteListView";
 import QuoteForm from "./components/quotes/QuoteForm";
@@ -49,6 +49,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as QuoteLineItem[],
     show_financing: false,
+    payment_terms: null as PaymentTerms | null,
   });
 
   // Send modal
@@ -336,6 +337,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       status: asDraft ? "draft" : "sent",
       line_items: form.line_items.filter(item => item.description && item.amount > 0),
       show_financing: form.show_financing,
+      payment_terms: form.payment_terms || null,
     };
 
     if (view === "edit" && selectedQuote) {
@@ -445,6 +447,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       amount_paid: 0,
       notes: quote.notes,
       line_items: quote.line_items,
+      payment_terms: quote.payment_terms || null,
     });
 
     if (invoiceRes?.success || invoiceRes?.data) {
@@ -502,6 +505,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       show_financing: false,
+      payment_terms: null as PaymentTerms | null,
     });
   };
 
@@ -520,6 +524,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
         ? quote.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
         : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       show_financing: quote.show_financing,
+      payment_terms: quote.payment_terms || null,
     });
     setView("edit");
   };
