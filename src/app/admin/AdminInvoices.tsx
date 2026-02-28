@@ -63,6 +63,11 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const closePdfPreview = useCallback(() => {
+    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    setShowPdfPreview(false);
+    setPdfPreviewUrl(null);
+  }, [pdfPreviewUrl]);
 
   // Jobs for the currently selected customer
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
@@ -71,7 +76,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
-      if (showPdfPreview) { setShowPdfPreview(false); setPdfPreviewUrl(null); return true; }
+      if (showPdfPreview) { closePdfPreview(); return true; }
       if (recordPaymentItem) { setRecordPaymentItem(null); return true; }
       if (confirmDeleteInvoice) { setConfirmDeleteInvoice(null); return true; }
       if (showNewCustomer) { setShowNewCustomer(false); return true; }
@@ -789,7 +794,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
         <PdfPreviewModal
           pdfUrl={pdfPreviewUrl}
           loading={pdfPreviewLoading}
-          onClose={() => { setShowPdfPreview(false); setPdfPreviewUrl(null); }}
+          onClose={closePdfPreview}
         />
       )}
 

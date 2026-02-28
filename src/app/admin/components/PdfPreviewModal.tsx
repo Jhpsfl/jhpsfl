@@ -33,11 +33,17 @@ export default function PdfPreviewModal({ pdfUrl, loading, onClose }: {
   const [rendering, setRendering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Prevent body scroll while modal is open
+  // Prevent body scroll while modal is open + clean up blob URL on unmount
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, []);
+    return () => {
+      document.body.style.overflow = "";
+      // Revoke the blob URL to free browser memory
+      if (pdfUrl && pdfUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [pdfUrl]);
 
   // Render PDF pages to canvas images using pdf.js
   const renderPdf = useCallback(async (url: string) => {
