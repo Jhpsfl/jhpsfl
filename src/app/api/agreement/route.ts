@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
       .from("financing_agreements")
       .insert({
         quote_id: quote_id || null,
+        invoice_id: invoice_id || null,
         customer_id: sourceData.customer_id || null,
         token,
         status: "pending",
@@ -213,11 +214,12 @@ export async function GET(request: NextRequest) {
     // Admin fetch by quote_id (authenticated)
     const clerkUserId = url.searchParams.get("clerk_user_id");
     const quoteId = url.searchParams.get("quote_id");
+    const invoiceId = url.searchParams.get("invoice_id");
 
     const supabase = createSupabaseAdmin();
 
-    if (clerkUserId && quoteId) {
-      // Admin fetching agreement data for a specific quote
+    if (clerkUserId && (quoteId || invoiceId)) {
+      // Admin fetching agreement data for a specific quote or invoice
       const { data: admin } = await supabase
         .from("admin_users")
         .select("id")
@@ -225,12 +227,16 @@ export async function GET(request: NextRequest) {
         .single();
       if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-      const { data: agreements } = await supabase
+      let query = supabase
         .from("financing_agreements")
         .select("*")
-        .eq("quote_id", quoteId)
         .order("created_at", { ascending: false })
         .limit(5);
+
+      if (quoteId) query = query.eq("quote_id", quoteId);
+      if (invoiceId) query = query.eq("invoice_id", invoiceId);
+
+      const { data: agreements } = await query;
 
       return NextResponse.json({ data: agreements || [] });
     }

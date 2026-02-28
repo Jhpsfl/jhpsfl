@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
+import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
 
 // Square Web Payments SDK type shim
 declare global {
@@ -209,6 +209,7 @@ export default function PaymentPage() {
   const { userId: clerkUserId, isSignedIn } = useAuth();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
+  const { signOut } = useClerk();
   const searchParams = useSearchParams();
   const paymentLabel = searchParams.get("payment_label") || "";
   const isDeposit = paymentLabel.toLowerCase().includes("deposit");
@@ -900,11 +901,19 @@ export default function PaymentPage() {
                       </Link>
                     </div>
                   )}
-                  <div style={{ marginTop: 24 }}>
+                  <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
                     <button onClick={() => { setStep("form"); setPaymentId(null); setSameBilling(true); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", billingAddress: "", billingCity: "", billingZip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
                       style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
                       Make another payment
                     </button>
+                    {isSignedIn && (
+                      <>
+                        <span style={{ color: "#2a4a2a" }}>·</span>
+                        <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                          Sign out
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

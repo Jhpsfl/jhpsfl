@@ -7,7 +7,7 @@ import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconSend, IconCopy, IconEdit, IconTrash, IconBack } from "./InvoiceIcons";
 import PaymentScheduleView from "./PaymentScheduleView";
 
-export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf, onUpdateSettings }: {
+export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf, onUpdateSettings, onViewAgreement }: {
   invoice: Invoice;
   isMobile: boolean;
   copiedLink: boolean;
@@ -21,6 +21,7 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   onRecordPayment?: (scheduleItem: PaymentScheduleItem) => void;
   onPreviewPdf?: () => void;
   onUpdateSettings?: (settings: Record<string, unknown>) => void;
+  onViewAgreement?: (invoiceId: string) => void;
 }) {
   const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
 
@@ -337,6 +338,24 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
               <div style={{ fontSize: 10, color: "#5a8a5a", lineHeight: 1.5 }}>
                 Default: camera-only for residential. Enable this if the customer calls and needs to upload a file instead.
               </div>
+            </div>
+          )}
+
+          {/* View Agreement button */}
+          {hasPaymentTerms && onViewAgreement && (
+            <div style={{ marginTop: 12 }}>
+              <button
+                onClick={() => onViewAgreement(invoice.id)}
+                style={{
+                  width: "100%", padding: "10px 14px", borderRadius: 10,
+                  background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+                  color: "#4CAF50", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}
+              >
+                📋 View Signed Agreement
+              </button>
             </div>
           )}
 

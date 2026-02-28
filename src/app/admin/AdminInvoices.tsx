@@ -11,6 +11,7 @@ import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 import RecordPaymentModal from "./components/invoices/RecordPaymentModal";
 import PdfPreviewModal from "./components/PdfPreviewModal";
+import AgreementDetailModal from "./components/quotes/AgreementDetailModal";
 
 // Re-export types for external consumers
 export type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
@@ -63,11 +64,33 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [agreementDetail, setAgreementDetail] = useState<any | null>(null);
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
   const closePdfPreview = useCallback(() => {
     if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
     setShowPdfPreview(false);
     setPdfPreviewUrl(null);
   }, [pdfPreviewUrl]);
+
+  const handleViewAgreement = async (invoiceId: string) => {
+    if (!userId) return;
+    const params = new URLSearchParams({ clerk_user_id: userId, invoice_id: invoiceId });
+    try {
+      const res = await fetch(`/api/agreement?${params}`);
+      const data = await res.json();
+      const agreements = data?.data || [];
+      const active = agreements.find((a: { status: string }) => !["voided", "expired"].includes(a.status));
+      if (active) {
+        setAgreementDetail(active);
+        setShowAgreementModal(true);
+      } else {
+        showToast("No signed agreement found for this invoice", "error");
+      }
+    } catch {
+      showToast("Failed to load agreement", "error");
+    }
+  };
 
   // Jobs for the currently selected customer
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
@@ -752,6 +775,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             await adminPost("invoices", "update", { id: selectedInvoice.id, ...settings });
             await loadInvoices();
           }}
+          onViewAgreement={handleViewAgreement}
         />
       )}
 
@@ -803,6 +827,20 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           pdfUrl={pdfPreviewUrl}
           loading={pdfPreviewLoading}
           onClose={closePdfPreview}
+        />
+      )}
+
+      {showAgreementModal && agreementDetail && userId && (
+        <AgreementDetailModal
+          agreement={agreementDetail}
+          userId={userId}
+          onClose={() => { setShowAgreementModal(false); setAgreementDetail(null); }}
+          onVoid={async (id: string) => {
+            await adminPost("financing_agreements", "void", { id });
+            setShowAgreementModal(false);
+            setAgreementDetail(null);
+            showToast("Agreement voided", "success");
+          }}
         />
       )}
 
