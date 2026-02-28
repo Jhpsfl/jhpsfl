@@ -447,6 +447,12 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
 // ESTIMATE DOCUMENT
 // ═══════════════════════════════════════════════════════════════
 
+export interface EstimatePaymentScheduleItem {
+  label: string;
+  amount: number;
+  due_date: string | null;
+}
+
 /** Estimate-specific data (pre-acceptance) */
 export interface EstimateData extends BaseDocumentData {
   quoteNumber: string;
@@ -454,6 +460,7 @@ export interface EstimateData extends BaseDocumentData {
   expirationDate?: Date;
   quoteStatus: 'PENDING' | 'ACCEPTED';
   showFinancing: boolean;
+  paymentTerms?: { type: string; schedule: EstimatePaymentScheduleItem[] } | null;
 }
 
 const FINANCING_MESSAGE =
@@ -493,6 +500,29 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
         </View>
         <ItemsTable items={data.lineItems} />
         <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel="Estimated Total" />
+
+        {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
+          <View style={{ marginTop: 20 }} wrap={false}>
+            <View style={{ backgroundColor: '#1E3A5F', padding: '8 12', borderRadius: '4 4 0 0' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
+            </View>
+            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderRadius: '0 0 4 4' }}>
+              {/* Header row */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', padding: '6 12' }}>
+                <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>DESCRIPTION</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
+              </View>
+              {data.paymentTerms.schedule.map((item, i) => (
+                <View key={i} style={{ flexDirection: 'row', padding: '7 12', borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
+                  <Text style={{ flex: 2, fontSize: 9, color: '#2D3748' }}>{item.label}</Text>
+                  <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{item.due_date ? formatDateShort(new Date(item.due_date)) : 'TBD'}</Text>
+                  <Text style={{ flex: 1, fontSize: 9, color: '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{fmt(Math.round(item.amount * 100))}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {data.showFinancing && (
           <View style={{ marginTop: 20, padding: 14, borderRadius: 6, borderWidth: 1.5, borderColor: '#26A69A', backgroundColor: '#E0F2F1' }} wrap={false}>

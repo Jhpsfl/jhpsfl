@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     expirationDate: quote.expiration_date ? new Date(quote.expiration_date) : undefined,
     quoteStatus: quote.status === 'accepted' ? 'ACCEPTED' : 'PENDING',
     showFinancing: quote.show_financing || false,
+    paymentTerms: quote.payment_terms || null,
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
     customerPhone: customer.phone || undefined,
@@ -76,6 +77,32 @@ export async function POST(req: NextRequest) {
       </div>`
     : '';
 
+  const scheduleItems: Array<{ label: string; amount: number; due_date: string | null }> =
+    quote.payment_terms?.schedule || [];
+  const paymentScheduleHtml = scheduleItems.length > 0
+    ? `<div style="margin:20px 0;">
+        <h3 style="margin:0 0 10px;font-size:15px;color:#1E3A5F;">Payment Schedule</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#EDF2F7;">
+              <th style="padding:8px 12px;text-align:left;border:1px solid #CBD5E0;color:#4A5568;">Description</th>
+              <th style="padding:8px 12px;text-align:center;border:1px solid #CBD5E0;color:#4A5568;">Due Date</th>
+              <th style="padding:8px 12px;text-align:right;border:1px solid #CBD5E0;color:#4A5568;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${scheduleItems.map((item, i) => `
+              <tr style="background:${i % 2 === 0 ? '#fff' : '#F7FAFC'};">
+                <td style="padding:8px 12px;border:1px solid #E2E8F0;color:#2D3748;">${item.label}</td>
+                <td style="padding:8px 12px;border:1px solid #E2E8F0;color:#4A5568;text-align:center;">${item.due_date ? new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(item.due_date)) : 'TBD'}</td>
+                <td style="padding:8px 12px;border:1px solid #E2E8F0;color:#2D3748;text-align:right;font-weight:bold;">${fmt(Math.round(item.amount * 100))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`
+    : '';
+
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
       <div style="background:linear-gradient(135deg,#2E7D32,#4CAF50);padding:28px 32px;border-radius:12px 12px 0 0;">
@@ -92,6 +119,7 @@ export async function POST(req: NextRequest) {
           <p style="margin:4px 0;font-size:14px;"><strong>Estimated Total:</strong> ${fmt(totalCents)}</p>
           ${expirationHtml}
         </div>
+        ${paymentScheduleHtml}
         ${financingHtml}
         <p style="margin:24px 0 0;font-size:15px;">If you&apos;d like to proceed or have any questions, please don&apos;t hesitate to reach out.</p>
         <p style="margin:16px 0 0;font-size:15px;">

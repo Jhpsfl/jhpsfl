@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
         expirationDate: data.expiration_date ? new Date(data.expiration_date) : undefined,
         quoteStatus: data.status === 'accepted' ? 'ACCEPTED' : 'PENDING',
         showFinancing: data.show_financing || false,
+        paymentTerms: data.payment_terms || null,
         customerName: data.customer_name || 'Customer',
         customerEmail: data.customer_email || '',
         customerPhone: data.customer_phone || undefined,
