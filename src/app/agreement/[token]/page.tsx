@@ -205,16 +205,22 @@ function base64ToFile(dataUrl: string, name: string): File {
   return new File([arr], name, { type: mime });
 }
 
-// ─── ID Upload Component with session persistence ───
+
+// ─── Inline Camera ID Capture (never leaves the browser — no app switch) ───
 function IdUpload({ label, file, storageKey, onFileChange }: {
   label: string; file: File | null; storageKey: string;
   onFileChange: (f: File | null) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
 
-  // Restore from sessionStorage on mount (handles camera app kill + reload)
+  // Restore from sessionStorage on mount
   useEffect(() => {
     if (file || restored) return;
     const saved = loadFromSession();
@@ -227,106 +233,225 @@ function IdUpload({ label, file, storageKey, onFileChange }: {
     setRestored(true);
   }, [file, storageKey, onFileChange, restored]);
 
-  // Update preview when file changes
+  // Save to session when file changes
   useEffect(() => {
-    if (!file) { 
-      if (!loadFromSession()[storageKey]) setPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    // Also save compressed version to sessionStorage
+    if (!file) return;
     fileToSessionBase64(file).then(b64 => {
-      setPreview(b64); // Use the compressed version as preview too
-      URL.revokeObjectURL(url);
+      setPreview(b64);
       saveToSession({ [storageKey]: b64 });
     });
   }, [file, storageKey]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      // Wait a tick for the video element to render
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 100);
+    } catch {
+      setCameraOpen(false);
+      setCameraError("camera_denied");
+      // Fall back to file input
+      fileInputRef.current?.click();
+    }
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(video, 0, 0);
+
+    // Stop camera
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setCameraOpen(false);
+
+    // Convert to file
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const capturedFile = new File([blob], `${storageKey}.jpg`, { type: "image/jpeg" });
+      onFileChange(capturedFile);
+    }, "image/jpeg", 0.85);
+  };
+
+  const cancelCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setCameraOpen(false);
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 10 * 1024 * 1024) {
-      alert("File is too large. Please use an image under 10MB.");
-      return;
-    }
+    if (f.size > 10 * 1024 * 1024) { alert("File too large. Max 10MB."); return; }
     onFileChange(f);
   };
 
   const handleClear = () => {
     onFileChange(null);
     setPreview(null);
-    if (inputRef.current) inputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
     saveToSession({ [storageKey]: null });
   };
+
+  // ─── Camera viewfinder (fullscreen overlay) ───
+  if (cameraOpen) {
+    return (
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+        background: "#000", zIndex: 9999,
+        display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+          {/* ID card overlay guide */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{
+              width: "88%", maxWidth: 380,
+              aspectRatio: "1.586/1",
+              border: "3px solid rgba(255,255,255,0.8)",
+              borderRadius: 12,
+              boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
+              position: "relative",
+            }}>
+              {[
+                { top: -2, left: -2, borderTop: "4px solid #4CAF50", borderLeft: "4px solid #4CAF50", borderTopLeftRadius: 12 },
+                { top: -2, right: -2, borderTop: "4px solid #4CAF50", borderRight: "4px solid #4CAF50", borderTopRightRadius: 12 },
+                { bottom: -2, left: -2, borderBottom: "4px solid #4CAF50", borderLeft: "4px solid #4CAF50", borderBottomLeftRadius: 12 },
+                { bottom: -2, right: -2, borderBottom: "4px solid #4CAF50", borderRight: "4px solid #4CAF50", borderBottomRightRadius: 12 },
+              ].map((s, i) => (
+                <div key={i} style={{ position: "absolute", width: 30, height: 30, ...s } as React.CSSProperties} />
+              ))}
+            </div>
+          </div>
+          <div style={{ position: "absolute", top: 40, left: 0, right: 0, textAlign: "center" }}>
+            <div style={{
+              display: "inline-block", background: "rgba(0,0,0,0.7)",
+              color: "#fff", padding: "8px 20px", borderRadius: 20,
+              fontSize: 14, fontWeight: 600,
+            }}>
+              Position your ID within the frame
+            </div>
+          </div>
+        </div>
+        <div style={{
+          padding: "20px 24px 36px", background: "#111",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <button onClick={cancelCamera} style={{
+            background: "none", border: "none", color: "#fff",
+            fontSize: 16, fontWeight: 600, cursor: "pointer", padding: "8px 16px",
+          }}>Cancel</button>
+          <button onClick={capturePhoto} style={{
+            width: 72, height: 72, borderRadius: "50%",
+            background: "#fff", border: "4px solid rgba(255,255,255,0.3)",
+            cursor: "pointer", position: "relative",
+          }}>
+            <div style={{
+              width: 58, height: 58, borderRadius: "50%",
+              background: "#fff", border: "3px solid #4CAF50",
+              position: "absolute", top: 3, left: 3,
+            }} />
+          </button>
+          <div style={{ width: 70 }} />
+        </div>
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+      </div>
+    );
+  }
 
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>{label}</div>
       {preview ? (
         <div style={{ position: "relative" }}>
-          <img
-            src={preview}
-            alt={label}
-            style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12, border: "2px solid #d1fae5" }}
-          />
-          <button
-            type="button"
-            onClick={handleClear}
-            style={{
-              position: "absolute", top: 8, right: 8,
-              width: 28, height: 28, borderRadius: "50%",
-              background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
-              cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            ✕
-          </button>
+          <img src={preview} alt={label} style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12, border: "2px solid #d1fae5" }} />
+          <button type="button" onClick={handleClear} style={{
+            position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
+            background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
+            cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+          }}>✕</button>
           <div style={{
             position: "absolute", bottom: 8, left: 8,
             background: "rgba(34,197,94,0.9)", color: "#fff",
             fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6,
-          }}>
-            ✓ Captured
-          </div>
+          }}>✓ Captured</div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            style={{
-              width: "100%", padding: "24px 16px", borderRadius: 12,
-              border: "2px dashed #d1d5db", background: "#f9fafb",
-              color: "#6b7280", fontSize: 13, cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-              transition: "border-color 0.2s, background 0.2s",
-            }}
-            onMouseOver={e => { e.currentTarget.style.borderColor = "#4CAF50"; e.currentTarget.style.background = "#f0fdf4"; }}
-            onMouseOut={e => { e.currentTarget.style.borderColor = "#d1d5db"; e.currentTarget.style.background = "#f9fafb"; }}
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <circle cx="12" cy="12" r="3" />
-              <path d="M7 6V4h2M15 6V4h2" />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={startCamera} style={{
+            flex: 1, padding: "24px 12px", borderRadius: 12,
+            border: "2px dashed #4CAF50", background: "#f0fdf4",
+            color: "#2E7D32", fontSize: 13, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
             </svg>
-            <span style={{ fontWeight: 600 }}>Take Photo or Choose File</span>
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>Position your ID within the frame</span>
+            <span style={{ fontWeight: 700 }}>Take Photo</span>
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} style={{
+            flex: 1, padding: "24px 12px", borderRadius: 12,
+            border: "2px dashed #d1d5db", background: "#f9fafb",
+            color: "#6b7280", fontSize: 13, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span style={{ fontWeight: 600 }}>Upload File</span>
           </button>
         </div>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/heic,image/heif"
-        capture="environment"
-        onChange={handleChange}
-        style={{ display: "none" }}
-      />
+      {cameraError === "camera_denied" && (
+        <p style={{ fontSize: 12, color: "#DC2626", marginTop: 6 }}>
+          Camera access denied. Use &quot;Upload File&quot; instead.
+        </p>
+      )}
+      <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/heic,image/heif" onChange={handleFileInput} style={{ display: "none" }} />
     </div>
   );
 }
-
 // ─── File to base64 helper ───
 async function fileToBase64(file: File): Promise<string> {
   // Compress large images via canvas before converting
