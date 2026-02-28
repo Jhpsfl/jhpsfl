@@ -41,6 +41,7 @@ export interface Quote {
   tax_amount: number;
   total: number;
   expiration_date: string | null;
+  due_date: string | null;
   notes: string | null;
   line_items: QuoteLineItem[];
   show_financing: boolean;

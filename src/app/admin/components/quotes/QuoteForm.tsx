@@ -23,6 +23,8 @@ export default function QuoteForm({
     quote_number: string;
     expiration_date: string;
     show_expiration: boolean;
+    due_date: string;
+    show_due_date: boolean;
     tax_rate: number;
     notes: string;
     line_items: QuoteLineItem[];
@@ -311,6 +313,32 @@ export default function QuoteForm({
                   type="date"
                   value={form.expiration_date}
                   onChange={e => setForm(prev => ({ ...prev, expiration_date: e.target.value }))}
+                  style={{ ...inputStyle, colorScheme: "dark" }}
+                />
+              )}
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Due Date</label>
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, show_due_date: !prev.show_due_date }))}
+                  style={{
+                    background: form.show_due_date ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${form.show_due_date ? "rgba(76,175,80,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    borderRadius: 6, padding: "3px 10px", fontSize: 11,
+                    color: form.show_due_date ? "#4CAF50" : "#5a7a5a",
+                    cursor: "pointer", fontWeight: 600, letterSpacing: 0.3,
+                  }}
+                >
+                  {form.show_due_date ? "ON" : "OFF"}
+                </button>
+              </div>
+              {form.show_due_date && (
+                <input
+                  type="date"
+                  value={form.due_date}
+                  onChange={e => setForm(prev => ({ ...prev, due_date: e.target.value }))}
                   style={{ ...inputStyle, colorScheme: "dark" }}
                 />
               )}
