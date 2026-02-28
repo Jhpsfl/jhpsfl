@@ -210,6 +210,7 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
   const paymentLabel = searchParams.get("payment_label") || "";
   const isDeposit = paymentLabel.toLowerCase().includes("deposit");
+  const isTestMode = searchParams.get("test") === "1";
 
   // Account creation for deposit payments
   const [password, setPassword] = useState("");
@@ -926,22 +927,39 @@ export default function PaymentPage() {
 
                               {/* Totals */}
                               <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
-                                  <span>Subtotal</span>
-                                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.subtotal.toFixed(2)}</span>
-                                </div>
-                                {invoiceData.tax_rate > 0 && (
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
-                                    <span>Tax ({invoiceData.tax_rate}%)</span>
-                                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
-                                  </div>
+                                {isDeposit ? (
+                                  <>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                      <span>Total Contract Price</span>
+                                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.total.toFixed(2)}</span>
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
+                                      <span style={{ fontSize: 15, fontWeight: 700, color: "#ffa726" }}>{paymentLabel || "Deposit Due Now"}</span>
+                                      <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                        ${formData.amount || "0.00"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                      <span>Subtotal</span>
+                                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.subtotal.toFixed(2)}</span>
+                                    </div>
+                                    {invoiceData.tax_rate > 0 && (
+                                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                        <span>Tax ({invoiceData.tax_rate}%)</span>
+                                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
+                                      <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>Total Due</span>
+                                      <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                        ${invoiceData.total.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </>
                                 )}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
-                                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>{paymentLabel || "Total Due"}</span>
-                                  <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
-                                    ${invoiceData.total.toFixed(2)}
-                                  </span>
-                                </div>
                               </div>
                             </>
                           )}
@@ -1285,6 +1303,36 @@ export default function PaymentPage() {
                           <><span style={{ fontSize: 18 }}>🔒</span> Pay ${formData.amount || "0.00"}</>
                         )}
                       </button>
+
+                      {/* Test mode: skip Square payment */}
+                      {isTestMode && (
+                        <button
+                          className="cta-pay"
+                          onClick={async () => {
+                            setIsProcessing(true);
+                            // Create account if deposit
+                            if (isDeposit && !isSignedIn && !accountCreated && password) {
+                              const regRes = await fetch("/api/customer/register", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  email: formData.email, password,
+                                  name: formData.name, phone: formData.phone,
+                                }),
+                              });
+                              const regData = await regRes.json();
+                              if (regRes.ok) setAccountCreated(true);
+                              else { setAccountError(regData.error); setIsProcessing(false); return; }
+                            }
+                            setPaymentId("TEST-" + Date.now());
+                            setStep("confirm");
+                            setIsProcessing(false);
+                          }}
+                          style={{ background: "linear-gradient(135deg, #ff9800, #e65100)", marginTop: 8 }}
+                        >
+                          ⚡ TEST: Skip Payment →
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1336,7 +1384,7 @@ export default function PaymentPage() {
 
                   <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 24 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>Total Due</span>
+                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>{paymentLabel || "Total Due"}</span>
                       <span style={{
                         fontSize: 32, fontWeight: 800, color: "#4CAF50",
                         fontFamily: "'JetBrains Mono', monospace",
