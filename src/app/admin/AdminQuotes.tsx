@@ -10,6 +10,7 @@ import SendQuoteModal from "./components/quotes/SendQuoteModal";
 import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 import PdfPreviewModal from "./components/PdfPreviewModal";
+import AgreementDetailModal from "./components/quotes/AgreementDetailModal";
 
 // Re-export types for external consumers
 export type { Quote, QuoteLineItem, Customer, CustomerJob } from "./components/quotes/quoteTypes";
@@ -73,14 +74,22 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
 
+  // Agreement state
+  const [agreementStatus, setAgreementStatus] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [agreementDetail, setAgreementDetail] = useState<any | null>(null);
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [sendingAgreement, setSendingAgreement] = useState(false);
+
   // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
+      if (showAgreementModal) { setShowAgreementModal(false); setAgreementDetail(null); return true; }
       if (showPdfPreview) { closePdfPreview(); return true; }
       if (confirmDeleteQuote) { setConfirmDeleteQuote(null); return true; }
       if (showNewCustomer) { setShowNewCustomer(false); return true; }
       if (showSendModal) { setShowSendModal(false); return true; }
-      if (view !== "list") { setView("list"); setSelectedQuote(null); return true; }
+      if (view !== "list") { setView("list"); setSelectedQuote(null); setAgreementStatus(null); return true; }
       return false;
     };
   }
@@ -509,6 +518,85 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     });
   };
 
+  // ─── Agreement: Fetch status for selected quote ───
+  const fetchAgreementStatus = useCallback(async (quoteId: string) => {
+    if (!userId) return;
+    const params = new URLSearchParams({ clerk_user_id: userId, quote_id: quoteId });
+    try {
+      const res = await fetch(`/api/agreement?${params}`);
+      const data = await res.json();
+      const agreements = data?.data || [];
+      // Find the most recent non-voided agreement
+      const active = agreements.find((a: { status: string }) => !["voided", "expired"].includes(a.status));
+      setAgreementStatus(active?.status || null);
+      setAgreementDetail(active || null);
+    } catch {
+      setAgreementStatus(null);
+    }
+  }, [userId]);
+
+  // Fetch agreement status when viewing a quote detail
+  useEffect(() => {
+    if (view === "detail" && selectedQuote?.id && selectedQuote.show_financing) {
+      fetchAgreementStatus(selectedQuote.id);
+    } else {
+      setAgreementStatus(null);
+      setAgreementDetail(null);
+    }
+  }, [view, selectedQuote, fetchAgreementStatus]);
+
+  // ─── Agreement: Send agreement link ───
+  const handleSendAgreement = async (quote: Quote) => {
+    setSendingAgreement(true);
+    try {
+      const res = await fetch("/api/agreement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: userId, quote_id: quote.id }),
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        // Copy link to clipboard
+        try {
+          await navigator.clipboard.writeText(data.url);
+          showToast(`Agreement link copied! ${data.existing ? "(existing link)" : ""}`);
+        } catch {
+          showToast("Agreement created! Check console for link.");
+          console.log("Agreement URL:", data.url);
+        }
+        // Refresh agreement status
+        await fetchAgreementStatus(quote.id);
+      } else {
+        showToast(data.error || "Failed to create agreement", "error");
+      }
+    } catch {
+      showToast("Failed to create agreement", "error");
+    }
+    setSendingAgreement(false);
+  };
+
+  // ─── Agreement: View details ───
+  const handleViewAgreement = () => {
+    if (agreementDetail) {
+      setShowAgreementModal(true);
+      onNavigate?.();
+    }
+  };
+
+  // ─── Agreement: Void ───
+  const handleVoidAgreement = async (agreementId: string) => {
+    const res = await adminPost("financing_agreements", "void", { id: agreementId });
+    if (res?.success) {
+      showToast("Agreement voided");
+      setShowAgreementModal(false);
+      setAgreementDetail(null);
+      setAgreementStatus(null);
+      if (selectedQuote?.id) fetchAgreementStatus(selectedQuote.id);
+    } else {
+      showToast(res?.error || "Failed to void agreement", "error");
+    }
+  };
+
   // ─── Edit quote ───
   const startEditQuote = (quote: Quote) => {
     onNavigate?.();
@@ -635,6 +723,10 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           onConvertToInvoice={handleConvertToInvoice}
           onNavigate={onNavigate}
           onPreviewPdf={() => handlePreviewQuotePdf(selectedQuote)}
+          agreementStatus={agreementStatus}
+          onSendAgreement={handleSendAgreement}
+          onViewAgreement={handleViewAgreement}
+          sendingAgreement={sendingAgreement}
         />
       )}
 
@@ -671,6 +763,15 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           pdfUrl={pdfPreviewUrl}
           loading={pdfPreviewLoading}
           onClose={closePdfPreview}
+        />
+      )}
+
+      {showAgreementModal && agreementDetail && (
+        <AgreementDetailModal
+          agreement={agreementDetail}
+          userId={userId}
+          onClose={() => { setShowAgreementModal(false); }}
+          onVoid={handleVoidAgreement}
         />
       )}
 

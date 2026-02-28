@@ -7,7 +7,7 @@ import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconSend, IconEdit, IconTrash, IconBack } from "../invoices/InvoiceIcons";
 import PaymentScheduleView from "../invoices/PaymentScheduleView";
 
-export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf }: {
+export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf, agreementStatus, onSendAgreement, onViewAgreement, sendingAgreement }: {
   quote: Quote;
   isMobile: boolean;
   onBack: () => void;
@@ -19,6 +19,10 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
   onConvertToInvoice: (q: Quote) => void;
   onNavigate?: () => void;
   onPreviewPdf?: () => void;
+  agreementStatus?: string | null;
+  onSendAgreement?: (q: Quote) => void;
+  onViewAgreement?: () => void;
+  sendingAgreement?: boolean;
 }) {
   return (
     <>
@@ -185,6 +189,44 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
           </h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* ─── Agreement Section ─── */}
+            {quote.show_financing && onSendAgreement && !agreementStatus && ["sent"].includes(quote.status) && (
+              <button
+                onClick={() => { onNavigate?.(); onSendAgreement(quote); }}
+                disabled={sendingAgreement}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "14px", borderRadius: 12, border: "none",
+                  background: sendingAgreement ? "#3a5a3a" : "linear-gradient(135deg, #26A69A, #00897B)",
+                  color: "#fff", fontSize: 14, fontWeight: 700, cursor: sendingAgreement ? "default" : "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  boxShadow: sendingAgreement ? "none" : "0 4px 20px rgba(38,166,154,0.35)",
+                }}
+              >
+                {sendingAgreement ? "Creating..." : "✍️ Send Agreement Link"}
+              </button>
+            )}
+
+            {agreementStatus && onViewAgreement && (
+              <button
+                onClick={onViewAgreement}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "14px", borderRadius: 12, border: "none",
+                  background: agreementStatus === "signed"
+                    ? "linear-gradient(135deg, #4CAF50, #2E7D32)"
+                    : "linear-gradient(135deg, #26A69A, #00897B)",
+                  color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+                }}
+              >
+                {agreementStatus === "signed" ? "✓ View Signed Agreement" :
+                 agreementStatus === "viewed" ? "👁 Agreement Viewed — Awaiting Signature" :
+                 "📄 View Agreement"}
+              </button>
+            )}
+
             {/* Convert to Invoice — only when accepted */}
             {quote.status === "accepted" && (
               <button

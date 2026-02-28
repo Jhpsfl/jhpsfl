@@ -198,6 +198,16 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ data });
       }
 
+      case "financing_agreements": {
+        const quoteId = url.searchParams.get("quote_id");
+        let query = supabase.from("financing_agreements").select("*").order("created_at", { ascending: false }).limit(limit);
+        if (quoteId) query = query.eq("quote_id", quoteId);
+        if (status) query = query.eq("status", status);
+        const { data, error } = await query;
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ data });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown resource: ${resource}` }, { status: 400 });
     }
@@ -606,6 +616,18 @@ export async function POST(request: NextRequest) {
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
             return NextResponse.json({ success: true });
           }
+        }
+        break;
+      }
+
+      case "financing_agreements": {
+        if (action === "void") {
+          const { error } = await supabase
+            .from("financing_agreements")
+            .update({ status: "voided", updated_at: new Date().toISOString() })
+            .eq("id", payload.id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true });
         }
         break;
       }
