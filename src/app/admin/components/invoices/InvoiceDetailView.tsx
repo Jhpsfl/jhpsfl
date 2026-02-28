@@ -7,7 +7,7 @@ import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconSend, IconCopy, IconEdit, IconTrash, IconBack } from "./InvoiceIcons";
 import PaymentScheduleView from "./PaymentScheduleView";
 
-export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment }: {
+export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf }: {
   invoice: Invoice;
   isMobile: boolean;
   copiedLink: boolean;
@@ -19,6 +19,7 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   onDelete: (inv: Invoice) => void;
   onNavigate?: () => void;
   onRecordPayment?: (scheduleItem: PaymentScheduleItem) => void;
+  onPreviewPdf?: () => void;
 }) {
   const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
 
@@ -205,6 +206,25 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
                 }}
               >
                 <IconSend /> {invoice.status === "draft" ? "Send Invoice" : "Resend Invoice"}
+              </button>
+            )}
+
+            {onPreviewPdf && (
+              <button
+                onClick={onPreviewPdf}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "12px", borderRadius: 12,
+                  border: "1px solid rgba(66,165,245,0.3)",
+                  background: "rgba(13,71,161,0.12)", color: "#42a5f5",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                Preview PDF
               </button>
             )}
 

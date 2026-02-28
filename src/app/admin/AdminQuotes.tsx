@@ -9,6 +9,7 @@ import QuoteDetailView from "./components/quotes/QuoteDetailView";
 import SendQuoteModal from "./components/quotes/SendQuoteModal";
 import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
+import PdfPreviewModal from "./components/PdfPreviewModal";
 
 // Re-export types for external consumers
 export type { Quote, QuoteLineItem, Customer, CustomerJob } from "./components/quotes/quoteTypes";
@@ -57,6 +58,11 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   // Confirm delete
   const [confirmDeleteQuote, setConfirmDeleteQuote] = useState<Quote | null>(null);
 
+  // PDF preview
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+
   // Jobs for the currently selected customer
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -64,6 +70,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
+      if (showPdfPreview) { setShowPdfPreview(false); setPdfPreviewUrl(null); return true; }
       if (confirmDeleteQuote) { setConfirmDeleteQuote(null); return true; }
       if (showNewCustomer) { setShowNewCustomer(false); return true; }
       if (showSendModal) { setShowSendModal(false); return true; }
@@ -220,6 +227,90 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const subtotal = form.line_items.reduce((sum, item) => sum + item.amount, 0);
   const taxAmount = subtotal * (form.tax_rate / 100);
   const total = subtotal + taxAmount;
+
+  // ─── PDF Preview ───
+  const handlePreviewQuotePdf = async (quote: Quote) => {
+    setShowPdfPreview(true);
+    setPdfPreviewLoading(true);
+    setPdfPreviewUrl(null);
+    onNavigate?.();
+
+    const customer = quote.customer_id ? customers.find(c => c.id === quote.customer_id) : null;
+    try {
+      const res = await fetch("/api/pdf/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clerk_user_id: userId,
+          type: "estimate",
+          data: {
+            quote_number: quote.quote_number,
+            created_at: quote.created_at,
+            expiration_date: quote.expiration_date,
+            status: quote.status,
+            show_financing: quote.show_financing,
+            customer_name: customer?.name || quote.customers?.name || "Customer",
+            customer_email: customer?.email || quote.customers?.email || "",
+            customer_phone: customer?.phone || quote.customers?.phone || "",
+            line_items: quote.line_items,
+            subtotal: quote.subtotal,
+            tax_amount: quote.tax_amount,
+            total: quote.total,
+            notes: quote.notes,
+          },
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setPdfPreviewUrl(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("PDF preview error:", err);
+    }
+    setPdfPreviewLoading(false);
+  };
+
+  const handlePreviewFormPdf = async () => {
+    setShowPdfPreview(true);
+    setPdfPreviewLoading(true);
+    setPdfPreviewUrl(null);
+    onNavigate?.();
+
+    const customer = form.customer_id ? customers.find(c => c.id === form.customer_id) : null;
+    const lineItems = form.line_items.filter(item => item.description && item.amount > 0);
+    try {
+      const res = await fetch("/api/pdf/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clerk_user_id: userId,
+          type: "estimate",
+          data: {
+            quote_number: form.quote_number,
+            created_at: new Date().toISOString(),
+            expiration_date: form.show_expiration ? form.expiration_date : null,
+            status: "draft",
+            show_financing: form.show_financing,
+            customer_name: customer?.name || "Customer",
+            customer_email: customer?.email || "",
+            customer_phone: customer?.phone || "",
+            line_items: lineItems,
+            subtotal,
+            tax_amount: taxAmount,
+            total,
+            notes: form.notes,
+          },
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setPdfPreviewUrl(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("PDF preview error:", err);
+    }
+    setPdfPreviewLoading(false);
+  };
 
   // ─── Save quote ───
   const handleSaveQuote = async (asDraft = true) => {
@@ -517,6 +608,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           removeLineItem={removeLineItem}
           onShowPresetPicker={() => setShowPresetPicker(true)}
           onNavigate={onNavigate}
+          onPreviewPdf={handlePreviewFormPdf}
         />
       )}
 
@@ -532,6 +624,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           onMarkDeclined={handleMarkDeclined}
           onConvertToInvoice={handleConvertToInvoice}
           onNavigate={onNavigate}
+          onPreviewPdf={() => handlePreviewQuotePdf(selectedQuote)}
         />
       )}
 
@@ -560,6 +653,14 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           invoice={{ ...confirmDeleteQuote, invoice_number: confirmDeleteQuote.quote_number } as any}
           onConfirm={confirmDeleteQuoteAction}
           onClose={() => setConfirmDeleteQuote(null)}
+        />
+      )}
+
+      {showPdfPreview && (
+        <PdfPreviewModal
+          pdfUrl={pdfPreviewUrl}
+          loading={pdfPreviewLoading}
+          onClose={() => { setShowPdfPreview(false); setPdfPreviewUrl(null); }}
         />
       )}
 

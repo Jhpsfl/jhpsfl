@@ -10,6 +10,7 @@ import SendInvoiceModal from "./components/invoices/SendInvoiceModal";
 import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 import RecordPaymentModal from "./components/invoices/RecordPaymentModal";
+import PdfPreviewModal from "./components/PdfPreviewModal";
 
 // Re-export types for external consumers
 export type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
@@ -58,6 +59,11 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // Record payment modal
   const [recordPaymentItem, setRecordPaymentItem] = useState<PaymentScheduleItem | null>(null);
 
+  // PDF preview
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+
   // Jobs for the currently selected customer
   const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -65,6 +71,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   // ─── Back button ───
   if (backRef) {
     backRef.current = () => {
+      if (showPdfPreview) { setShowPdfPreview(false); setPdfPreviewUrl(null); return true; }
       if (recordPaymentItem) { setRecordPaymentItem(null); return true; }
       if (confirmDeleteInvoice) { setConfirmDeleteInvoice(null); return true; }
       if (showNewCustomer) { setShowNewCustomer(false); return true; }
@@ -129,6 +136,89 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     }
 
     return `${baseUrl}/pay?${params.toString()}`;
+  };
+
+  // ─── PDF Preview ───
+  const handlePreviewInvoicePdf = async (invoice: Invoice) => {
+    setShowPdfPreview(true);
+    setPdfPreviewLoading(true);
+    setPdfPreviewUrl(null);
+    onNavigate?.();
+
+    const customer = invoice.customer_id ? customers.find(c => c.id === invoice.customer_id) : null;
+    try {
+      const res = await fetch("/api/pdf/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clerk_user_id: userId,
+          type: "invoice",
+          data: {
+            invoice_number: invoice.invoice_number,
+            created_at: invoice.created_at,
+            due_date: invoice.due_date,
+            status: invoice.status,
+            customer_name: customer?.name || invoice.customers?.name || "Customer",
+            customer_email: customer?.email || invoice.customers?.email || "",
+            customer_phone: customer?.phone || invoice.customers?.phone || "",
+            line_items: invoice.line_items,
+            subtotal: invoice.subtotal,
+            tax_amount: invoice.tax_amount,
+            total: invoice.total,
+            payment_link: invoice.payment_link || getPaymentLink(invoice),
+            notes: invoice.notes,
+          },
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setPdfPreviewUrl(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("PDF preview error:", err);
+    }
+    setPdfPreviewLoading(false);
+  };
+
+  const handlePreviewFormPdf = async () => {
+    setShowPdfPreview(true);
+    setPdfPreviewLoading(true);
+    setPdfPreviewUrl(null);
+    onNavigate?.();
+
+    const customer = form.customer_id ? customers.find(c => c.id === form.customer_id) : null;
+    const lineItems = form.line_items.filter(item => item.description && item.amount > 0);
+    try {
+      const res = await fetch("/api/pdf/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clerk_user_id: userId,
+          type: "invoice",
+          data: {
+            invoice_number: form.invoice_number,
+            created_at: new Date().toISOString(),
+            due_date: form.show_due_date ? form.due_date : null,
+            status: "draft",
+            customer_name: customer?.name || "Customer",
+            customer_email: customer?.email || "",
+            customer_phone: customer?.phone || "",
+            line_items: lineItems,
+            subtotal,
+            tax_amount: taxAmount,
+            total,
+            notes: form.notes,
+          },
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setPdfPreviewUrl(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("PDF preview error:", err);
+    }
+    setPdfPreviewLoading(false);
   };
 
   // ─── API calls ───
@@ -631,6 +721,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           removeLineItem={removeLineItem}
           onShowPresetPicker={() => setShowPresetPicker(true)}
           onNavigate={onNavigate}
+          onPreviewPdf={handlePreviewFormPdf}
         />
       )}
 
@@ -647,6 +738,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           onDelete={handleDeleteInvoice}
           onNavigate={onNavigate}
           onRecordPayment={(item) => setRecordPaymentItem(item)}
+          onPreviewPdf={() => handlePreviewInvoicePdf(selectedInvoice)}
         />
       )}
 
@@ -690,6 +782,14 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           scheduleItem={recordPaymentItem}
           onConfirm={handleRecordPayment}
           onClose={() => setRecordPaymentItem(null)}
+        />
+      )}
+
+      {showPdfPreview && (
+        <PdfPreviewModal
+          pdfUrl={pdfPreviewUrl}
+          loading={pdfPreviewLoading}
+          onClose={() => { setShowPdfPreview(false); setPdfPreviewUrl(null); }}
         />
       )}
 

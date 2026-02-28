@@ -6,7 +6,7 @@ import { formatCurrency, formatDate, FINANCING_MESSAGE } from "./quoteHelpers";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconSend, IconEdit, IconTrash, IconBack } from "../invoices/InvoiceIcons";
 
-export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate }: {
+export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdit, onDelete, onMarkAccepted, onMarkDeclined, onConvertToInvoice, onNavigate, onPreviewPdf }: {
   quote: Quote;
   isMobile: boolean;
   onBack: () => void;
@@ -17,6 +17,7 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
   onMarkDeclined: (q: Quote) => void;
   onConvertToInvoice: (q: Quote) => void;
   onNavigate?: () => void;
+  onPreviewPdf?: () => void;
 }) {
   return (
     <>
@@ -188,6 +189,26 @@ export default function QuoteDetailView({ quote, isMobile, onBack, onSend, onEdi
                 }}
               >
                 📄 Convert to Invoice
+              </button>
+            )}
+
+            {/* Preview PDF */}
+            {onPreviewPdf && (
+              <button
+                onClick={onPreviewPdf}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "12px", borderRadius: 12,
+                  border: "1px solid rgba(66,165,245,0.3)",
+                  background: "rgba(13,71,161,0.12)", color: "#42a5f5",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                Preview PDF
               </button>
             )}
 
