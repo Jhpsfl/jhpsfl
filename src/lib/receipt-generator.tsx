@@ -284,6 +284,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
 const TotalsBlock: React.FC<{
   subtotal: number; taxAmount: number; discountAmount?: number;
   tipAmount?: number; totalAmount: number; totalLabel: string;
+  depositAmount?: number; balanceAmount?: number;
 }> = (p) => (
   <View style={s.totalsWrap} wrap={false}>
     <View style={s.totalsBlock}>
@@ -314,6 +315,20 @@ const TotalsBlock: React.FC<{
         <Text style={s.grandTotalText}>{p.totalLabel}</Text>
         <Text style={s.grandTotalText}>{fmt(p.totalAmount)}</Text>
       </View>
+      {(p.depositAmount ?? 0) > 0 && (
+        <>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(p.depositAmount! * 100))}</Text>
+          </View>
+          {(p.balanceAmount ?? 0) > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 4, marginTop: 2 }}>
+              <Text style={{ fontSize: 9, color: '#4A5568' }}>Remaining Balance</Text>
+              <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(p.balanceAmount! * 100))}</Text>
+            </View>
+          )}
+        </>
+      )}
     </View>
   </View>
 );
@@ -563,7 +578,15 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </View>
         )}
         <ItemsTable items={data.lineItems} />
-        <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel={hasPaymentTerms ? 'Total Contract Price' : 'Amount Due'} />
+        <TotalsBlock
+          subtotal={data.subtotal}
+          taxAmount={data.taxAmount}
+          discountAmount={data.discountAmount}
+          totalAmount={data.totalAmount}
+          totalLabel={hasPaymentTerms ? 'Total Contract Price' : 'Amount Due'}
+          depositAmount={hasPaymentTerms ? data.paymentTerms!.deposit_amount : undefined}
+          balanceAmount={hasPaymentTerms ? (data.totalAmount / 100) - data.paymentTerms!.deposit_amount : undefined}
+        />
 
         {/* Regular invoice: everything stays on one page */}
         {!hasPaymentTerms && (
@@ -719,7 +742,17 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           </View>
         </View>
         <ItemsTable items={data.lineItems} />
-        <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel="Estimated Total" />
+        <TotalsBlock
+          subtotal={data.subtotal}
+          taxAmount={data.taxAmount}
+          discountAmount={data.discountAmount}
+          totalAmount={data.totalAmount}
+          totalLabel="Estimated Total"
+          depositAmount={data.paymentTerms?.schedule?.[0]?.amount}
+          balanceAmount={data.paymentTerms?.schedule && data.paymentTerms.schedule.length > 1
+            ? data.paymentTerms.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0)
+            : undefined}
+        />
 
         {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
           <View style={{ marginTop: 20 }} wrap={false}>
