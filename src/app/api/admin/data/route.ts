@@ -189,6 +189,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ data });
       }
 
+      case "quotes": {
+        let query = supabase.from("quotes").select("*, customers(name, phone, email)").order("created_at", { ascending: false }).limit(limit);
+        if (status) query = query.eq("status", status);
+        if (customerId) query = query.eq("customer_id", customerId);
+        const { data, error } = await query;
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ data });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown resource: ${resource}` }, { status: 400 });
     }
@@ -542,6 +551,60 @@ export async function POST(request: NextRequest) {
           const { error } = await supabase.from("customers").delete().eq("id", id);
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true });
+        }
+        break;
+      }
+
+      case "quotes": {
+        switch (action) {
+          case "create": {
+            const { data, error } = await supabase
+              .from("quotes")
+              .insert({
+                customer_id: payload.customer_id || null,
+                quote_number: payload.quote_number,
+                status: payload.status || "draft",
+                subtotal: payload.subtotal,
+                tax_rate: payload.tax_rate || 0,
+                tax_amount: payload.tax_amount || 0,
+                total: payload.total,
+                expiration_date: payload.expiration_date || null,
+                notes: payload.notes || null,
+                line_items: payload.line_items || [],
+                show_financing: payload.show_financing || false,
+                sent_at: payload.sent_at || null,
+              })
+              .select(`*, customers ( name, email, phone )`)
+              .single();
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true, data });
+          }
+          case "update": {
+            const updateData: Record<string, unknown> = {};
+            const allowedFields = [
+              "customer_id", "quote_number", "status", "subtotal",
+              "tax_rate", "tax_amount", "total", "expiration_date",
+              "notes", "line_items", "show_financing",
+              "sent_at", "accepted_at", "declined_at", "converted_invoice_id"
+            ];
+            for (const field of allowedFields) {
+              if (payload[field] !== undefined) updateData[field] = payload[field];
+            }
+            updateData.updated_at = new Date().toISOString();
+            const { data, error } = await supabase
+              .from("quotes")
+              .update(updateData)
+              .eq("id", payload.id)
+              .select(`*, customers ( name, email, phone )`)
+              .single();
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true, data });
+          }
+          case "delete": {
+            const { error } = await supabase.from("quotes").delete().eq("id", payload.id);
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true });
+          }
         }
         break;
       }

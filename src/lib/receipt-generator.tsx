@@ -409,6 +409,77 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
 };
 
 // ═══════════════════════════════════════════════════════════════
+// ESTIMATE DOCUMENT
+// ═══════════════════════════════════════════════════════════════
+
+/** Estimate-specific data (pre-acceptance) */
+export interface EstimateData extends BaseDocumentData {
+  quoteNumber: string;
+  quoteDate: Date;
+  expirationDate?: Date;
+  quoteStatus: 'PENDING' | 'ACCEPTED';
+  showFinancing: boolean;
+}
+
+const FINANCING_MESSAGE =
+  'This project is eligible for flexible payment options including deposits and installment plans. Contact us to discuss a payment schedule that works for you.';
+
+const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data, logoUrl }) => {
+  const isAccepted = data.quoteStatus === 'ACCEPTED';
+  const badge = isAccepted ? s.badgePaid : s.badgeDue;
+  const badgeText = isAccepted ? s.badgePaidText : s.badgeDueText;
+  const label = isAccepted ? 'ACCEPTED' : 'PENDING';
+
+  return (
+    <Document title={`JHPS Estimate - ${data.quoteNumber}`} author={BRAND.name} subject="Service Estimate">
+      <Page size="LETTER" style={s.page}>
+        <View style={s.header}>
+          <CompanyHeader logoUrl={logoUrl} />
+          <View style={s.headerRight}>
+            <Text style={s.docTitle}>ESTIMATE</Text>
+            <View style={badge}><Text style={badgeText}>{label}</Text></View>
+          </View>
+        </View>
+        <View style={s.metaRow}>
+          <View style={s.metaBlock}>
+            <Text style={s.metaLabel}>Prepared For</Text>
+            <Text style={s.metaValBold}>{data.customerName}</Text>
+            <Text style={s.metaVal}>{data.customerEmail}</Text>
+            {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
+            {data.customerAddress && <Text style={s.metaVal}>{data.customerAddress}</Text>}
+          </View>
+          <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
+            <Text style={s.metaLabel}>Estimate Details</Text>
+            <Text style={s.metaVal}>Estimate #: {data.quoteNumber}</Text>
+            <Text style={s.metaVal}>Date: {formatDateShort(data.quoteDate)}</Text>
+            {data.expirationDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Valid Until: {formatDateShort(data.expirationDate)}</Text>}
+          </View>
+        </View>
+        <ItemsTable items={data.lineItems} />
+        <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel="Estimated Total" />
+
+        {data.showFinancing && (
+          <View style={{ marginTop: 20, padding: 14, borderRadius: 6, borderWidth: 1.5, borderColor: '#26A69A', backgroundColor: '#E0F2F1' }} wrap={false}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#00695C', marginBottom: 6 }}>$ FLEXIBLE PAYMENT OPTIONS AVAILABLE</Text>
+            <Text style={{ fontSize: 9, color: '#004D40', lineHeight: 1.5 }}>{FINANCING_MESSAGE}</Text>
+          </View>
+        )}
+
+        <View style={s.infoBox} wrap={false}>
+          <Text style={s.infoTitle}>Estimate Information</Text>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color: isAccepted ? C.paidGreen : C.dueBlue, fontFamily: 'Helvetica-Bold' }]}>{data.quoteStatus}</Text></View>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Estimate Number</Text><Text style={s.infoVal}>{data.quoteNumber}</Text></View>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Date Prepared</Text><Text style={s.infoVal}>{formatDateShort(data.quoteDate)}</Text></View>
+          {data.expirationDate && <View style={s.infoRow}><Text style={s.infoLabel}>Valid Until</Text><Text style={[s.infoVal, { color: C.dueBlue, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.expirationDate)}</Text></View>}
+        </View>
+        {data.notes && <NotesSection text={data.notes} />}
+        <Footer />
+      </Page>
+    </Document>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════
 
@@ -428,4 +499,13 @@ export function getReceiptFilename(data: ReceiptData): string {
 
 export function getInvoiceFilename(data: InvoiceData): string {
   return `JHPS-Invoice-${data.invoiceNumber}.pdf`;
+}
+
+export async function generateEstimatePDF(data: EstimateData, logoUrl?: string): Promise<Buffer> {
+  const buf = await renderToBuffer(<EstimateDoc data={data} logoUrl={logoUrl} />);
+  return Buffer.from(buf);
+}
+
+export function getEstimateFilename(data: EstimateData): string {
+  return `JHPS-Estimate-${data.quoteNumber}.pdf`;
 }

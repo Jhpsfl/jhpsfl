@@ -12,6 +12,7 @@ import {
 import AdminVideoLeads from "./AdminVideoLeads";
 import AdminInbox from "./AdminInbox";
 import AdminInvoices from "./AdminInvoices";
+import AdminQuotes from "./AdminQuotes";
 
 // ─── Sub-components ───
 import { formatDate, formatCurrency, timeAgo } from "./components/formatters";
@@ -135,7 +136,7 @@ interface CustomerDetail {
   storedCards: StoredCard[];
 }
 
-export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices";
+export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes";
 
 // ─── Main Admin Dashboard ───
 export default function AdminDashboard() {
@@ -177,6 +178,8 @@ export default function AdminDashboard() {
   const videoLeadsBackRef = useRef<(() => boolean) | null>(null);
   const invoicesBackRef = useRef<(() => boolean) | null>(null);
   const invoiceCreateRef = useRef<((preselectedCustomerId?: string) => void) | null>(null);
+  const quotesBackRef = useRef<(() => boolean) | null>(null);
+  const [pendingQuoteInvoiceId, setPendingQuoteInvoiceId] = useState<string | null>(null);
 
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => Promise<void> } | null>(null);
@@ -592,6 +595,7 @@ export default function AdminDashboard() {
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
     if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
+    if (activeTab === "quotes" && quotesBackRef.current?.()) return;
     if (tabHistoryRef.current.length > 1) {
       const newHistory = tabHistoryRef.current.slice(0, -1);
       const dest = newHistory[newHistory.length - 1];
@@ -610,6 +614,7 @@ export default function AdminDashboard() {
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
     if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
+    if (activeTab === "quotes" && quotesBackRef.current?.()) return;
     if (tabHistoryRef.current.length > 1) {
       const newHistory = tabHistoryRef.current.slice(0, -1);
       const dest = newHistory[newHistory.length - 1];
@@ -882,6 +887,7 @@ export default function AdminDashboard() {
                   <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} badge={badgeCounts.newLeads} />
                   <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
                   <NavItem icon="📄" label="Invoices" active={activeTab === "invoices"} onClick={() => switchTab("invoices")} />
+                  <NavItem icon="📋" label="Estimates" active={activeTab === "quotes"} onClick={() => switchTab("quotes")} />
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
@@ -1366,7 +1372,12 @@ export default function AdminDashboard() {
 
                     {/* ─── INVOICES TAB ─── */}
                     {activeTab === "invoices" && userId && (
-                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} initialInvoiceId={pendingInvoiceId} onInitialInvoiceConsumed={() => setPendingInvoiceId(null)} initialCustomerId={pendingInvoiceCustomerId} onInitialCustomerConsumed={() => setPendingInvoiceCustomerId(null)} />
+                      <AdminInvoices userId={userId} backRef={invoicesBackRef} onNavigate={pushSentinel} createRef={invoiceCreateRef} initialInvoiceId={pendingInvoiceId || pendingQuoteInvoiceId} onInitialInvoiceConsumed={() => { setPendingInvoiceId(null); setPendingQuoteInvoiceId(null); }} initialCustomerId={pendingInvoiceCustomerId} onInitialCustomerConsumed={() => setPendingInvoiceCustomerId(null)} />
+                    )}
+
+                    {/* ─── ESTIMATES TAB ─── */}
+                    {activeTab === "quotes" && userId && (
+                      <AdminQuotes userId={userId} backRef={quotesBackRef} onNavigate={pushSentinel} onSwitchToInvoice={(invoiceId) => { setPendingQuoteInvoiceId(invoiceId); pushSentinel(); switchTab("invoices"); }} />
                     )}
                   </div>
                 )}
