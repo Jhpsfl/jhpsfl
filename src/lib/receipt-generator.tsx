@@ -701,6 +701,7 @@ export interface EstimateData extends BaseDocumentData {
   quoteNumber: string;
   quoteDate: Date;
   expirationDate?: Date;
+  dueDate?: Date;
   quoteStatus: 'PENDING' | 'ACCEPTED';
   showFinancing: boolean;
   paymentTerms?: { type: string; schedule: EstimatePaymentScheduleItem[] } | null;
@@ -739,6 +740,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
             <Text style={s.metaVal}>Estimate #: {data.quoteNumber}</Text>
             <Text style={s.metaVal}>Date: {formatDateShort(data.quoteDate)}</Text>
             {data.expirationDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Valid Until: {formatDateShort(data.expirationDate)}</Text>}
+            {data.dueDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Due Date: {formatDateShort(data.dueDate)}</Text>}
           </View>
         </View>
         <ItemsTable items={data.lineItems} />

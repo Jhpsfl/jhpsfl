@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
         quoteNumber: data.quote_number || 'PREVIEW',
         quoteDate: new Date(data.created_at || Date.now()),
         expirationDate: data.expiration_date ? new Date(data.expiration_date) : undefined,
+        dueDate: data.due_date ? new Date(data.due_date) : undefined,
         quoteStatus: data.status === 'accepted' ? 'ACCEPTED' : 'PENDING',
         showFinancing: data.show_financing || false,
         paymentTerms: data.payment_terms || null,
