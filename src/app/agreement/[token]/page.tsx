@@ -150,26 +150,114 @@ function SignaturePad({ onSignatureChange }: { onSignatureChange: (data: string 
 }
 
 // ─── ID Upload Component ───
-function IdUpload({ label, file, onFileChange }: { label: string; file: File | null; onFileChange: (f: File | null) => void }) {
+// ─── Session persistence helpers (survives camera app switch on low-RAM phones) ───
+const STORAGE_KEY = "jhps_agreement_state";
+
+function saveToSession(data: Record<string, unknown>) {
+  try {
+    const existing = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}");
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...existing, ...data }));
+  } catch { /* quota exceeded or private browsing */ }
+}
+
+function loadFromSession(): Record<string, unknown> {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}");
+  } catch { return {}; }
+}
+
+function clearSession() {
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* */ }
+}
+
+// Convert file to compressed base64 for session storage
+function fileToSessionBase64(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800; // Smaller for sessionStorage
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Convert base64 data URL back to File
+function base64ToFile(dataUrl: string, name: string): File {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new File([arr], name, { type: mime });
+}
+
+// ─── ID Upload Component with session persistence ───
+function IdUpload({ label, file, storageKey, onFileChange }: {
+  label: string; file: File | null; storageKey: string;
+  onFileChange: (f: File | null) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
 
+  // Restore from sessionStorage on mount (handles camera app kill + reload)
   useEffect(() => {
-    if (!file) { setPreview(null); return; }
+    if (file || restored) return;
+    const saved = loadFromSession();
+    const b64 = saved[storageKey] as string | undefined;
+    if (b64) {
+      setPreview(b64);
+      const restoredFile = base64ToFile(b64, `${storageKey}.jpg`);
+      onFileChange(restoredFile);
+    }
+    setRestored(true);
+  }, [file, storageKey, onFileChange, restored]);
+
+  // Update preview when file changes
+  useEffect(() => {
+    if (!file) { 
+      if (!loadFromSession()[storageKey]) setPreview(null);
+      return;
+    }
     const url = URL.createObjectURL(file);
     setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    // Also save compressed version to sessionStorage
+    fileToSessionBase64(file).then(b64 => {
+      setPreview(b64); // Use the compressed version as preview too
+      URL.revokeObjectURL(url);
+      saveToSession({ [storageKey]: b64 });
+    });
+  }, [file, storageKey]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    // Validate size (10MB max)
     if (f.size > 10 * 1024 * 1024) {
       alert("File is too large. Please use an image under 10MB.");
       return;
     }
     onFileChange(f);
+  };
+
+  const handleClear = () => {
+    onFileChange(null);
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = "";
+    saveToSession({ [storageKey]: null });
   };
 
   return (
@@ -184,7 +272,7 @@ function IdUpload({ label, file, onFileChange }: { label: string; file: File | n
           />
           <button
             type="button"
-            onClick={() => { onFileChange(null); if (inputRef.current) inputRef.current.value = ""; }}
+            onClick={handleClear}
             style={{
               position: "absolute", top: 8, right: 8,
               width: 28, height: 28, borderRadius: "50%",
@@ -199,31 +287,33 @@ function IdUpload({ label, file, onFileChange }: { label: string; file: File | n
             background: "rgba(34,197,94,0.9)", color: "#fff",
             fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6,
           }}>
-            ✓ Uploaded
+            ✓ Captured
           </div>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          style={{
-            width: "100%", padding: "28px 16px", borderRadius: 12,
-            border: "2px dashed #d1d5db", background: "#f9fafb",
-            color: "#6b7280", fontSize: 13, cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-            transition: "border-color 0.2s, background 0.2s",
-          }}
-          onMouseOver={e => { e.currentTarget.style.borderColor = "#4CAF50"; e.currentTarget.style.background = "#f0fdf4"; }}
-          onMouseOut={e => { e.currentTarget.style.borderColor = "#d1d5db"; e.currentTarget.style.background = "#f9fafb"; }}
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="m21 15-5-5L5 21" />
-          </svg>
-          <span>Tap to upload or take photo</span>
-          <span style={{ fontSize: 11, color: "#9ca3af" }}>JPEG, PNG, or HEIC — max 10MB</span>
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            style={{
+              width: "100%", padding: "24px 16px", borderRadius: 12,
+              border: "2px dashed #d1d5db", background: "#f9fafb",
+              color: "#6b7280", fontSize: 13, cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+              transition: "border-color 0.2s, background 0.2s",
+            }}
+            onMouseOver={e => { e.currentTarget.style.borderColor = "#4CAF50"; e.currentTarget.style.background = "#f0fdf4"; }}
+            onMouseOut={e => { e.currentTarget.style.borderColor = "#d1d5db"; e.currentTarget.style.background = "#f9fafb"; }}
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M7 6V4h2M15 6V4h2" />
+            </svg>
+            <span style={{ fontWeight: 600 }}>Take Photo or Choose File</span>
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>Position your ID within the frame</span>
+          </button>
+        </div>
       )}
       <input
         ref={inputRef}
@@ -281,20 +371,29 @@ export default function AgreementPage() {
   const [error, setError] = useState<string | null>(null);
   const [agreement, setAgreement] = useState<AgreementResponse | null>(null);
 
-  // Form state
-  const [step, setStep] = useState<"review" | "sign">("review");
-  const [signerName, setSignerName] = useState("");
-  const [signerEmail, setSignerEmail] = useState("");
-  const [signerPhone, setSignerPhone] = useState("");
-  const [signerAddress, setSignerAddress] = useState("");
-  const [signatureData, setSignatureData] = useState<string | null>(null);
+  // Form state — restore from session on mount
+  const saved = typeof window !== "undefined" ? loadFromSession() : {};
+  const [step, setStep] = useState<"review" | "sign">((saved.step as "review" | "sign") || "review");
+  const [signerName, setSignerName] = useState((saved.signerName as string) || "");
+  const [signerEmail, setSignerEmail] = useState((saved.signerEmail as string) || "");
+  const [signerPhone, setSignerPhone] = useState((saved.signerPhone as string) || "");
+  const [signerAddress, setSignerAddress] = useState((saved.signerAddress as string) || "");
+  const [signatureData, setSignatureData] = useState<string | null>((saved.signatureData as string) || null);
   const [idFront, setIdFront] = useState<File | null>(null);
   const [idBack, setIdBack] = useState<File | null>(null);
-  const [idType, setIdType] = useState("drivers_license");
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [idType, setIdType] = useState((saved.idType as string) || "drivers_license");
+  const [agreedToTerms, setAgreedToTerms] = useState(!!saved.agreedToTerms);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Persist form state to sessionStorage on changes
+  useEffect(() => {
+    saveToSession({
+      step, signerName, signerEmail, signerPhone, signerAddress,
+      signatureData, idType, agreedToTerms,
+    });
+  }, [step, signerName, signerEmail, signerPhone, signerAddress, signatureData, idType, agreedToTerms]);
 
   // ─── Fetch agreement ───
   useEffect(() => {
@@ -305,9 +404,10 @@ export default function AgreementPage() {
         if (res.error) { setError(res.error); }
         else if (res.data) {
           setAgreement(res.data);
-          if (res.data.signer_name) setSignerName(res.data.signer_name);
-          if (res.data.signer_email) setSignerEmail(res.data.signer_email);
-          if (res.data.signer_phone) setSignerPhone(res.data.signer_phone);
+          // Only set signer info if not already restored from session
+          if (!signerName && res.data.signer_name) setSignerName(res.data.signer_name);
+          if (!signerEmail && res.data.signer_email) setSignerEmail(res.data.signer_email);
+          if (!signerPhone && res.data.signer_phone) setSignerPhone(res.data.signer_phone);
           if (res.data.status === "signed") setSubmitted(true);
         }
       })
@@ -349,6 +449,7 @@ export default function AgreementPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
+        clearSession();
         setSubmitted(true);
       } else {
         setSubmitError(data.error || "Something went wrong. Please try again.");
@@ -731,8 +832,8 @@ export default function AgreementPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <IdUpload label="Front of ID" file={idFront} onFileChange={setIdFront} />
-            <IdUpload label="Back of ID" file={idBack} onFileChange={setIdBack} />
+            <IdUpload label="Front of ID" file={idFront} storageKey="idFront" onFileChange={setIdFront} />
+            <IdUpload label="Back of ID" file={idBack} storageKey="idBack" onFileChange={setIdBack} />
           </div>
         </div>
 
