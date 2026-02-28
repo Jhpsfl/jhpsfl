@@ -1017,17 +1017,38 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
+                        <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                          <button onClick={() => { pushSentinel(); switchTab("quotes"); }} style={{
+                            flex: 1, padding: "8px 4px",
+                            background: "linear-gradient(135deg, #1565C0, #0D47A1)", border: "1px solid rgba(66,165,245,0.35)",
+                            borderRadius: 8, color: "#E3F2FD", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                            fontFamily: "'DM Sans', sans-serif",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                            boxShadow: "0 2px 12px rgba(21,101,192,0.4), 0 0 8px rgba(66,165,245,0.15)",
+                            letterSpacing: 0.5,
+                          }}>
+                            📋 Estimates
+                          </button>
+                          <button onClick={() => { pushSentinel(); switchTab("invoices"); }} style={{
+                            flex: 1, padding: "8px 4px",
+                            background: "linear-gradient(135deg, #4CAF50, #2E7D32)", border: "none",
+                            borderRadius: 8, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                            fontFamily: "'DM Sans', sans-serif",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                          }}>
+                            📄 Invoices
+                          </button>
+                        </div>
                         <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
                           {[
                             { label: "New Job", onClick: () => { pushSentinel(); setEditingJob(null); setShowJobModal(true); } },
-                            { label: "Invoices", onClick: () => { pushSentinel(); switchTab("invoices"); } },
                             { label: "New Customer", onClick: () => { pushSentinel(); setShowCustomerModal(true); } },
                           ].map((btn, i) => (
                             <button key={btn.label} onClick={btn.onClick} style={{
                               flex: 1, padding: "6px 4px",
                               background: "linear-gradient(135deg, #4CAF50, #2E7D32)", border: "none",
-                              borderRadius: i === 0 ? "6px 0 0 6px" : i === 2 ? "0 6px 6px 0" : 0,
-                              borderRight: i < 2 ? "1px solid rgba(0,0,0,0.25)" : "none",
+                              borderRadius: i === 0 ? "6px 0 0 6px" : "0 6px 6px 0",
+                              borderRight: i < 1 ? "1px solid rgba(0,0,0,0.25)" : "none",
                               color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer",
                               fontFamily: "'DM Sans', sans-serif",
                               display: "flex", alignItems: "center", justifyContent: "center", gap: 3,

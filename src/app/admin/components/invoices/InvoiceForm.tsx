@@ -65,6 +65,37 @@ export default function InvoiceForm({
 
   return (
     <>
+      {/* Floating total — mobile only, locked top-right */}
+      {isMobile && (
+        <div style={{
+          position: "fixed", top: 14, right: 14, zIndex: 9990,
+          background: "linear-gradient(135deg, rgba(13,71,161,0.95), rgba(21,101,192,0.92))",
+          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          border: "1px solid rgba(66,165,245,0.4)",
+          borderRadius: 14, padding: "10px 16px",
+          boxShadow: "0 4px 24px rgba(13,71,161,0.5), 0 0 12px rgba(66,165,245,0.2)",
+          display: "flex", flexDirection: "column", alignItems: "flex-end",
+          minWidth: 100,
+        }}>
+          <div style={{ fontSize: 9, color: "rgba(144,202,249,0.8)", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 2 }}>
+            TOTAL
+          </div>
+          <div style={{
+            fontSize: 22, fontWeight: 800, color: "#E3F2FD",
+            fontFamily: "'JetBrains Mono', monospace",
+            textShadow: "0 0 12px rgba(66,165,245,0.6)",
+            lineHeight: 1,
+          }}>
+            {formatCurrency(total)}
+          </div>
+          {form.line_items.filter(i => i.description && i.amount > 0).length > 0 && (
+            <div style={{ fontSize: 10, color: "rgba(144,202,249,0.6)", marginTop: 2 }}>
+              {form.line_items.filter(i => i.description && i.amount > 0).length} item{form.line_items.filter(i => i.description && i.amount > 0).length !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
         <button
