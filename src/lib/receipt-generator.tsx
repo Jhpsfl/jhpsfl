@@ -567,7 +567,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
 
         {/* Payment Schedule — only for contracts with financing */}
         {hasPaymentTerms && data.paymentTerms && (
-          <View style={{ marginTop: 16 }}>
+          <View style={{ marginTop: 14 }} wrap={false}>
             <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
             </View>
@@ -595,7 +595,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
                 );
               })}
               {/* Deposit due now callout */}
-              <View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
+              <View style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#E8F5E9', borderTopWidth: 2, borderColor: C.primary }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.primary }}>
                     DEPOSIT DUE NOW
@@ -609,6 +609,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </View>
         )}
 
+        {/* Contract info box */}
         <View style={[s.infoBox, { marginTop: 12 }]}>
           <Text style={s.infoTitle}>{hasPaymentTerms ? 'Contract Information' : 'Invoice Information'}</Text>
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
