@@ -232,7 +232,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
       <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
     </View>
     {items.map((item, i) => (
-      <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]}>
+      <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
         <View style={s.colSvc}>
           <Text style={s.cellBold}>{item.name}</Text>
           {item.description && <Text style={s.cellDesc}>{item.description}</Text>}
@@ -249,7 +249,7 @@ const TotalsBlock: React.FC<{
   subtotal: number; taxAmount: number; discountAmount?: number;
   tipAmount?: number; totalAmount: number; totalLabel: string;
 }> = (p) => (
-  <View style={s.totalsWrap}>
+  <View style={s.totalsWrap} wrap={false}>
     <View style={s.totalsBlock}>
       <View style={s.totalsRow}>
         <Text style={s.totalsLabel}>Subtotal</Text>
@@ -283,7 +283,7 @@ const TotalsBlock: React.FC<{
 );
 
 const NotesSection: React.FC<{ text: string }> = ({ text }) => (
-  <View style={s.notes}>
+  <View style={s.notes} wrap={false}>
     <Text style={s.notesLabel}>Notes</Text>
     <Text style={s.notesText}>{text}</Text>
   </View>
@@ -394,14 +394,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         </View>
         <ItemsTable items={data.lineItems} />
         <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} totalAmount={data.totalAmount} totalLabel="Amount Due" />
-        {data.paymentLink && (
-          <View style={s.payLinkBox}>
-            <Text style={s.payLinkTitle}>Pay Online</Text>
-            <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
-            <Text style={s.payLinkNote}>Click or copy the link above to pay securely with credit/debit card</Text>
-          </View>
-        )}
-        <View style={s.infoBox}>
+        <View style={s.infoBox} wrap={false}>
           <Text style={s.infoTitle}>Invoice Information</Text>
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
