@@ -35,8 +35,8 @@ export default function InvoiceForm({
   loadingJobs: boolean;
   showNewCustomer: boolean;
   setShowNewCustomer: (v: boolean) => void;
-  newCustomerForm: { name: string; email: string; phone: string };
-  setNewCustomerForm: React.Dispatch<React.SetStateAction<{ name: string; email: string; phone: string }>>;
+  newCustomerForm: { name: string; email: string; phone: string; customer_type: "residential" | "commercial"; company_name: string };
+  setNewCustomerForm: React.Dispatch<React.SetStateAction<{ name: string; email: string; phone: string; customer_type: "residential" | "commercial"; company_name: string }>>;
   savingNewCustomer: boolean;
   subtotal: number;
   taxAmount: number;
@@ -129,7 +129,7 @@ export default function InvoiceForm({
                 value={form.customer_id ?? ""}
                 onChange={e => {
                   if (e.target.value === "__new__") {
-                    setNewCustomerForm({ name: "", email: "", phone: "" });
+                    setNewCustomerForm({ name: "", email: "", phone: "", customer_type: "residential", company_name: "" });
                     setShowNewCustomer(true);
                   } else {
                     setForm(prev => ({ ...prev, customer_id: e.target.value || null }));
@@ -215,8 +215,34 @@ export default function InvoiceForm({
                   background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.2)",
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#5a8a5a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>New Customer</div>
+                  {/* Customer type toggle */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    {(["residential", "commercial"] as const).map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setNewCustomerForm(prev => ({ ...prev, customer_type: t }))}
+                        style={{
+                          flex: 1, padding: "7px 0", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                          border: newCustomerForm.customer_type === t ? "2px solid #4CAF50" : "1px solid #1a3a1a",
+                          background: newCustomerForm.customer_type === t ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.03)",
+                          color: newCustomerForm.customer_type === t ? "#4CAF50" : "#5a8a5a",
+                          cursor: "pointer", textTransform: "capitalize",
+                        }}
+                      >{t === "residential" ? "🏠 Residential" : "🏢 Commercial"}</button>
+                    ))}
+                  </div>
+                  {newCustomerForm.customer_type === "commercial" && (
+                    <input
+                      type="text"
+                      placeholder="Company Name"
+                      value={newCustomerForm.company_name}
+                      onChange={e => setNewCustomerForm(prev => ({ ...prev, company_name: e.target.value }))}
+                      style={{ ...inputStyle, marginBottom: 8 }}
+                    />
+                  )}
                   {[
-                    { key: "name", placeholder: "Full Name *", type: "text" },
+                    { key: "name", placeholder: newCustomerForm.customer_type === "commercial" ? "Contact Person *" : "Full Name *", type: "text" },
                     { key: "email", placeholder: "Email", type: "email" },
                     { key: "phone", placeholder: "Phone", type: "tel" },
                   ].map(f => (

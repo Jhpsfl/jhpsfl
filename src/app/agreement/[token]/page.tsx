@@ -673,17 +673,19 @@ export default function AgreementPage() {
           {agreement?.quote_snapshot && (() => {
             const snap = agreement.quote_snapshot as unknown as Record<string, unknown>;
             const depositAmt = (snap.deposit_amount as number) || 0;
-            const payLink = snap.payment_link as string | undefined;
-            // Build a deposit payment URL
+            // Always build deposit URL with correct deposit amount — never use the original payment_link
+            // because that has the full contract total
             const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
             const params = new URLSearchParams({
               invoice: (snap.quote_number as string) || "",
               amount: depositAmt.toFixed(2),
               ...(snap.customer_name ? { name: snap.customer_name as string } : {}),
               ...(snap.customer_email ? { email: snap.customer_email as string } : {}),
-              payment_label: "Deposit",
+              ...(snap.customer_phone ? { phone: snap.customer_phone as string } : {}),
+              payment_label: "Deposit (Non-Refundable)",
+              description: `Deposit for Service Contract ${(snap.quote_number as string) || ""}`,
             });
-            const depositUrl = payLink || `${baseUrl}/pay?${params.toString()}`;
+            const depositUrl = `${baseUrl}/pay?${params.toString()}`;
             return depositAmt > 0 ? (
               <a
                 href={depositUrl}

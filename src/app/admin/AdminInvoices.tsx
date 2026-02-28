@@ -32,7 +32,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
   // New-customer mini-modal (inline in create/edit form)
   const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomerForm, setNewCustomerForm] = useState({ name: "", email: "", phone: "" });
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: "", email: "", phone: "", customer_type: "residential" as "residential" | "commercial", company_name: "" });
   const [savingNewCustomer, setSavingNewCustomer] = useState(false);
 
   // Invoice form state — now includes payment_terms
@@ -255,6 +255,8 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       name: newCustomerForm.name.trim(),
       email: newCustomerForm.email.trim() || null,
       phone: newCustomerForm.phone.trim() || null,
+      customer_type: newCustomerForm.customer_type,
+      company_name: newCustomerForm.company_name.trim() || null,
     });
     setSavingNewCustomer(false);
     if (res?.data?.id || res?.success) {
@@ -263,7 +265,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       if (custRes?.data) setCustomers(custRes.data);
       if (newId) setForm(prev => ({ ...prev, customer_id: newId }));
       setShowNewCustomer(false);
-      setNewCustomerForm({ name: "", email: "", phone: "" });
+      setNewCustomerForm({ name: "", email: "", phone: "", customer_type: "residential", company_name: "" });
       showToast("Customer created");
     } else {
       showToast(res?.error || "Failed to create customer", "error");
