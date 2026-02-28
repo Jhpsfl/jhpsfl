@@ -36,3 +36,15 @@ export const GALLERY_QUERY = defineQuery(`
     image, imageUrl, imageFit, imagePosition
   }
 `)
+
+export const COMMERCIAL_PAGE_QUERY = defineQuery(`
+  *[_type == "commercialPage"][0]{
+    heroHeadline, heroSubheadline,
+    stats,
+    solutions[]{
+      icon, title, description,
+      image, imageUrl
+    },
+    ctaHeadline, ctaSubtext, contactEmail
+  }
+`)
