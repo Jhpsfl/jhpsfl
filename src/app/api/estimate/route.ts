@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 const ADMIN_EMAIL = "info@jhpsfl.com";
 const NOTIFY_EMAIL = "FRLawnCareFL@gmail.com"; // also notified
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     const leadId = lead?.id ?? "unknown";
 
     // ── 2. Admin notification email ──────────────────────────────────────────────
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "JHPS Florida <info@jhpsfl.com>",
       to: [ADMIN_EMAIL, NOTIFY_EMAIL],
       subject: `New Estimate Request — ${name} (${service || "General"})`,
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── 3. Customer confirmation email ───────────────────────────────────────────
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "JHPS Florida <info@jhpsfl.com>",
       to: [email],
       subject: "We received your estimate request — JHPS Florida",

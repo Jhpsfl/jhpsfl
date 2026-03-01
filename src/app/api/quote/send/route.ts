@@ -6,7 +6,7 @@ import { generateEstimatePDF, getEstimateFilename } from '@/lib/receipt-generato
 import type { EstimateData } from '@/lib/receipt-generator';
 import { randomUUID } from 'crypto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 const FINANCING_MESSAGE =
   'This project is eligible for flexible payment options including deposits and installment plans. Contact us to discuss a payment schedule that works for you.';
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
     if (!isCommercial) {
       emailOptions.attachments = [{ filename: pdfFilename, content: pdfBuffer.toString('base64') }];
     }
-    const { data, error } = await resend.emails.send(emailOptions);
+    const { data, error } = await getResend().emails.send(emailOptions);
     if (error) {
       console.error('RESEND_ERROR:', error);
       return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });

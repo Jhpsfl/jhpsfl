@@ -7,7 +7,7 @@ import type { InvoiceData } from '@/lib/receipt-generator';
 import { generateAgreementText, type QuoteSnapshot, type PaymentScheduleSnapshot } from '@/lib/agreement';
 import { randomUUID } from 'crypto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 // Server-side short link helper
 async function shortenUrl(url: string, label: string, supabase: ReturnType<typeof createSupabaseAdmin>): Promise<string> {
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
   const thread_id = randomUUID();
   let resendMessageId: string | undefined;
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: 'JHPS Florida <info@jhpsfl.com>',
       to: [customer.email],
       subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— Jenkins Home & Property Solutions`,

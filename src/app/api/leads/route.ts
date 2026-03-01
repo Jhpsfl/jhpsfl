@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase";
 import { getSignedViewUrl } from "@/lib/b2Storage";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 // ─── Quote email builder ───
 interface QuoteEmailPayload {
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
         const serviceAddress = addressParts.join(", ");
 
         // Send email via Resend directly (no internal fetch)
-        const { error: emailError } = await resend.emails.send({
+        const { error: emailError } = await getResend().emails.send({
           from: "JHPS Florida <info@jhpsfl.com>",
           to: [lead.email],
           subject: `Your Quote from JHPS Florida — ${lead.service_requested}`,

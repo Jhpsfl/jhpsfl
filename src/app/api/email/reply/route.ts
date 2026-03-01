@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail, buildReplyHtml } from '@/lib/email';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
 
   let resendMessageId: string | undefined;
   try {
-    const sendParams: Parameters<typeof resend.emails.send>[0] = {
+    const r = getResend();
+    const sendParams: Parameters<typeof r.emails.send>[0] = {
       from: 'JHPS Florida <info@jhpsfl.com>',
       to: [to_email],
       subject: replySubject,
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     };
     if (resendAttachments.length) sendParams.attachments = resendAttachments;
 
-    const { data, error } = await resend.emails.send(sendParams);
+    const { data, error } = await r.emails.send(sendParams);
     if (error) {
       console.error('Resend error:', error);
       return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });

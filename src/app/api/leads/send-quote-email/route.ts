@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 interface LineItem {
   service: string;
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     const html = buildEmailHtml(payload);
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: "JHPS Florida <info@jhpsfl.com>",
       to: [customer_email],
       subject: `Your Quote from JHPS Florida — ${payload.service_requested}`,

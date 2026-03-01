@@ -16,7 +16,7 @@ import { Resend } from 'resend';
 import type { ReceiptData, InvoiceData } from './receipt-generator';
 import { getReceiptFilename, getInvoiceFilename } from './receipt-generator';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM = 'JHPS Florida <info@jhpsfl.com>';
 
 function fmt(cents: number): string {
@@ -31,7 +31,7 @@ export async function sendReceiptEmail(
 ): Promise<void> {
   const filename = getReceiptFilename(data);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: [data.customerEmail],
     subject: `JHPS Payment Receipt — ${fmt(data.totalAmount)}`,
@@ -85,7 +85,7 @@ export async function sendInvoiceEmail(
     year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
   }).format(data.dueDate);
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: [data.customerEmail],
     subject: `JHPS Invoice ${data.invoiceNumber} — ${fmt(data.totalAmount)} ${statusLabel}`,

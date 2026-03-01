@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
   `;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: 'JHPS Florida <info@jhpsfl.com>',
       to: [customer.email],
       subject: `Cash Payment Receipt — ${fmt(amountCents)} — Jenkins Home & Property Solutions`,

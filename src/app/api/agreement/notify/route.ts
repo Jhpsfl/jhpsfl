@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = "info@jhpsfl.com";
 const NOTIFY_EMAIL = "FRLawnCareFL@gmail.com";
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 </body>
 </html>`;
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "JHPS Florida <info@jhpsfl.com>",
       to: [ADMIN_EMAIL, NOTIFY_EMAIL],
       subject: `✍️ Agreement Signed — ${signer_name || "Customer"} (${quote_number || "Estimate"})`,
