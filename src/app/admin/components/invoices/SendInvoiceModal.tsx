@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import type { Invoice, Customer } from "./invoiceTypes";
 import { formatCurrency } from "./invoiceHelpers";
 import { IconSend, IconCopy } from "./InvoiceIcons";
+import { createShortLink } from "@/lib/shortLink";
 
 export default function SendInvoiceModal({ invoice, customers, sendMethod, setSendMethod, sendingInvoice, copiedLink, onSend, onCopyLink, onClose, getPaymentLink, adminPost, loadInvoices }: {
   invoice: Invoice;
@@ -19,6 +20,15 @@ export default function SendInvoiceModal({ invoice, customers, sendMethod, setSe
   adminPost: (resource: string, action: string, payload: Record<string, unknown>) => Promise<unknown>;
   loadInvoices: () => Promise<void>;
 }) {
+  const [shortUrl, setShortUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sendMethod === "link") {
+      const fullLink = getPaymentLink(invoice);
+      createShortLink(fullLink, `Payment: ${invoice.invoice_number}`).then(setShortUrl);
+    }
+  }, [sendMethod, invoice, getPaymentLink]);
+
   return (
     <div
       onClick={onClose}
@@ -145,7 +155,7 @@ export default function SendInvoiceModal({ invoice, customers, sendMethod, setSe
               fontSize: 12, color: "#8aba8a", fontFamily: "'JetBrains Mono', monospace",
               lineHeight: 1.6, maxHeight: 100, overflowY: "auto",
             }}>
-              {getPaymentLink(invoice)}
+              {shortUrl || getPaymentLink(invoice)}
             </div>
             <button
               onClick={() => {

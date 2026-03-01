@@ -9,6 +9,29 @@ import { randomUUID } from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Server-side short link helper
+async function shortenUrl(url: string, label: string, supabase: ReturnType<typeof createSupabaseAdmin>): Promise<string> {
+  try {
+    // Check if already shortened
+    const { data: existing } = await supabase
+      .from('short_links')
+      .select('code')
+      .eq('target_url', url)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return `https://jhpsfl.com/l/${existing[0].code}`;
+    }
+    // Generate code
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    await supabase.from('short_links').insert({ code, target_url: url, label });
+    return `https://jhpsfl.com/l/${code}`;
+  } catch {
+    return url; // fallback
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { clerk_user_id, invoice, customer, payment_link } = body;
@@ -153,6 +176,10 @@ export async function POST(req: NextRequest) {
 
   const isOverdue = invoiceData.invoiceStatus === 'OVERDUE';
   const statusColor = isOverdue ? '#C62828' : '#1565C0';
+
+  // Shorten links for email
+  const shortPaymentLink = payment_link ? await shortenUrl(payment_link, `Payment: ${invoice.invoice_number}`, supabase) : null;
+  const shortAgreementUrl = agreementUrl ? await shortenUrl(agreementUrl, `Agreement: ${invoice.invoice_number}`, supabase) : null;
   const docLabel = isContract ? 'Service Contract' : 'Invoice';
 
   const html = `
@@ -175,17 +202,17 @@ export async function POST(req: NextRequest) {
           ${isContract && invoiceData.paymentTerms ? `<p style="margin:4px 0;font-size:14px;"><strong>Deposit Due Now:</strong> <span style="color:#2E7D32;font-weight:bold;">${fmt(Math.round(invoiceData.paymentTerms.deposit_amount * 100))}</span></p>` : ''}
           ${invoiceData.dueDate ? `<p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>` : ''}
         </div>
-        ${isContract && agreementUrl ? `
+        ${isContract && shortAgreementUrl ? `
           <div style="text-align:center;margin:24px 0;">
-            <a href="${agreementUrl}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#1565C0,#0D47A1);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Review & Sign Agreement →</a>
+            <a href="${shortAgreementUrl}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#1565C0,#0D47A1);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Review & Sign Agreement →</a>
           </div>
           <p style="text-align:center;font-size:13px;color:#666;margin-top:8px;">Please review the contract, sign digitally, and upload your ID to proceed.</p>
           <p style="text-align:center;font-size:12px;color:#999;margin-top:4px;">After signing, you'll be directed to make your deposit payment.</p>
-        ` : payment_link ? `
+        ` : shortPaymentLink ? `
           <div style="text-align:center;margin:24px 0;">
-            <a href="${payment_link}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Pay Now →</a>
+            <a href="${shortPaymentLink}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Pay Now →</a>
           </div>
-          <p style="text-align:center;font-size:12px;color:#999;margin-top:8px;">Or copy this link: ${payment_link}</p>
+          <p style="text-align:center;font-size:12px;color:#999;margin-top:8px;">Or copy this link: ${shortPaymentLink}</p>
         ` : ''}
         <p style="margin:24px 0 0;font-size:15px;">If you have any questions, please don't hesitate to reach out.</p>
         <p style="margin:16px 0 0;font-size:15px;">

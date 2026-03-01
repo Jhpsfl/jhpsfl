@@ -12,6 +12,7 @@ import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 import RecordPaymentModal from "./components/invoices/RecordPaymentModal";
 import PdfPreviewModal from "./components/PdfPreviewModal";
 import AgreementDetailModal from "./components/quotes/AgreementDetailModal";
+import { createShortLink } from "@/lib/shortLink";
 
 // Re-export types for external consumers
 export type { Invoice, InvoiceLineItem, Customer, CustomerJob } from "./components/invoices/invoiceTypes";
@@ -448,10 +449,12 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
 
       if (!asDraft && res?.data && (!form.customer_id || form.customer_id === "__link_only__")) {
         const link = getPaymentLink(res.data);
-        navigator.clipboard.writeText(link).then(() => {
-          showToast("Invoice created — payment link copied to clipboard!");
-        }).catch(() => {
-          showToast("Invoice created! Copy the payment link from the invoice detail.");
+        createShortLink(link, `Payment: ${res.data.invoice_number}`).then(shortLink => {
+          navigator.clipboard.writeText(shortLink).then(() => {
+            showToast("Invoice created — payment link copied to clipboard!");
+          }).catch(() => {
+            showToast("Invoice created! Copy the payment link from the invoice detail.");
+          });
         });
         setSelectedInvoice(res.data);
         setView("detail");
@@ -621,9 +624,10 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   };
 
   // ─── Copy link ───
-  const handleCopyLink = (invoice: Invoice) => {
+  const handleCopyLink = async (invoice: Invoice) => {
     const link = getPaymentLink(invoice);
-    navigator.clipboard.writeText(link).then(() => {
+    const shortLink = await createShortLink(link, `Payment: ${invoice.invoice_number}`);
+    navigator.clipboard.writeText(shortLink).then(() => {
       setCopiedLink(true);
       showToast("Payment link copied!");
       setTimeout(() => setCopiedLink(false), 3000);

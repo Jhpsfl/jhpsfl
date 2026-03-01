@@ -11,6 +11,7 @@ import ServicePresetPicker from "./components/invoices/ServicePresetPicker";
 import ConfirmDeleteModal from "./components/invoices/ConfirmDeleteModal";
 import PdfPreviewModal from "./components/PdfPreviewModal";
 import AgreementDetailModal from "./components/quotes/AgreementDetailModal";
+import { createShortLink } from "@/lib/shortLink";
 
 // Re-export types for external consumers
 export type { Quote, QuoteLineItem, Customer, CustomerJob } from "./components/quotes/quoteTypes";
@@ -560,8 +561,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
     if (quote.public_token) {
-      // Use the public estimate page
-      const link = `${baseUrl}/estimate/${quote.public_token}`;
+      const fullLink = `${baseUrl}/estimate/${quote.public_token}`;
+      const link = await createShortLink(fullLink, `Estimate: ${quote.quote_number}`);
       try {
         await navigator.clipboard.writeText(link);
         showToast("Estimate link copied!");
@@ -585,9 +586,10 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       });
       const data = await res.json();
       if (data.success && data.url) {
-        // Copy link to clipboard
+        // Shorten and copy link to clipboard
         try {
-          await navigator.clipboard.writeText(data.url);
+          const shortLink = await createShortLink(data.url, `Agreement: ${quote.quote_number}`);
+          await navigator.clipboard.writeText(shortLink);
           showToast(`Agreement link copied! ${data.existing ? "(existing link)" : ""}`);
         } catch {
           showToast("Agreement created! Check console for link.");
