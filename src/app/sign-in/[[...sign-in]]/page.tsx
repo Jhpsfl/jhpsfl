@@ -1,5 +1,7 @@
 import { SignIn } from '@clerk/nextjs'
 
+export const dynamic = "force-dynamic";
+
 const appearance = {
   variables: {
     colorPrimary: '#4CAF50',

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import PaymentPage from "./PaymentPage";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Make a Payment | Jenkins Home & Property Solutions",
   description:

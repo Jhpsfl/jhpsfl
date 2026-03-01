@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import AccountPage from "./AccountPage";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "My Account | Jenkins Home & Property Solutions",
   description:
