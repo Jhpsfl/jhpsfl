@@ -37,6 +37,32 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Get attachments for all messages in this thread
+  const messageIds = (messages || []).map(m => m.id);
+  let attachmentsByMessage: Record<string, Array<{ id: string; message_id: string; filename: string; content_type: string; size_bytes: number; s3_key: string; s3_url: string; created_at: string }>> = {};
+
+  if (messageIds.length > 0) {
+    const { data: attachments } = await supabase
+      .from('email_attachments')
+      .select('*')
+      .in('message_id', messageIds);
+
+    if (attachments) {
+      for (const att of attachments) {
+        if (!attachmentsByMessage[att.message_id]) {
+          attachmentsByMessage[att.message_id] = [];
+        }
+        attachmentsByMessage[att.message_id].push(att);
+      }
+    }
+  }
+
+  // Attach attachments to their messages
+  const messagesWithAttachments = (messages || []).map(m => ({
+    ...m,
+    attachments: attachmentsByMessage[m.id] || [],
+  }));
+
   // Mark all unread messages in this thread as read
   await supabase
     .from('email_messages')
@@ -56,5 +82,5 @@ export async function GET(
     lead = leadData;
   }
 
-  return NextResponse.json({ messages: messages || [], lead });
+  return NextResponse.json({ messages: messagesWithAttachments, lead });
 }

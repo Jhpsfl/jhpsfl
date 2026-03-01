@@ -1,6 +1,8 @@
 import { createSupabaseAdmin } from './supabase';
 
 // ── Types ──────────────────────────────────────────────────────
+export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam';
+
 export interface EmailMessage {
   id: string;
   thread_id: string;
@@ -13,7 +15,14 @@ export interface EmailMessage {
   body_text: string | null;
   resend_message_id: string | null;
   read: boolean;
+  starred: boolean;
+  folder: EmailFolder;
+  has_attachments: boolean;
+  is_draft: boolean;
+  cc_emails: string[];
+  bcc_emails: string[];
   created_at: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailThread {
@@ -26,9 +35,35 @@ export interface EmailThread {
   latest_direction: 'outbound' | 'inbound';
   message_count: number;
   unread_count: number;
+  starred: boolean;
+  has_attachments: boolean;
   lead_id: string | null;
   created_at: string;
   customer_name?: string;
+}
+
+export interface EmailAttachment {
+  id: string;
+  message_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  s3_key: string;
+  s3_url: string;
+  created_at: string;
+}
+
+export interface EmailContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  category: 'vendor' | 'customer' | 'supplier' | 'contractor' | 'other';
+  notes: string | null;
+  starred: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SmsMessage {
@@ -56,8 +91,14 @@ export async function logEmail(params: {
   body_html?: string;
   body_text?: string;
   resend_message_id?: string;
+  folder?: EmailFolder;
+  is_draft?: boolean;
+  has_attachments?: boolean;
+  cc_emails?: string[];
+  bcc_emails?: string[];
 }): Promise<EmailMessage | null> {
   const supabase = createSupabaseAdmin();
+  const folder = params.folder || (params.is_draft ? 'drafts' : params.direction === 'outbound' ? 'sent' : 'inbox');
   const { data, error } = await supabase
     .from('email_messages')
     .insert({
@@ -71,6 +112,11 @@ export async function logEmail(params: {
       body_text: params.body_text || null,
       resend_message_id: params.resend_message_id || null,
       read: params.direction === 'outbound',
+      folder,
+      is_draft: params.is_draft || false,
+      has_attachments: params.has_attachments || false,
+      cc_emails: params.cc_emails || [],
+      bcc_emails: params.bcc_emails || [],
     })
     .select()
     .single();
