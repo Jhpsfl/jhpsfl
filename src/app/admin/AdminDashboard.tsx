@@ -32,6 +32,7 @@ export interface Customer {
   name: string | null;
   email: string | null;
   phone: string | null;
+  address: string | null;
   created_at: string;
   updated_at: string;
   job_sites?: { count: number }[];
@@ -171,7 +172,7 @@ export default function AdminDashboard() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string } | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string; address?: string } | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<{ id: string; name: string } | null>(null);
@@ -1219,10 +1220,13 @@ export default function AdminDashboard() {
                               {customerDetail.customer.email && <a href={`mailto:${customerDetail.customer.email}`} style={{ color: "#4CAF50", fontSize: 14, textDecoration: "none" }}>✉️ {customerDetail.customer.email}</a>}
                               {customerDetail.customer.phone && <a href={`tel:${customerDetail.customer.phone}`} style={{ color: "#4CAF50", fontSize: 14, textDecoration: "none" }}>📞 {customerDetail.customer.phone}</a>}
                             </div>
+                            {customerDetail.customer.address && (
+                              <p style={{ color: "#8aba8a", fontSize: 13, marginTop: 6 }}>📍 {customerDetail.customer.address}</p>
+                            )}
                             <div style={{ color: "#3a5a3a", fontSize: 12, marginTop: 8 }}>Customer since {formatDate(customerDetail.customer.created_at)}</div>
                           </div>
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: customerDetail.customer.id, name: customerDetail.customer.name || undefined, email: customerDetail.customer.email || undefined, phone: customerDetail.customer.phone || undefined }); setShowCustomerModal(true); }}>✏️ Edit Customer</button>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: customerDetail.customer.id, name: customerDetail.customer.name || undefined, email: customerDetail.customer.email || undefined, phone: customerDetail.customer.phone || undefined, address: customerDetail.customer.address || undefined }); setShowCustomerModal(true); }}>✏️ Edit Customer</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>+ New Job</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(customerDetail.customer.id); switchTab("invoices"); }}>📄 Create Invoice</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(customerDetail.customer.id); setShowCashModal(true); }}>💵 Cash Payment</button>

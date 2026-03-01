@@ -38,6 +38,7 @@ interface QuoteData {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
+  customer_address: string;
 }
 
 // ─── PDF.js loader ───
@@ -228,25 +229,29 @@ export default function EstimatePage() {
           {/* Estimate header card */}
           <div style={{
             background: "linear-gradient(160deg, #0d1f0d, #091409)",
-            border: "1px solid #1a3a1a", borderRadius: 20, padding: "32px 28px",
+            border: "1px solid #1a3a1a", borderRadius: 20, padding: "32px 24px",
             marginBottom: 24, animation: "fadeIn 0.5s ease",
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
-              <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <p style={{ color: "#3a5a3a", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>
-                  SERVICE ESTIMATE
+                  PREPARED FOR
                 </p>
                 <h2 style={{ color: "#e8f5e8", fontSize: 24, fontFamily: "'Playfair Display', serif", fontWeight: 700, marginBottom: 4 }}>
-                  {quote.quote_number}
+                  {quote.customer_name}
                 </h2>
-                <p style={{ color: "#5a8a5a", fontSize: 13 }}>
-                  Prepared on {fmtDate(quote.created_at)}
+                {quote.customer_address && (
+                  <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 2 }}>📍 {quote.customer_address}</p>
+                )}
+                <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 6 }}>
+                  {quote.quote_number} · {fmtDate(quote.created_at)}
                 </p>
               </div>
               <div style={{
                 padding: "8px 16px", borderRadius: 10,
                 background: isExpired ? "rgba(239,83,80,0.1)" : isAcceptedStatus ? "rgba(76,175,80,0.12)" : "rgba(66,165,245,0.1)",
                 border: `1px solid ${isExpired ? "rgba(239,83,80,0.3)" : isAcceptedStatus ? "rgba(76,175,80,0.3)" : "rgba(66,165,245,0.3)"}`,
+                flexShrink: 0,
               }}>
                 <span style={{
                   fontSize: 13, fontWeight: 700,
@@ -257,12 +262,8 @@ export default function EstimatePage() {
               </div>
             </div>
 
-            {/* Customer info */}
-            <div style={{ display: "flex", gap: 24, marginTop: 20, flexWrap: "wrap" }}>
-              <div>
-                <p style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Prepared For</p>
-                <p style={{ color: "#e8f5e8", fontSize: 15, fontWeight: 600, marginTop: 4 }}>{quote.customer_name}</p>
-              </div>
+            {/* Contact info row */}
+            <div style={{ display: "flex", gap: 24, marginTop: 16, flexWrap: "wrap" }}>
               {quote.customer_email && (
                 <div>
                   <p style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Email</p>

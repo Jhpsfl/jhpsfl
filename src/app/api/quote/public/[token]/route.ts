@@ -12,7 +12,7 @@ export async function GET(
 
   const { data: quote, error } = await supabase
     .from("quotes")
-    .select("*, customers(name, email, phone)")
+    .select("*, customers(name, email, phone, address)")
     .eq("public_token", token)
     .single();
 
@@ -48,6 +48,7 @@ export async function GET(
       customer_name: quote.customers?.name || "Customer",
       customer_email: quote.customers?.email || "",
       customer_phone: quote.customers?.phone || "",
+      customer_address: quote.customers?.address || "",
     },
   });
 }

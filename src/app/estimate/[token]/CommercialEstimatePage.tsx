@@ -12,6 +12,7 @@ interface QuoteData {
   line_items: LineItem[]; show_financing: boolean; is_commercial: boolean;
   payment_terms: { type: string; deposit_amount: number; schedule: ScheduleItem[] } | null;
   created_at: string; customer_name: string; customer_email: string; customer_phone: string;
+  customer_address: string;
 }
 
 const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174";
@@ -167,6 +168,9 @@ export default function CommercialEstimatePage({ quote, token }: { quote: QuoteD
             <h2 style={{ color: "#E3F2FD", fontSize: 28, fontFamily: "'Playfair Display', serif", fontWeight: 700, marginBottom: 6, lineHeight: 1.3 }}>
               Prepared for<br /><span style={{ whiteSpace: "nowrap" }}>{quote.customer_name}</span>
             </h2>
+            {quote.customer_address && (
+              <p style={{ color: "#5a7a9a", fontSize: 13, marginBottom: 4 }}>📍 {quote.customer_address}</p>
+            )}
             <p style={{ color: "#5a7a9a", fontSize: 14, marginBottom: 24 }}>
               Proposal #{quote.quote_number} · {fmtDate(quote.created_at)}
               {quote.expiration_date && <><br /><span style={{ color: "#42a5f5", fontWeight: 600 }}>Valid until {fmtDate(quote.expiration_date)}</span></>}

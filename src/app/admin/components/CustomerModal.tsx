@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-interface CustomerData { id?: string; name?: string; email?: string; phone?: string; }
+interface CustomerData { id?: string; name?: string; email?: string; phone?: string; address?: string; }
 
 export default function CustomerModal({ onClose, onSave, editCustomer }: {
   onClose: () => void;
@@ -14,6 +14,7 @@ export default function CustomerModal({ onClose, onSave, editCustomer }: {
     name: editCustomer?.name || "",
     email: editCustomer?.email || "",
     phone: editCustomer?.phone || "",
+    address: editCustomer?.address || "",
   });
   const isValid = !!(form.name || form.email || form.phone);
 
@@ -33,6 +34,8 @@ export default function CustomerModal({ onClose, onSave, editCustomer }: {
     else if (isEdit) data.email = null;
     if (form.phone) data.phone = form.phone;
     else if (isEdit) data.phone = null;
+    if (form.address) data.address = form.address;
+    else if (isEdit) data.address = null;
     onSave(data);
   };
 
@@ -72,6 +75,11 @@ export default function CustomerModal({ onClose, onSave, editCustomer }: {
             <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Phone</label>
             <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="(407) 555-0000" inputMode="tel" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Address</label>
+            <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="123 Main St, Deltona, FL 32725" style={inputStyle} />
           </div>
           <button onClick={handleSubmit} style={{
             background: isValid ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
