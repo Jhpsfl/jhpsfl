@@ -165,7 +165,7 @@ export default function CommercialEstimatePage({ quote, token }: { quote: QuoteD
               COMMERCIAL SERVICE PROPOSAL
             </p>
             <h2 style={{ color: "#E3F2FD", fontSize: 28, fontFamily: "'Playfair Display', serif", fontWeight: 700, marginBottom: 6, lineHeight: 1.3 }}>
-              Prepared for {quote.customer_name}
+              Prepared for<br /><span style={{ whiteSpace: "nowrap" }}>{quote.customer_name}</span>
             </h2>
             <p style={{ color: "#5a7a9a", fontSize: 14, marginBottom: 24 }}>
               Proposal #{quote.quote_number} · {fmtDate(quote.created_at)}
