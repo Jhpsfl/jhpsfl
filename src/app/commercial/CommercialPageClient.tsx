@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { getSanityImageSrc } from "@/app/components/website/sanityImageHelpers";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { getSanityImageSrc, getLogoSrc } from "@/app/components/website/sanityImageHelpers";
 
 // ─── Types ───
 interface InViewOptions {
@@ -851,8 +851,25 @@ interface SanityData {
   contactEmail?: string;
 }
 
-export default function CommercialPage({ data }: { data?: SanityData }) {
+interface SiteSettings {
+  companyName?: string;
+  logo?: { asset?: { _ref?: string; url?: string } };
+  logoMaxWidth?: number;
+  logoMaxHeight?: number;
+  logoFit?: string;
+  logoPadding?: number;
+}
+
+export default function CommercialPage({ data, siteSettings }: { data?: SanityData; siteSettings?: SiteSettings }) {
   const EMAIL = data?.contactEmail || DEFAULT_EMAIL;
+
+  // Logo from siteSettings
+  const logoMaxWidth = siteSettings?.logoMaxWidth || 200;
+  const logoMaxHeight = siteSettings?.logoMaxHeight || 80;
+  const logoFit = (siteSettings?.logoFit || 'contain') as React.CSSProperties['objectFit'];
+  const logoPadding = siteSettings?.logoPadding || 0;
+  const companyName = siteSettings?.companyName || "JHPS Florida";
+  const logoSrc = siteSettings?.logo ? getLogoSrc(siteSettings.logo, logoMaxWidth * 2) : null;
 
   // Merge Sanity solution data with fallbacks (Sanity uploaded image > Sanity URL > fallback URL)
   const solutions = (data?.solutions?.length ? data.solutions : FALLBACK_SOLUTIONS).map((sol, i) => ({
@@ -914,58 +931,18 @@ export default function CommercialPage({ data }: { data?: SanityData }) {
         }}
       >
         {/* Logo */}
-        <a
-          href="/"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            textDecoration: "none",
-          }}
-        >
-          <div
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "8px",
-              background: "linear-gradient(135deg, #2E7D32, #4CAF50)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "'Playfair Display', serif",
-              fontWeight: 800,
-              fontSize: "18px",
-              color: "#fff",
-            }}
-          >
-            J
-          </div>
-          <div>
-            <div
-              style={{
-                fontFamily: "'DM Sans', sans-serif",
-                fontWeight: 700,
-                fontSize: "15px",
-                color: "#e8f5e8",
-                letterSpacing: "1px",
-                lineHeight: 1.2,
-              }}
-            >
-              JHPS FLORIDA
-            </div>
-            <div
-              style={{
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: "10px",
-                color: "#4CAF50",
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              Commercial Services
-            </div>
-          </div>
+        <a href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
+          {logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoSrc}
+              alt={companyName}
+              style={{ maxWidth: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, objectFit: logoFit, padding: logoPadding }}
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 200, height: "auto", maxHeight: 80 }} />
+          )}
         </a>
 
         {/* Desktop Nav */}
