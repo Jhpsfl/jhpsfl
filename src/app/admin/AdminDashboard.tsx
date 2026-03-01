@@ -14,6 +14,7 @@ import AdminInbox from "./AdminInbox";
 import AdminInvoices from "./AdminInvoices";
 import AdminQuotes from "./AdminQuotes";
 import AdminAnalytics from "./AdminAnalytics";
+import FeedbackModal from "./components/FeedbackModal";
 
 // ─── Sub-components ───
 import { formatDate, formatCurrency, timeAgo } from "./components/formatters";
@@ -207,6 +208,8 @@ export default function AdminDashboard() {
   const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string; address?: string } | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState<string | null>(null); // "post_service" | "lost_estimate" | null
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackModalPreselect, setFeedbackModalPreselect] = useState<{ type?: "post_service" | "lost_estimate"; quoteId?: string } | null>(null);
   const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<{ id: string; name: string } | null>(null);
 
@@ -574,7 +577,7 @@ export default function AdminDashboard() {
   };
 
   // ─── Send feedback request ───
-  const handleSendFeedback = async (customerId: string, type: "post_service" | "lost_estimate", quoteId?: string) => {
+  const handleSendFeedback = async (customerId: string, type: "post_service" | "lost_estimate", quoteId?: string, silent?: boolean) => {
     if (!user?.id) return;
     setSendingFeedback(type);
     try {
@@ -585,7 +588,7 @@ export default function AdminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        showToast(type === "post_service" ? "Feedback request sent!" : "Follow-up sent!");
+        if (!silent) showToast(type === "post_service" ? "Feedback request sent!" : "Follow-up sent!");
         // Reload customer detail
         if (customerDetail) {
           const r = await fetch(`/api/admin/data?resource=customer_detail&customer_id=${customerDetail.customer.id}`, { headers: { "x-clerk-user-id": user.id } });
@@ -593,9 +596,11 @@ export default function AdminDashboard() {
         }
       } else {
         showToast(data.error || "Failed to send");
+        throw new Error(data.error || "Failed to send");
       }
-    } catch {
-      showToast("Failed to send feedback request");
+    } catch (e) {
+      if (!silent) showToast("Failed to send feedback request");
+      throw e;
     }
     setSendingFeedback(null);
   };
@@ -1325,7 +1330,7 @@ export default function AdminDashboard() {
                           <button className="action-btn" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(cd.customer.id); switchTab("invoices"); }} style={{ background: "rgba(255,183,77,0.1)", border: "1px solid rgba(255,183,77,0.25)", color: "#FFB74D" }}>📄 Invoice</button>
                           <button className="action-btn" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }} style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.25)", color: "#66bb6a" }}>+ Job</button>
                           <button className="action-btn" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(cd.customer.id); setShowCashModal(true); }} style={{ background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.25)", color: "#4CAF50" }}>💵 Cash</button>
-                          <button className="action-btn" disabled={sendingFeedback === "post_service"} onClick={() => handleSendFeedback(cd.customer.id, "post_service")} style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.25)", color: "#FFD700", opacity: sendingFeedback === "post_service" ? 0.5 : 1 }}>{sendingFeedback === "post_service" ? "Sending..." : "⭐ Feedback"}</button>
+                          <button className="action-btn" onClick={() => { setFeedbackModalPreselect(null); setShowFeedbackModal(true); }} style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.25)", color: "#FFD700" }}>⭐ Feedback</button>
                           <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: cd.customer.id, name: cd.customer.name || cd.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", color: "#ef9a9a" }}>🗑️</button>
                         </div>
 
@@ -1373,7 +1378,7 @@ export default function AdminDashboard() {
                                       <button className="quick-action" onClick={() => window.open(`/estimate/${q.public_token}`, "_blank")}>👁 View</button>
                                     )}
                                     {(q.status === "declined" || q.status === "expired") && (
-                                      <button className="quick-action" disabled={sendingFeedback === "lost_estimate"} onClick={() => handleSendFeedback(cd.customer.id, "lost_estimate", q.id)} style={{ color: "#42a5f5", borderColor: "rgba(66,165,245,0.3)" }}>{sendingFeedback === "lost_estimate" ? "..." : "📊 Follow-Up"}</button>
+                                      <button className="quick-action" onClick={() => { setFeedbackModalPreselect({ type: "lost_estimate", quoteId: q.id }); setShowFeedbackModal(true); }} style={{ color: "#42a5f5", borderColor: "rgba(66,165,245,0.3)" }}>📊 Follow-Up</button>
                                     )}
                                   </div>
                                 </div>
@@ -1817,6 +1822,26 @@ export default function AdminDashboard() {
             )}
             {showSubModal && (
               <SubscriptionModal onClose={() => { setShowSubModal(false); setEditingSub(null); }} onSave={handleSaveSubscription} customers={customers} subscription={editingSub} />
+            )}
+            {showFeedbackModal && customerDetail && (
+              <FeedbackModal
+                customer={{
+                  id: customerDetail.customer.id,
+                  name: customerDetail.customer.name,
+                  email: customerDetail.customer.email,
+                  phone: customerDetail.customer.phone,
+                  company_name: customerDetail.customer.company_name,
+                  customer_type: customerDetail.customer.customer_type,
+                }}
+                jobs={customerDetail.jobs}
+                quotes={customerDetail.quotes}
+                feedbackHistory={customerDetail.feedbackRequests}
+                preselect={feedbackModalPreselect}
+                onClose={() => { setShowFeedbackModal(false); setFeedbackModalPreselect(null); }}
+                onSend={async (params) => {
+                  await handleSendFeedback(customerDetail.customer.id, params.type, params.quote_id, true);
+                }}
+              />
             )}
           </>
         )}
