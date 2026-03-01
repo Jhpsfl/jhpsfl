@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 
 // Google Business review link — update with your actual Google Place ID
+// Set GOOGLE_REVIEWS_ENABLED to true and update the URL when ready
+const GOOGLE_REVIEWS_ENABLED = false;
 const GOOGLE_REVIEW_URL = "https://g.page/r/JHPS-REVIEW-LINK/review"; // TODO: Replace with actual Google Business review URL
 
 const LOST_ESTIMATE_REASONS = [
@@ -349,7 +351,18 @@ export default function FeedbackPage() {
 
               <div style={{ textAlign: "center" }}>
                 <button
-                  onClick={() => setStep("followup")}
+                  onClick={() => {
+                    if (GOOGLE_REVIEWS_ENABLED) {
+                      setStep("followup");
+                    } else if (rating && rating <= 3) {
+                      // Unhappy customer — show resolution option even without Google reviews
+                      setStep("followup");
+                    } else {
+                      // Happy customer, no Google reviews — just submit
+                      submitPostService(false);
+                    }
+                  }}
+                  disabled={submitting}
                   style={{
                     padding: "14px 40px",
                     borderRadius: 10,
@@ -358,11 +371,12 @@ export default function FeedbackPage() {
                     color: "#fff",
                     fontSize: 16,
                     fontWeight: 700,
-                    cursor: "pointer",
+                    cursor: submitting ? "default" : "pointer",
+                    opacity: submitting ? 0.6 : 1,
                     fontFamily: "inherit",
                   }}
                 >
-                  Continue
+                  {submitting ? "Submitting..." : "Submit Feedback"}
                 </button>
               </div>
             </>
@@ -389,12 +403,15 @@ export default function FeedbackPage() {
             </h2>
             <p style={{ color: "#5a8a5a", fontSize: 14, lineHeight: 1.6, maxWidth: 380, margin: "0 auto" }}>
               {isHappy
-                ? "If you have a moment, a Google review would mean the world to our small business."
+                ? (GOOGLE_REVIEWS_ENABLED
+                    ? "If you have a moment, a Google review would mean the world to our small business."
+                    : "Your kind words mean the world to our small business. Thank you!")
                 : "Your feedback is truly valuable. Here's how we can move forward:"}
             </p>
           </div>
 
-          {/* Google Review button — shown to EVERYONE (compliant) */}
+          {/* Google Review button — shown to EVERYONE when enabled (compliant) */}
+          {GOOGLE_REVIEWS_ENABLED && (
           <div style={{ textAlign: "center", marginBottom: 16 }}>
             <button
               onClick={handleGoogleReviewClick}
@@ -423,6 +440,7 @@ export default function FeedbackPage() {
               Leave a Google Review
             </button>
           </div>
+          )}
 
           {/* Resolution option for unhappy customers */}
           {isUnhappy && (
@@ -469,7 +487,7 @@ export default function FeedbackPage() {
                 fontFamily: "inherit",
               }}
             >
-              {isHappy ? "No thanks, just submit my feedback" : "Just submit my feedback"}
+              {isHappy ? (GOOGLE_REVIEWS_ENABLED ? "No thanks, just submit my feedback" : "Done") : "Just submit my feedback"}
             </button>
           </div>
         </div>
