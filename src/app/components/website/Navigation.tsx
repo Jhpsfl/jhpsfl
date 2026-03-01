@@ -27,13 +27,13 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
           transition: "all 0.4s", padding: "0 24px",
         }}
       >
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: Math.max(72, logoMaxHeight + 16) }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={logoSrc || "/jhps-nav-logo.svg"}
               alt={companyName}
-              style={{ width: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, padding: logoPadding }}
+              style={{ height: logoMaxHeight, width: "auto", display: "block", padding: logoPadding }}
             />
           </div>
 

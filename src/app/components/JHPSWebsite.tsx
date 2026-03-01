@@ -133,8 +133,8 @@ export default function JHPSWebsite({ settings, homePage, services, gallery }: P
   const shortName = settings?.shortName || "JHPS";
   const phone = settings?.phone || "4076869817";
   const email = settings?.email || "Info@jhpsfl.com";
-  const logoMaxWidth = settings?.logoMaxWidth || 200;
-  const logoMaxHeight = settings?.logoMaxHeight || 80;
+  const logoMaxWidth = settings?.logoMaxWidth || 400;
+  const logoMaxHeight = settings?.logoMaxHeight || 52;
   const logoFit = (settings?.logoFit || 'contain') as CSSProperties['objectFit'];
   const logoPadding = settings?.logoPadding || 0;
   const primaryHex = settings?.primaryColor?.hex || "#4CAF50";
