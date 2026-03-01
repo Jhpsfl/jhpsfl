@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       case "customer_detail": {
         if (!customerId) return NextResponse.json({ error: "customer_id required" }, { status: 400 });
 
-        const [customerRes, sitesRes, jobsRes, paymentsRes, subsRes, invoicesRes, cardsRes] = await Promise.all([
+        const [customerRes, sitesRes, jobsRes, paymentsRes, subsRes, invoicesRes, cardsRes, quotesRes, notesRes] = await Promise.all([
           supabase.from("customers").select("*").eq("id", customerId).single(),
           supabase.from("job_sites").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("jobs").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
@@ -127,6 +127,8 @@ export async function GET(request: NextRequest) {
           supabase.from("subscriptions").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("stored_cards").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+          supabase.from("quotes").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+          supabase.from("customer_notes").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
         ]);
 
         if (customerRes.error) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
@@ -139,6 +141,8 @@ export async function GET(request: NextRequest) {
           subscriptions: subsRes.data || [],
           invoices: invoicesRes.data || [],
           storedCards: cardsRes.data || [],
+          quotes: quotesRes.data || [],
+          notes: notesRes.data || [],
         });
       }
 
@@ -628,6 +632,31 @@ export async function POST(request: NextRequest) {
             .from("financing_agreements")
             .update({ status: "voided", updated_at: new Date().toISOString() })
             .eq("id", payload.id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true });
+        }
+        break;
+      }
+
+      case "customer_notes": {
+        if (action === "create") {
+          const { customer_id, note } = payload;
+          if (!customer_id || !note) return NextResponse.json({ error: "customer_id and note required" }, { status: 400 });
+          const { data, error } = await supabase.from("customer_notes").insert({ customer_id, note }).select().single();
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true, data });
+        }
+        if (action === "update") {
+          const { id, note } = payload;
+          if (!id || !note) return NextResponse.json({ error: "id and note required" }, { status: 400 });
+          const { data, error } = await supabase.from("customer_notes").update({ note, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json({ success: true, data });
+        }
+        if (action === "delete") {
+          const { id } = payload;
+          if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+          const { error } = await supabase.from("customer_notes").delete().eq("id", id);
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true });
         }

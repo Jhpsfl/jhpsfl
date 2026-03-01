@@ -33,6 +33,8 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   address: string | null;
+  customer_type: string | null;
+  company_name: string | null;
   created_at: string;
   updated_at: string;
   job_sites?: { count: number }[];
@@ -127,6 +129,9 @@ interface OverviewData {
   recentPayments: Payment[];
 }
 
+interface CustomerNote { id: string; customer_id: string; note: string; created_at: string; updated_at: string; }
+interface CustomerQuote { id: string; quote_number: string; status: string; total: number; created_at: string; is_commercial?: boolean; expiration_date?: string; line_items?: { description: string }[]; }
+
 interface CustomerDetail {
   customer: Customer;
   jobSites: JobSite[];
@@ -135,6 +140,8 @@ interface CustomerDetail {
   subscriptions: Subscription[];
   invoices: Invoice[];
   storedCards: StoredCard[];
+  quotes: CustomerQuote[];
+  notes: CustomerNote[];
 }
 
 export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes";
@@ -1210,126 +1217,296 @@ export default function AdminDashboard() {
                     )}
 
                     {/* ─── CUSTOMER DETAIL ─── */}
-                    {activeTab === "customer_detail" && customerDetail && (
+                    {activeTab === "customer_detail" && customerDetail && (() => {
+                      const cd = customerDetail;
+                      const totalRevenue = cd.payments.reduce((s, p) => s + (p.amount || 0), 0) + cd.invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.amount || 0), 0);
+                      const openInvoices = cd.invoices.filter(i => i.status !== "paid" && i.status !== "voided");
+                      const pendingEstimates = cd.quotes.filter(q => q.status === "sent" || q.status === "draft");
+                      return (
                       <>
                         <button onClick={() => switchTab("customers")} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>← Back to Customers</button>
-                        <div style={{ background: "linear-gradient(160deg, #0d1f0d, #091409)", border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 32px", marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-                          <div>
-                            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>{customerDetail.customer.name || "Unknown Customer"}</h1>
-                            <div style={{ display: "flex", gap: 20, marginTop: 8, flexWrap: "wrap" }}>
-                              {customerDetail.customer.email && <a href={`mailto:${customerDetail.customer.email}`} style={{ color: "#4CAF50", fontSize: 14, textDecoration: "none" }}>✉️ {customerDetail.customer.email}</a>}
-                              {customerDetail.customer.phone && <a href={`tel:${customerDetail.customer.phone}`} style={{ color: "#4CAF50", fontSize: 14, textDecoration: "none" }}>📞 {customerDetail.customer.phone}</a>}
+
+                        {/* ═══ HEADER CARD ═══ */}
+                        <div style={{ background: "linear-gradient(160deg, #0d1f0d, #091409)", border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px", marginBottom: 20 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+                            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                                <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: "#e8f5e8", fontWeight: 800 }}>{cd.customer.name || "Unknown Customer"}</h1>
+                                {cd.customer.customer_type === "commercial" && <span style={{ padding: "3px 10px", borderRadius: 6, background: "rgba(66,165,245,0.1)", border: "1px solid rgba(66,165,245,0.2)", color: "#42a5f5", fontSize: 10, fontWeight: 700 }}>COMMERCIAL</span>}
+                              </div>
+                              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
+                                {cd.customer.email && <a href={`mailto:${cd.customer.email}`} style={{ color: "#4CAF50", fontSize: 13, textDecoration: "none" }}>✉️ {cd.customer.email}</a>}
+                                {cd.customer.phone && <a href={`tel:${cd.customer.phone}`} style={{ color: "#4CAF50", fontSize: 13, textDecoration: "none" }}>📞 {cd.customer.phone}</a>}
+                              </div>
+                              {cd.customer.address && <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 4 }}>📍 {cd.customer.address}</p>}
+                              {cd.customer.company_name && <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 2 }}>🏢 {cd.customer.company_name}</p>}
+                              <p style={{ color: "#3a5a3a", fontSize: 11, marginTop: 6 }}>Customer since {formatDate(cd.customer.created_at)}</p>
                             </div>
-                            {customerDetail.customer.address && (
-                              <p style={{ color: "#8aba8a", fontSize: 13, marginTop: 6 }}>📍 {customerDetail.customer.address}</p>
-                            )}
-                            <div style={{ color: "#3a5a3a", fontSize: 12, marginTop: 8 }}>Customer since {formatDate(customerDetail.customer.created_at)}</div>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: cd.customer.id, name: cd.customer.name || undefined, email: cd.customer.email || undefined, phone: cd.customer.phone || undefined, address: cd.customer.address || undefined }); setShowCustomerModal(true); }} style={{ flexShrink: 0 }}>✏️ Edit</button>
                           </div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: customerDetail.customer.id, name: customerDetail.customer.name || undefined, email: customerDetail.customer.email || undefined, phone: customerDetail.customer.phone || undefined, address: customerDetail.customer.address || undefined }); setShowCustomerModal(true); }}>✏️ Edit Customer</button>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>+ New Job</button>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(customerDetail.customer.id); switchTab("invoices"); }}>📄 Create Invoice</button>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(customerDetail.customer.id); setShowCashModal(true); }}>💵 Cash Payment</button>
-                            <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: customerDetail.customer.id, name: customerDetail.customer.name || customerDetail.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.12)", border: "1px solid rgba(198,40,40,0.3)", color: "#ef9a9a" }}>🗑️ Delete Customer</button>
-                          </div>
-                        </div>
 
-                        {customerDetail.jobSites.length > 0 && (
-                          <div style={{ marginBottom: 24 }}>
-                            <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Properties</h3>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                              {customerDetail.jobSites.map((site) => (
-                                <div key={site.id} style={{ background: "linear-gradient(160deg, #0d1f0d, #091409)", border: "1px solid #1a3a1a", borderRadius: 14, padding: "16px 20px" }}>
-                                  <p style={{ color: "#e8f5e8", fontWeight: 600, fontSize: 14 }}>📍 {site.address}</p>
-                                  <p style={{ color: "#5a8a5a", fontSize: 13 }}>{[site.city, site.state, site.zip].filter(Boolean).join(", ")}</p>
-                                  {site.notes && <p style={{ color: "#3a5a3a", fontSize: 12, marginTop: 4 }}>{site.notes}</p>}
-                                </div>
-                              ))}
+                          {/* Quick stats */}
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
+                            <div style={{ textAlign: "center" }}>
+                              <div style={{ color: "#4CAF50", fontSize: 18, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(totalRevenue)}</div>
+                              <div style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>TOTAL REVENUE</div>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              <div style={{ color: "#42a5f5", fontSize: 18, fontWeight: 800 }}>{cd.quotes.length}</div>
+                              <div style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>ESTIMATES</div>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              <div style={{ color: "#FFB74D", fontSize: 18, fontWeight: 800 }}>{cd.invoices.length}</div>
+                              <div style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>INVOICES</div>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              <div style={{ color: "#66bb6a", fontSize: 18, fontWeight: 800 }}>{cd.jobs.length}</div>
+                              <div style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>JOBS</div>
                             </div>
                           </div>
-                        )}
-
-                        <div style={{ marginBottom: 24 }}>
-                          <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Jobs</h3>
-                          <DataTable headers={["Service", "Status", "Date", "Amount", "Actions"]} emptyMessage="No jobs yet for this customer">
-                            {customerDetail.jobs.map((j) => (
-                              <TableRow key={j.id}>
-                                <Td>{j.service_type}</Td>
-                                <Td><StatusBadge status={j.status} /></Td>
-                                <Td>{formatDate(j.scheduled_date)}</Td>
-                                <Td mono accent>{formatCurrency(j.amount)}</Td>
-                                <Td>
-                                  <div style={{ display: "flex", gap: 6 }}>
-                                    <button className="quick-action" onClick={() => { pushSentinel(); setEditingJob(j); setShowJobModal(true); }}>Edit</button>
-                                    {j.status === "scheduled" && <button className="quick-action" onClick={() => handleUpdateJobStatus(j.id, "in_progress")}>Start</button>}
-                                    {j.status === "in_progress" && <button className="quick-action" onClick={() => handleUpdateJobStatus(j.id, "completed")}>Complete</button>}
-                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteJob(j.id)}>Delete</button>
-                                  </div>
-                                </Td>
-                              </TableRow>
-                            ))}
-                          </DataTable>
                         </div>
 
-                        <div style={{ marginBottom: 24 }}>
-                          <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Payment History</h3>
-                          <DataTable headers={["Amount", "Status", "Method", "Date", "Receipt", ""]} emptyMessage="No payments recorded">
-                            {customerDetail.payments.map((p) => (
-                              <TableRow key={p.id}>
-                                <Td mono accent>{formatCurrency(p.amount)}</Td>
-                                <Td><StatusBadge status={p.status} /></Td>
-                                <Td>{p.payment_method || "—"}</Td>
-                                <Td>{formatDate(p.paid_at || p.created_at)}</Td>
-                                <Td>{p.square_receipt_url ? <a href={p.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>View ↗</a> : "—"}</Td>
-                                <Td><button className="quick-action quick-action-danger" onClick={() => handleDeletePayment(p.id)}>Delete</button></Td>
-                              </TableRow>
-                            ))}
-                          </DataTable>
+                        {/* Quick actions */}
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>+ New Job</button>
+                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(cd.customer.id); switchTab("invoices"); }}>📄 Create Invoice</button>
+                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(cd.customer.id); setShowCashModal(true); }}>💵 Cash Payment</button>
+                          <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: cd.customer.id, name: cd.customer.name || cd.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", color: "#ef9a9a" }}>🗑️ Delete</button>
                         </div>
 
-                        {customerDetail.subscriptions.length > 0 && (
-                          <div>
-                            <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Subscriptions</h3>
-                            <DataTable headers={["Plan", "Service", "Frequency", "Amount", "Mode", "Status", "Next Billing", ""]}>
-                              {customerDetail.subscriptions.map((s) => (
-                                <TableRow key={s.id}>
-                                  <Td>{s.plan_name}</Td>
-                                  <Td>{s.service_type}</Td>
-                                  <Td>{s.frequency}</Td>
-                                  <Td mono accent>{formatCurrency(s.amount)}</Td>
-                                  <Td><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: s.billing_mode === "auto" ? "#66bb6a" : "#888" }}>{s.billing_mode || "manual"}</span></Td>
-                                  <Td><StatusBadge status={s.status} /></Td>
-                                  <Td>{formatDate(s.next_billing_date)}</Td>
-                                  <Td>
-                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                      {s.status === "active" && <button className="quick-action" onClick={() => handleChargeNow(s.id)} disabled={chargingSubId === s.id}>{chargingSubId === s.id ? "..." : "Charge"}</button>}
-                                      <button className="quick-action" onClick={() => { setEditingSub(s); setShowSubModal(true); }}>Edit</button>
-                                      <button className="quick-action quick-action-danger" onClick={() => handleDeleteSubscription(s.id)}>Delete</button>
-                                    </div>
-                                  </Td>
-                                </TableRow>
-                              ))}
-                            </DataTable>
-                          </div>
-                        )}
-
-                        {customerDetail.storedCards && customerDetail.storedCards.length > 0 && (
-                          <div>
-                            <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Cards on File</h3>
+                        {/* ═══ ESTIMATES ═══ */}
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#42a5f5", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#42a5f5", display: "inline-block" }} />
+                            Estimates
+                            {pendingEstimates.length > 0 && <span style={{ padding: "2px 8px", borderRadius: 8, background: "rgba(66,165,245,0.15)", fontSize: 11, fontWeight: 600 }}>{pendingEstimates.length} pending</span>}
+                          </h3>
+                          {cd.quotes.length === 0 ? (
+                            <div style={{ padding: "20px", borderRadius: 12, background: "rgba(66,165,245,0.03)", border: "1px solid rgba(66,165,245,0.08)", textAlign: "center", color: "#3a5a6a", fontSize: 13 }}>No estimates yet</div>
+                          ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              {customerDetail.storedCards.map((card) => (
-                                <div key={card.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1a3a1a", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                                  <span style={{ fontSize: 18 }}>💳</span>
-                                  <span style={{ color: "#e8f5e8", fontWeight: 600, fontSize: 14 }}>{card.brand || "Card"} ····{card.last4 || "????"}</span>
-                                  <span style={{ color: "#5a8a5a", fontSize: 12 }}>{card.exp_month ? `${String(card.exp_month).padStart(2, "0")}/${card.exp_year}` : ""}</span>
-                                  {card.is_default && <span style={{ padding: "2px 8px", background: "rgba(76,175,80,0.15)", borderRadius: 8, fontSize: 10, fontWeight: 700, color: "#66bb6a" }}>DEFAULT</span>}
+                              {cd.quotes.map(q => (
+                                <div key={q.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(66,165,245,0.03)", border: "1px solid rgba(66,165,245,0.1)", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <span style={{ color: "#42a5f5", fontSize: 13, fontWeight: 700 }}>{q.quote_number}</span>
+                                    {q.is_commercial && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: "rgba(66,165,245,0.15)", fontSize: 9, fontWeight: 700, color: "#90CAF9" }}>COMMERCIAL</span>}
+                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(q.created_at)}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <StatusBadge status={q.status} />
+                                    <span style={{ color: "#42a5f5", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(q.total)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ═══ INVOICES ═══ */}
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#FFB74D", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#FFB74D", display: "inline-block" }} />
+                            Invoices
+                            {openInvoices.length > 0 && <span style={{ padding: "2px 8px", borderRadius: 8, background: "rgba(255,183,77,0.15)", fontSize: 11, fontWeight: 600 }}>{openInvoices.length} open</span>}
+                          </h3>
+                          {cd.invoices.length === 0 ? (
+                            <div style={{ padding: "20px", borderRadius: 12, background: "rgba(255,183,77,0.03)", border: "1px solid rgba(255,183,77,0.08)", textAlign: "center", color: "#5a5a3a", fontSize: 13 }}>No invoices yet</div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.invoices.map(inv => (
+                                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(255,183,77,0.03)", border: "1px solid rgba(255,183,77,0.1)", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <span style={{ color: "#FFB74D", fontSize: 13, fontWeight: 700 }}>{inv.invoice_number || "Invoice"}</span>
+                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(inv.created_at)}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <StatusBadge status={inv.status} />
+                                    <span style={{ color: "#FFB74D", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(inv.amount)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ═══ JOBS ═══ */}
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#66bb6a", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#66bb6a", display: "inline-block" }} />
+                            Jobs
+                          </h3>
+                          {cd.jobs.length === 0 ? (
+                            <div style={{ padding: "20px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", textAlign: "center", color: "#3a5a3a", fontSize: 13 }}>No jobs yet</div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.jobs.map(j => (
+                                <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <span style={{ color: "#66bb6a", fontSize: 13, fontWeight: 700 }}>{j.service_type}</span>
+                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(j.scheduled_date)}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <StatusBadge status={j.status} />
+                                    <span style={{ color: "#66bb6a", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(j.amount)}</span>
+                                    <button className="quick-action" onClick={() => { pushSentinel(); setEditingJob(j); setShowJobModal(true); }}>Edit</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ═══ PAYMENTS ═══ */}
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#4CAF50", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#4CAF50", display: "inline-block" }} />
+                            Payment History
+                          </h3>
+                          {cd.payments.length === 0 ? (
+                            <div style={{ padding: "20px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", textAlign: "center", color: "#3a5a3a", fontSize: 13 }}>No payments recorded</div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.payments.map(p => (
+                                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <span style={{ color: "#4CAF50", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(p.amount)}</span>
+                                    <span style={{ color: "#5a8a5a", fontSize: 12, marginLeft: 8 }}>{p.payment_method || "—"}</span>
+                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(p.paid_at || p.created_at)}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <StatusBadge status={p.status} />
+                                    {p.square_receipt_url && <a href={p.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>Receipt ↗</a>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ═══ SUBSCRIPTIONS ═══ */}
+                        {cd.subscriptions.length > 0 && (
+                          <div style={{ marginBottom: 24 }}>
+                            <h3 style={{ fontSize: 14, color: "#AB47BC", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ width: 4, height: 18, borderRadius: 2, background: "#AB47BC", display: "inline-block" }} />
+                              Subscriptions
+                            </h3>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.subscriptions.map(s => (
+                                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(171,71,188,0.03)", border: "1px solid rgba(171,71,188,0.1)", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <span style={{ color: "#CE93D8", fontSize: 13, fontWeight: 700 }}>{s.plan_name}</span>
+                                    <span style={{ color: "#5a5a6a", fontSize: 12, marginLeft: 8 }}>{s.frequency}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <StatusBadge status={s.status} />
+                                    <span style={{ color: "#CE93D8", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(s.amount)}</span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
+
+                        {/* ═══ PROPERTIES ═══ */}
+                        {cd.jobSites.length > 0 && (
+                          <div style={{ marginBottom: 24 }}>
+                            <h3 style={{ fontSize: 14, color: "#26A69A", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ width: 4, height: 18, borderRadius: 2, background: "#26A69A", display: "inline-block" }} />
+                              Properties
+                            </h3>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+                              {cd.jobSites.map(site => (
+                                <div key={site.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(38,166,154,0.03)", border: "1px solid rgba(38,166,154,0.1)" }}>
+                                  <p style={{ color: "#80CBC4", fontWeight: 600, fontSize: 13 }}>📍 {site.address}</p>
+                                  <p style={{ color: "#5a8a8a", fontSize: 12 }}>{[site.city, site.state, site.zip].filter(Boolean).join(", ")}</p>
+                                  {site.notes && <p style={{ color: "#3a5a5a", fontSize: 11, marginTop: 4 }}>{site.notes}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ═══ CARDS ON FILE ═══ */}
+                        {cd.storedCards && cd.storedCards.length > 0 && (
+                          <div style={{ marginBottom: 24 }}>
+                            <h3 style={{ fontSize: 14, color: "#78909C", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ width: 4, height: 18, borderRadius: 2, background: "#78909C", display: "inline-block" }} />
+                              Cards on File
+                            </h3>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.storedCards.map(card => (
+                                <div key={card.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(120,144,156,0.04)", border: "1px solid rgba(120,144,156,0.1)" }}>
+                                  <span style={{ fontSize: 16 }}>💳</span>
+                                  <span style={{ color: "#B0BEC5", fontWeight: 600, fontSize: 13 }}>{card.brand || "Card"} ····{card.last4 || "????"}</span>
+                                  <span style={{ color: "#5a6a7a", fontSize: 11 }}>{card.exp_month ? `${String(card.exp_month).padStart(2, "0")}/${card.exp_year}` : ""}</span>
+                                  {card.is_default && <span style={{ padding: "2px 8px", background: "rgba(76,175,80,0.15)", borderRadius: 8, fontSize: 9, fontWeight: 700, color: "#66bb6a" }}>DEFAULT</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ═══ NOTES & COMMENTS ═══ */}
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#FF8A65", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#FF8A65", display: "inline-block" }} />
+                            Internal Notes
+                          </h3>
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <input
+                                id="customer-note-input"
+                                placeholder="Add a note about this customer..."
+                                style={{ flex: 1, padding: "12px 14px", background: "#0d1a0d", border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8", fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif" }}
+                                onKeyDown={async (e) => {
+                                  if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim()) {
+                                    const input = e.target as HTMLInputElement;
+                                    const note = input.value.trim();
+                                    input.value = "";
+                                    const res = await adminPost("customer_notes", "create", { customer_id: cd.customer.id, note });
+                                    if (res?.success) loadCustomerDetail(cd.customer.id);
+                                  }
+                                }}
+                              />
+                              <button
+                                className="action-btn action-btn-primary"
+                                onClick={async () => {
+                                  const input = document.getElementById("customer-note-input") as HTMLInputElement;
+                                  if (!input?.value.trim()) return;
+                                  const note = input.value.trim();
+                                  input.value = "";
+                                  const res = await adminPost("customer_notes", "create", { customer_id: cd.customer.id, note });
+                                  if (res?.success) loadCustomerDetail(cd.customer.id);
+                                }}
+                              >+ Add</button>
+                            </div>
+                          </div>
+                          {cd.notes.length === 0 ? (
+                            <div style={{ padding: "20px", borderRadius: 12, background: "rgba(255,138,101,0.03)", border: "1px solid rgba(255,138,101,0.08)", textAlign: "center", color: "#5a4a3a", fontSize: 13 }}>No notes yet — add your first note above</div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {cd.notes.map(n => (
+                                <div key={n.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "12px 16px", borderRadius: 12, background: "rgba(255,138,101,0.03)", border: "1px solid rgba(255,138,101,0.08)", gap: 12 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <p style={{ color: "#e8d8c8", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.note}</p>
+                                    <p style={{ color: "#5a4a3a", fontSize: 10, marginTop: 6 }}>{formatDate(n.created_at)}</p>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      const res = await adminPost("customer_notes", "delete", { id: n.id });
+                                      if (res?.success) loadCustomerDetail(cd.customer.id);
+                                    }}
+                                    style={{ background: "none", border: "none", color: "#5a3a3a", fontSize: 14, cursor: "pointer", flexShrink: 0, padding: "2px 6px" }}
+                                    title="Delete note"
+                                  >✕</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </>
-                    )}
+                      );
+                    })()}
 
                     {/* ─── JOBS TAB ─── */}
                     {activeTab === "jobs" && (
