@@ -13,6 +13,7 @@ import AdminVideoLeads from "./AdminVideoLeads";
 import AdminInbox from "./AdminInbox";
 import AdminInvoices from "./AdminInvoices";
 import AdminQuotes from "./AdminQuotes";
+import AdminAnalytics from "./AdminAnalytics";
 
 // ─── Sub-components ───
 import { formatDate, formatCurrency, timeAgo } from "./components/formatters";
@@ -167,7 +168,7 @@ interface CustomerDetail {
   feedbackRequests: FeedbackRequest[];
 }
 
-export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes";
+export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes" | "analytics";
 
 // ─── Main Admin Dashboard ───
 export default function AdminDashboard() {
@@ -971,7 +972,7 @@ export default function AdminDashboard() {
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
-                  <NavItem icon="📈" label="Analytics" active={false} onClick={() => showToast("Analytics coming soon", "error")} />
+                  <NavItem icon="📈" label="Analytics" active={activeTab === "analytics"} onClick={() => switchTab("analytics")} />
                 </nav>
 
                 {/* Install App button */}
@@ -1777,6 +1778,10 @@ export default function AdminDashboard() {
                     {/* ─── ESTIMATES TAB ─── */}
                     {activeTab === "quotes" && userId && (
                       <AdminQuotes userId={userId} backRef={quotesBackRef} onNavigate={pushSentinel} onSwitchToInvoice={(invoiceId) => { setPendingQuoteInvoiceId(invoiceId); pushSentinel(); switchTab("invoices"); }} initialQuoteId={pendingQuoteId} onInitialQuoteConsumed={() => setPendingQuoteId(null)} />
+                    )}
+
+                    {activeTab === "analytics" && (
+                      <AdminAnalytics />
                     )}
                   </div>
                 )}

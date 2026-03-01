@@ -81,6 +81,41 @@ export async function GET(request: NextRequest) {
     const supabase = createSupabaseAdmin();
 
     switch (resource) {
+      case "analytics": {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString();
+
+        const [
+          allPaymentsRes,
+          allInvoicesRes,
+          allQuotesRes,
+          allJobsRes,
+          allCustomersRes,
+          feedbackRequestsRes,
+          feedbackResponsesRes,
+        ] = await Promise.all([
+          supabase.from("payments").select("amount, status, payment_method, created_at, paid_at").eq("status", "completed").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("invoices").select("amount_due, amount_paid, status, created_at, paid_at").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("quotes").select("id, status, total, created_at, is_commercial").order("created_at", { ascending: true }),
+          supabase.from("jobs").select("id, status, service_type, amount, created_at, completed_date").order("created_at", { ascending: true }),
+          supabase.from("customers").select("id, customer_type, created_at").order("created_at", { ascending: true }),
+          supabase.from("feedback_requests").select("id, type, status, sent_at, responded_at, created_at"),
+          supabase.from("feedback_responses").select("id, rating, lost_estimate_reason, google_review_clicked, resolution_requested, created_at"),
+        ]);
+
+        return NextResponse.json({
+          payments: allPaymentsRes.data || [],
+          invoices: allInvoicesRes.data || [],
+          quotes: allQuotesRes.data || [],
+          jobs: allJobsRes.data || [],
+          customers: allCustomersRes.data || [],
+          feedbackRequests: feedbackRequestsRes.data || [],
+          feedbackResponses: feedbackResponsesRes.data || [],
+        });
+      }
+
       case "overview": {
         const [customersRes, activeJobsRes, completedJobsRes, subsRes, paymentsRes, recentPaymentsRes, paidInvoicesRes] = await Promise.all([
           supabase.from("customers").select("id", { count: "exact", head: true }),
