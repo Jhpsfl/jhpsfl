@@ -17,11 +17,13 @@ import { createShortLink } from "@/lib/shortLink";
 export type { Quote, QuoteLineItem, Customer, CustomerJob } from "./components/quotes/quoteTypes";
 
 // ─── Main Export ───
-export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInvoice }: {
+export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInvoice, initialQuoteId, onInitialQuoteConsumed }: {
   userId: string;
   backRef?: React.MutableRefObject<(() => boolean) | null>;
   onNavigate?: () => void;
   onSwitchToInvoice?: (invoiceId: string) => void;
+  initialQuoteId?: string | null;
+  onInitialQuoteConsumed?: () => void;
 }) {
   // ─── State ───
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
@@ -180,6 +182,18 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   useEffect(() => {
     loadQuotes();
   }, [loadQuotes]);
+
+  // ─── Auto-navigate to initial quote ───
+  useEffect(() => {
+    if (!initialQuoteId || loading) return;
+    const q = quotes.find(q => q.id === initialQuoteId);
+    if (q) {
+      onNavigate?.();
+      setSelectedQuote(q);
+      setView("detail");
+      onInitialQuoteConsumed?.();
+    }
+  }, [initialQuoteId, quotes, loading, onNavigate, onInitialQuoteConsumed]);
 
   // ─── Fetch jobs when customer changes ───
   useEffect(() => {

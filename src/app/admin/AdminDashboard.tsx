@@ -117,7 +117,10 @@ interface Invoice {
   paid_date: string | null;
   line_items: unknown;
   notes: string | null;
+  description: string | null;
+  pay_link: string | null;
   created_at: string;
+  customers?: { name: string | null; email: string | null; phone: string | null };
 }
 
 interface OverviewData {
@@ -130,7 +133,7 @@ interface OverviewData {
 }
 
 interface CustomerNote { id: string; customer_id: string; note: string; created_at: string; updated_at: string; }
-interface CustomerQuote { id: string; quote_number: string; status: string; total: number; created_at: string; is_commercial?: boolean; expiration_date?: string; line_items?: { description: string }[]; }
+interface CustomerQuote { id: string; quote_number: string; status: string; total: number; created_at: string; is_commercial?: boolean; public_token?: string; expiration_date?: string; line_items?: { description: string }[]; }
 
 interface CustomerDetail {
   customer: Customer;
@@ -169,6 +172,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
   const [pendingInvoiceCustomerId, setPendingInvoiceCustomerId] = useState<string | null>(null);
+  const [pendingQuoteId, setPendingQuoteId] = useState<string | null>(null);
 
   // Subscription modal
   const [showSubModal, setShowSubModal] = useState(false);
@@ -1266,12 +1270,13 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        {/* Quick actions */}
+                        {/* Quick actions — color-coded to match sections */}
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>+ New Job</button>
-                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(cd.customer.id); switchTab("invoices"); }}>📄 Create Invoice</button>
-                          <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(cd.customer.id); setShowCashModal(true); }}>💵 Cash Payment</button>
-                          <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: cd.customer.id, name: cd.customer.name || cd.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", color: "#ef9a9a" }}>🗑️ Delete</button>
+                          <button className="action-btn" onClick={() => { pushSentinel(); switchTab("quotes"); }} style={{ background: "rgba(66,165,245,0.1)", border: "1px solid rgba(66,165,245,0.25)", color: "#42a5f5" }}>+ Estimate</button>
+                          <button className="action-btn" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(cd.customer.id); switchTab("invoices"); }} style={{ background: "rgba(255,183,77,0.1)", border: "1px solid rgba(255,183,77,0.25)", color: "#FFB74D" }}>📄 Invoice</button>
+                          <button className="action-btn" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }} style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.25)", color: "#66bb6a" }}>+ Job</button>
+                          <button className="action-btn" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(cd.customer.id); setShowCashModal(true); }} style={{ background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.25)", color: "#4CAF50" }}>💵 Cash</button>
+                          <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: cd.customer.id, name: cd.customer.name || cd.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", color: "#ef9a9a" }}>🗑️</button>
                         </div>
 
                         {/* ═══ ESTIMATES ═══ */}
@@ -1286,15 +1291,37 @@ export default function AdminDashboard() {
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {cd.quotes.map(q => (
-                                <div key={q.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(66,165,245,0.03)", border: "1px solid rgba(66,165,245,0.1)", flexWrap: "wrap", gap: 8 }}>
-                                  <div>
-                                    <span style={{ color: "#42a5f5", fontSize: 13, fontWeight: 700 }}>{q.quote_number}</span>
-                                    {q.is_commercial && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: "rgba(66,165,245,0.15)", fontSize: 9, fontWeight: 700, color: "#90CAF9" }}>COMMERCIAL</span>}
-                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(q.created_at)}</span>
+                                <div key={q.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(66,165,245,0.03)", border: "1px solid rgba(66,165,245,0.1)" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                      <span style={{ color: "#42a5f5", fontSize: 14, fontWeight: 700 }}>{q.quote_number}</span>
+                                      {q.is_commercial && <span style={{ padding: "1px 6px", borderRadius: 4, background: "rgba(66,165,245,0.15)", fontSize: 9, fontWeight: 700, color: "#90CAF9" }}>COMMERCIAL</span>}
+                                      <span style={{ color: "#3a5a3a", fontSize: 11 }}>{formatDate(q.created_at)}</span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <StatusBadge status={q.status} />
+                                      <span style={{ color: "#42a5f5", fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(q.total)}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <StatusBadge status={q.status} />
-                                    <span style={{ color: "#42a5f5", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(q.total)}</span>
+                                  {/* Scope preview */}
+                                  {q.line_items && q.line_items.length > 0 && (
+                                    <p style={{ color: "#4a6a7a", fontSize: 12, marginBottom: 8 }}>
+                                      {q.line_items.map(li => li.description).join(" · ")}
+                                    </p>
+                                  )}
+                                  {/* Action row */}
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    <button className="quick-action" onClick={() => { setPendingQuoteId(q.id); pushSentinel(); switchTab("quotes"); }}>Open</button>
+                                    {q.public_token && (
+                                      <button className="quick-action" onClick={() => {
+                                        const url = `${window.location.origin}/estimate/${q.public_token}`;
+                                        navigator.clipboard.writeText(url);
+                                        showToast("Link copied!");
+                                      }}>📋 Link</button>
+                                    )}
+                                    {q.public_token && (
+                                      <button className="quick-action" onClick={() => window.open(`/estimate/${q.public_token}`, "_blank")}>👁 View</button>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -1314,14 +1341,33 @@ export default function AdminDashboard() {
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {cd.invoices.map(inv => (
-                                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(255,183,77,0.03)", border: "1px solid rgba(255,183,77,0.1)", flexWrap: "wrap", gap: 8 }}>
-                                  <div>
-                                    <span style={{ color: "#FFB74D", fontSize: 13, fontWeight: 700 }}>{inv.invoice_number || "Invoice"}</span>
-                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(inv.created_at)}</span>
+                                <div key={inv.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,183,77,0.03)", border: "1px solid rgba(255,183,77,0.1)" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ color: "#FFB74D", fontSize: 14, fontWeight: 700 }}>{inv.invoice_number || "Invoice"}</span>
+                                      <span style={{ color: "#3a5a3a", fontSize: 11 }}>{formatDate(inv.created_at)}</span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <StatusBadge status={inv.status} />
+                                      <span style={{ color: "#FFB74D", fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(inv.amount)}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <StatusBadge status={inv.status} />
-                                    <span style={{ color: "#FFB74D", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(inv.amount)}</span>
+                                  {/* Description preview */}
+                                  {inv.description && <p style={{ color: "#5a5a3a", fontSize: 12, marginBottom: 8 }}>{inv.description.length > 80 ? inv.description.slice(0, 80) + "…" : inv.description}</p>}
+                                  {/* Action row */}
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    <button className="quick-action" onClick={() => { setPendingInvoiceId(inv.id); pushSentinel(); switchTab("invoices"); }}>Open</button>
+                                    {inv.pay_link && (
+                                      <button className="quick-action" onClick={() => {
+                                        navigator.clipboard.writeText(inv.pay_link!);
+                                        showToast("Pay link copied!");
+                                      }}>📋 Pay Link</button>
+                                    )}
+                                    {inv.status === "sent" && <button className="quick-action" style={{ color: "#66bb6a" }} onClick={async () => {
+                                      await adminPost("invoices", "update", { id: inv.id, status: "paid", paid_date: new Date().toISOString() });
+                                      showToast("Marked as paid");
+                                      loadCustomerDetail(cd.customer.id);
+                                    }}>✓ Mark Paid</button>}
                                   </div>
                                 </div>
                               ))}
@@ -1334,21 +1380,30 @@ export default function AdminDashboard() {
                           <h3 style={{ fontSize: 14, color: "#66bb6a", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ width: 4, height: 18, borderRadius: 2, background: "#66bb6a", display: "inline-block" }} />
                             Jobs
+                            {cd.jobs.filter(j => j.status === "in_progress").length > 0 && <span style={{ padding: "2px 8px", borderRadius: 8, background: "rgba(102,187,106,0.15)", fontSize: 11, fontWeight: 600, color: "#66bb6a" }}>{cd.jobs.filter(j => j.status === "in_progress").length} active</span>}
                           </h3>
                           {cd.jobs.length === 0 ? (
                             <div style={{ padding: "20px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", textAlign: "center", color: "#3a5a3a", fontSize: 13 }}>No jobs yet</div>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {cd.jobs.map(j => (
-                                <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)", flexWrap: "wrap", gap: 8 }}>
-                                  <div>
-                                    <span style={{ color: "#66bb6a", fontSize: 13, fontWeight: 700 }}>{j.service_type}</span>
-                                    <span style={{ color: "#3a5a3a", fontSize: 11, marginLeft: 10 }}>{formatDate(j.scheduled_date)}</span>
+                                <div key={j.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(76,175,80,0.03)", border: "1px solid rgba(76,175,80,0.08)" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ color: "#66bb6a", fontSize: 14, fontWeight: 700 }}>{j.service_type}</span>
+                                      <span style={{ color: "#3a5a3a", fontSize: 11 }}>{formatDate(j.scheduled_date)}</span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <StatusBadge status={j.status} />
+                                      <span style={{ color: "#66bb6a", fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(j.amount)}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <StatusBadge status={j.status} />
-                                    <span style={{ color: "#66bb6a", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(j.amount)}</span>
+                                  {j.description && <p style={{ color: "#3a5a3a", fontSize: 12, marginBottom: 8 }}>{j.description.length > 80 ? j.description.slice(0, 80) + "…" : j.description}</p>}
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                     <button className="quick-action" onClick={() => { pushSentinel(); setEditingJob(j); setShowJobModal(true); }}>Edit</button>
+                                    {j.status === "scheduled" && <button className="quick-action" style={{ color: "#42a5f5" }} onClick={() => handleUpdateJobStatus(j.id, "in_progress")}>▶ Start</button>}
+                                    {j.status === "in_progress" && <button className="quick-action" style={{ color: "#66bb6a" }} onClick={() => handleUpdateJobStatus(j.id, "completed")}>✓ Complete</button>}
+                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteJob(j.id)}>Delete</button>
                                   </div>
                                 </div>
                               ))}
@@ -1376,6 +1431,7 @@ export default function AdminDashboard() {
                                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                     <StatusBadge status={p.status} />
                                     {p.square_receipt_url && <a href={p.square_receipt_url} target="_blank" rel="noreferrer" style={{ color: "#4CAF50", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>Receipt ↗</a>}
+                                    <button className="quick-action quick-action-danger" onClick={async () => { await handleDeletePayment(p.id); loadCustomerDetail(cd.customer.id); }}>✕</button>
                                   </div>
                                 </div>
                               ))}
@@ -1392,14 +1448,21 @@ export default function AdminDashboard() {
                             </h3>
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {cd.subscriptions.map(s => (
-                                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "rgba(171,71,188,0.03)", border: "1px solid rgba(171,71,188,0.1)", flexWrap: "wrap", gap: 8 }}>
-                                  <div>
-                                    <span style={{ color: "#CE93D8", fontSize: 13, fontWeight: 700 }}>{s.plan_name}</span>
-                                    <span style={{ color: "#5a5a6a", fontSize: 12, marginLeft: 8 }}>{s.frequency}</span>
+                                <div key={s.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(171,71,188,0.03)", border: "1px solid rgba(171,71,188,0.1)" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                                    <div>
+                                      <span style={{ color: "#CE93D8", fontSize: 13, fontWeight: 700 }}>{s.plan_name}</span>
+                                      <span style={{ color: "#5a5a6a", fontSize: 12, marginLeft: 8 }}>{s.frequency}</span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                      <StatusBadge status={s.status} />
+                                      <span style={{ color: "#CE93D8", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(s.amount)}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <StatusBadge status={s.status} />
-                                    <span style={{ color: "#CE93D8", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(s.amount)}</span>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    {s.status === "active" && <button className="quick-action" onClick={() => handleChargeNow(s.id)} disabled={chargingSubId === s.id}>{chargingSubId === s.id ? "..." : "⚡ Charge Now"}</button>}
+                                    <button className="quick-action" onClick={() => { setEditingSub(s); setShowSubModal(true); }}>Edit</button>
+                                    <button className="quick-action quick-action-danger" onClick={() => handleDeleteSubscription(s.id)}>Delete</button>
                                   </div>
                                 </div>
                               ))}
@@ -1620,7 +1683,7 @@ export default function AdminDashboard() {
 
                     {/* ─── ESTIMATES TAB ─── */}
                     {activeTab === "quotes" && userId && (
-                      <AdminQuotes userId={userId} backRef={quotesBackRef} onNavigate={pushSentinel} onSwitchToInvoice={(invoiceId) => { setPendingQuoteInvoiceId(invoiceId); pushSentinel(); switchTab("invoices"); }} />
+                      <AdminQuotes userId={userId} backRef={quotesBackRef} onNavigate={pushSentinel} onSwitchToInvoice={(invoiceId) => { setPendingQuoteInvoiceId(invoiceId); pushSentinel(); switchTab("invoices"); }} initialQuoteId={pendingQuoteId} onInitialQuoteConsumed={() => setPendingQuoteId(null)} />
                     )}
                   </div>
                 )}
