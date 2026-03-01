@@ -6,6 +6,8 @@ import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
 import { ClerkProvider } from '@clerk/nextjs';
 
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -66,8 +68,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
+  const content = (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
@@ -131,6 +132,7 @@ export default function RootLayout({
         <Analytics />
       </body>
     </html>
-    </ClerkProvider>
   );
+
+  return clerkKey ? <ClerkProvider>{content}</ClerkProvider> : content;
 }
