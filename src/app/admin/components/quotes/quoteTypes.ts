@@ -45,6 +45,7 @@ export interface Quote {
   notes: string | null;
   line_items: QuoteLineItem[];
   show_financing: boolean;
+  is_commercial: boolean;
   payment_terms?: PaymentTerms | null;
   sent_at: string | null;
   accepted_at: string | null;

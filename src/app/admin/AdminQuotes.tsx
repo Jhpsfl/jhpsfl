@@ -53,6 +53,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as QuoteLineItem[],
     show_financing: false,
+    is_commercial: false,
     payment_terms: null as PaymentTerms | null,
   });
 
@@ -355,6 +356,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       status: asDraft ? "draft" : "sent",
       line_items: form.line_items.filter(item => item.description && item.amount > 0),
       show_financing: form.show_financing,
+      is_commercial: form.is_commercial,
       payment_terms: form.payment_terms || null,
     };
 
@@ -525,6 +527,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       show_financing: false,
+      is_commercial: false,
       payment_terms: null as PaymentTerms | null,
     });
   };
@@ -645,6 +648,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
         ? quote.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
         : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       show_financing: quote.show_financing,
+      is_commercial: quote.is_commercial || false,
       payment_terms: quote.payment_terms || null,
     });
     setView("edit");

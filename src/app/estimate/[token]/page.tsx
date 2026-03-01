@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import CommercialEstimatePage from "./CommercialEstimatePage";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -31,6 +32,7 @@ interface QuoteData {
   notes: string | null;
   line_items: LineItem[];
   show_financing: boolean;
+  is_commercial: boolean;
   payment_terms: { type: string; deposit_amount: number; schedule: ScheduleItem[] } | null;
   created_at: string;
   customer_name: string;
@@ -175,6 +177,11 @@ export default function EstimatePage() {
   );
 
   if (!quote) return null;
+
+  // Commercial estimates get a branded proposal landing page
+  if (quote.is_commercial) {
+    return <CommercialEstimatePage quote={quote} token={token} />;
+  }
 
   const isExpired = quote.status === "expired";
   const isAcceptedStatus = quote.status === "accepted" || accepted;

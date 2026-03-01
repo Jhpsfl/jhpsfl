@@ -29,6 +29,7 @@ export default function QuoteForm({
     notes: string;
     line_items: QuoteLineItem[];
     show_financing: boolean;
+    is_commercial: boolean;
     payment_terms: PaymentTerms | null;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
@@ -124,6 +125,42 @@ export default function QuoteForm({
           border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
           overflow: "hidden", minWidth: 0, maxWidth: "100%", boxSizing: "border-box",
         }}>
+          {/* ─── Commercial Toggle ─── */}
+          <div style={{
+            padding: "16px 18px", borderRadius: 14, marginBottom: 16,
+            background: form.is_commercial ? "rgba(30,58,95,0.15)" : "rgba(255,255,255,0.02)",
+            border: `1px solid ${form.is_commercial ? "rgba(66,165,245,0.35)" : "#1a3a1a"}`,
+            transition: "all 0.2s",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: form.is_commercial ? "#42a5f5" : "#8aba8a" }}>
+                  🏢 Commercial Estimate
+                </div>
+                <div style={{ fontSize: 12, color: "#5a8a5a", marginTop: 2 }}>
+                  Branded proposal landing page with service showcase
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, is_commercial: !prev.is_commercial }))}
+                style={{
+                  width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer",
+                  background: form.is_commercial ? "linear-gradient(135deg, #1565C0, #0D47A1)" : "#1a3a1a",
+                  position: "relative", transition: "background 0.2s", flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                  position: "absolute", top: 3,
+                  left: form.is_commercial ? 27 : 3,
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                }} />
+              </button>
+            </div>
+          </div>
+
           {/* ─── Financing Toggle ─── */}
           <div style={{
             padding: "16px 18px", borderRadius: 14, marginBottom: 24,

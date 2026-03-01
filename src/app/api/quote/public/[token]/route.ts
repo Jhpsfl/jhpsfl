@@ -42,6 +42,7 @@ export async function GET(
       notes: quote.notes,
       line_items: quote.line_items,
       show_financing: quote.show_financing,
+      is_commercial: quote.is_commercial || false,
       payment_terms: quote.payment_terms,
       created_at: quote.created_at,
       customer_name: quote.customers?.name || "Customer",
