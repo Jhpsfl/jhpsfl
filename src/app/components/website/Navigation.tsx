@@ -33,7 +33,7 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
             <img
               src={logoSrc || "/jhps-nav-logo.svg"}
               alt={companyName}
-              style={{ height: logoMaxHeight, width: "auto", display: "block", padding: logoPadding }}
+              style={{ height: logoMaxHeight, width: "auto", display: "block", padding: logoPadding, minHeight: logoMaxHeight, minWidth: logoMaxHeight * 6 }}
             />
           </div>
 
