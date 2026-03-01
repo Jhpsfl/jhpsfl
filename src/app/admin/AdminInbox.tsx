@@ -890,7 +890,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                           fetchMessages(thread.thread_id);
                         }
                       }}
-                      style={{ display: "flex", alignItems: "center", gap: 0, padding: "10px 8px 10px 4px", borderBottom: "1px solid #0a160a", background: isSelected ? "rgba(76,175,80,0.06)" : "transparent", cursor: "pointer" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 0, padding: "10px 8px 10px 4px", borderBottom: "1px solid #0a160a", background: isSelected ? "rgba(76,175,80,0.06)" : "rgba(13,26,13,0.6)", borderRadius: 4, margin: "2px 6px", cursor: "pointer" }}>
                       {/* Checkbox */}
                       <div onClick={e => toggleSelect(thread.thread_id, e)} style={{ width: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#4CAF50" : "#2a4a2a"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -974,7 +974,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 if (isCollapsed) {
                   return (
                     <div key={msg.id} className="gmail-msg-card gmail-msg-collapsed" onClick={() => setCollapsedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#0d1a0d", margin: "4px 8px", borderRadius: 8 }}>
                       <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: isOutbound ? "#1a3a2a" : "#1a2a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: isOutbound ? "#4CAF50" : "#6a8a6a" }}>{initials}</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#a0b8a0", flexShrink: 0 }}>{senderName}</div>
                       <div style={{ flex: 1, fontSize: 12, color: "#4a6a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bodyText.substring(0, 80)}</div>
@@ -985,7 +985,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 }
 
                 return (
-                  <div key={msg.id} className="gmail-msg-card" style={{ padding: "16px 16px 20px" }}>
+                  <div key={msg.id} className="gmail-msg-card" style={{ padding: "16px 16px 20px", background: "#0a140a", margin: "4px 8px", borderRadius: 8, border: "1px solid #1a2a1a" }}>
                     {/* Sender header */}
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                       <div style={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, background: isOutbound ? "linear-gradient(135deg, #2E7D32, #1a4a1a)" : "#1a2a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: isOutbound ? "#4CAF50" : "#6a8a6a" }}>{initials}</div>
@@ -1006,15 +1006,15 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                         </div>
                       </div>
                     </div>
-                    {isOutbound && msg.resend_message_id && <div style={{ fontSize: 11, color: "#2E7D32", marginBottom: 8, marginLeft: 52 }}>{"\u2713"} Delivered</div>}
+                    {isOutbound && msg.resend_message_id && <div style={{ fontSize: 11, color: "#2E7D32", marginBottom: 8 }}>{"\u2713"} Delivered</div>}
 
                     {/* Body: render HTML in sandboxed iframe, fallback to plain text */}
-                    <div style={{ marginLeft: 52 }}>
+                    <div style={{ marginTop: 8 }}>
                       {hasHtml ? (
                         <iframe
-                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#333;background:#fff;}img{max-width:100%;height:auto;}a{color:#2E7D32;}</style></head><body>${msg.body_html}</body></html>`}
+                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;width:100%!important;}td{background:transparent!important;}h1,h2,h3,p,div,span{color:#c8dcc8!important;background:transparent!important;}strong,b{color:#e8f5e8!important;}a{color:#4CAF50!important;}</style></head><body>${msg.body_html}</body></html>`}
                           sandbox="allow-same-origin"
-                          style={{ width: "100%", minHeight: 120, border: "1px solid #1a3a1a", borderRadius: 8, background: "#fff" }}
+                          style={{ width: "100%", minHeight: 120, border: "1px solid #1a3a1a", borderRadius: 8, background: "#0a160a" }}
                           onLoad={e => {
                             const iframe = e.target as HTMLIFrameElement;
                             if (iframe.contentDocument?.body) {
@@ -1029,7 +1029,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
 
                     {/* Attachments */}
                     {attachments.length > 0 && (
-                      <div style={{ marginLeft: 52, marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {attachments.map(att => (
                           <a key={att.id} href={att.s3_url} target="_blank" rel="noopener noreferrer"
                             style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8, border: "1px solid #1a3a1a", background: "#0d1a0d", color: "#8ab88a", textDecoration: "none", fontSize: 12 }}>

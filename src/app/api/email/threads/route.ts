@@ -48,9 +48,11 @@ async function buildThreadQuery(
   } else if (folder === 'spam') {
     query = query.eq('folder', 'spam');
   } else {
-    // Default: inbox — show inbound + threads that have inbound, exclude trash/spam/drafts
+    // Default: inbox — show all non-draft, non-trash/spam messages
     query = query.eq('is_draft', false).not('folder', 'in', '("trash","spam")');
   }
+
+  const isInbox = !folder || folder === 'inbox';
 
   const { data: messages, error } = await query;
   if (error) {
@@ -100,6 +102,7 @@ async function buildThreadQuery(
     lead_id: string | null;
     created_at: string;
     customer_name?: string;
+    has_inbound: boolean;
   }>();
 
   for (const msg of messages || []) {
@@ -119,6 +122,7 @@ async function buildThreadQuery(
         has_attachments: !!msg.has_attachments,
         lead_id: msg.lead_id,
         created_at: msg.created_at,
+        has_inbound: msg.direction === 'inbound',
       });
     }
 
@@ -127,6 +131,16 @@ async function buildThreadQuery(
     if (!msg.read) thread.unread_count++;
     if (msg.starred) thread.starred = true;
     if (msg.has_attachments) thread.has_attachments = true;
+    if (msg.direction === 'inbound') thread.has_inbound = true;
+  }
+
+  // For inbox, only show threads that have received at least one inbound message
+  if (isInbox) {
+    for (const [threadId, thread] of threadMap) {
+      if (!thread.has_inbound) {
+        threadMap.delete(threadId);
+      }
+    }
   }
 
   // Get customer names from video_leads
