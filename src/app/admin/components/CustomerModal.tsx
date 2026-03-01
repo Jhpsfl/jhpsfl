@@ -2,17 +2,38 @@
 
 import { useState } from "react";
 
-export default function CustomerModal({ onClose, onSave }: {
+interface CustomerData { id?: string; name?: string; email?: string; phone?: string; }
+
+export default function CustomerModal({ onClose, onSave, editCustomer }: {
   onClose: () => void;
   onSave: (data: Record<string, unknown>) => void;
+  editCustomer?: CustomerData | null;
 }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const isEdit = !!editCustomer?.id;
+  const [form, setForm] = useState({
+    name: editCustomer?.name || "",
+    email: editCustomer?.email || "",
+    phone: editCustomer?.phone || "",
+  });
   const isValid = !!(form.name || form.email || form.phone);
 
   const inputStyle = {
     width: "100%", padding: "12px 14px", background: "#0d1a0d",
     border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
     fontSize: 14, outline: "none", fontFamily: "'DM Sans', sans-serif",
+  };
+
+  const handleSubmit = () => {
+    if (!isValid) return;
+    const data: Record<string, unknown> = {};
+    if (isEdit) data.id = editCustomer!.id;
+    if (form.name) data.name = form.name;
+    else if (isEdit) data.name = null;
+    if (form.email) data.email = form.email;
+    else if (isEdit) data.email = null;
+    if (form.phone) data.phone = form.phone;
+    else if (isEdit) data.phone = null;
+    onSave(data);
   };
 
   return (
@@ -28,11 +49,13 @@ export default function CustomerModal({ onClose, onSave }: {
         animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#e8f5e8", fontWeight: 700 }}>Add Customer</h3>
+          <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#e8f5e8", fontWeight: 700 }}>
+            {isEdit ? "Edit Customer" : "Add Customer"}
+          </h3>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer" }}>✕</button>
         </div>
         <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 24 }}>
-          Add a customer from your own sources — referrals, calls, door-to-door, etc.
+          {isEdit ? "Update customer details. Changes apply everywhere — invoices, estimates, and contracts." : "Add a customer from your own sources — referrals, calls, door-to-door, etc."}
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
@@ -50,14 +73,7 @@ export default function CustomerModal({ onClose, onSave }: {
             <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="(407) 555-0000" inputMode="tel" style={inputStyle} />
           </div>
-          <button onClick={() => {
-            if (!isValid) return;
-            const data: Record<string, unknown> = {};
-            if (form.name) data.name = form.name;
-            if (form.email) data.email = form.email;
-            if (form.phone) data.phone = form.phone;
-            onSave(data);
-          }} style={{
+          <button onClick={handleSubmit} style={{
             background: isValid ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "#1a3a1a",
             color: isValid ? "#fff" : "#3a5a3a",
             border: "none", padding: "14px", borderRadius: 12, fontSize: 15,
@@ -65,7 +81,7 @@ export default function CustomerModal({ onClose, onSave }: {
             fontFamily: "'DM Sans', sans-serif",
             boxShadow: isValid ? "0 4px 20px rgba(76,175,80,0.35)" : "none", marginTop: 4,
           }}>
-            Add Customer
+            {isEdit ? "Save Changes" : "Add Customer"}
           </button>
         </div>
       </div>

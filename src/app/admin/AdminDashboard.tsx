@@ -171,6 +171,7 @@ export default function AdminDashboard() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string } | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<{ id: string; name: string } | null>(null);
@@ -521,13 +522,20 @@ export default function AdminDashboard() {
   };
 
   const handleSaveCustomer = async (data: Record<string, unknown>) => {
-    const res = await adminPost("customers", "create", data);
+    const isEdit = !!data.id;
+    const action = isEdit ? "update" : "create";
+    const res = await adminPost("customers", action, data);
     if (res?.success || res?.data) {
-      showToast("Customer added");
+      showToast(isEdit ? "Customer updated" : "Customer added");
       setShowCustomerModal(false);
+      setEditingCustomer(null);
+      if (isEdit && customerDetail) {
+        // Reload customer detail to reflect changes
+        loadCustomerDetail(data.id as string);
+      }
       loadTab("customers");
     } else {
-      showToast(res?.error || "Failed to add customer", "error");
+      showToast(res?.error || `Failed to ${action} customer`, "error");
     }
   };
 
@@ -592,7 +600,7 @@ export default function AdminDashboard() {
 
   const handleSoftBack = () => {
     if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
-    if (showCustomerModal) { setShowCustomerModal(false); return; }
+    if (showCustomerModal) { setShowCustomerModal(false); setEditingCustomer(null); return; }
     if (showCashModal) { setShowCashModal(false); return; }
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
@@ -611,7 +619,7 @@ export default function AdminDashboard() {
   // ─── Update popstate handler every render ───
   popstateHandlerRef.current = () => {
     if (showJobModal) { setShowJobModal(false); setEditingJob(null); return; }
-    if (showCustomerModal) { setShowCustomerModal(false); return; }
+    if (showCustomerModal) { setShowCustomerModal(false); setEditingCustomer(null); return; }
     if (showCashModal) { setShowCashModal(false); return; }
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
@@ -1054,7 +1062,7 @@ export default function AdminDashboard() {
                         <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
                           {[
                             { label: "New Job", onClick: () => { pushSentinel(); setEditingJob(null); setShowJobModal(true); } },
-                            { label: "New Customer", onClick: () => { pushSentinel(); setShowCustomerModal(true); } },
+                            { label: "New Customer", onClick: () => { pushSentinel(); setEditingCustomer(null); setShowCustomerModal(true); } },
                           ].map((btn, i) => (
                             <button key={btn.label} onClick={btn.onClick} style={{
                               flex: 1, padding: "6px 4px",
@@ -1162,7 +1170,7 @@ export default function AdminDashboard() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
                             <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 800 }}>Customers</h1>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setShowCustomerModal(true); }}>+ Add Customer</button>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer(null); setShowCustomerModal(true); }}>+ Add Customer</button>
                           </div>
                           <div style={{ position: "relative", flex: "1 1 300px", maxWidth: "100%" }}>
                             <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "#3a5a3a", fontSize: 16, zIndex: 1 }}>🔍</span>
@@ -1214,6 +1222,7 @@ export default function AdminDashboard() {
                             <div style={{ color: "#3a5a3a", fontSize: 12, marginTop: 8 }}>Customer since {formatDate(customerDetail.customer.created_at)}</div>
                           </div>
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: customerDetail.customer.id, name: customerDetail.customer.name || undefined, email: customerDetail.customer.email || undefined, phone: customerDetail.customer.phone || undefined }); setShowCustomerModal(true); }}>✏️ Edit Customer</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }}>+ New Job</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(customerDetail.customer.id); switchTab("invoices"); }}>📄 Create Invoice</button>
                             <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(customerDetail.customer.id); setShowCashModal(true); }}>💵 Cash Payment</button>
@@ -1443,7 +1452,7 @@ export default function AdminDashboard() {
               <JobModal onClose={() => { setShowJobModal(false); setEditingJob(null); }} onSave={handleSaveJob} customers={customers} job={editingJob} />
             )}
             {showCustomerModal && (
-              <CustomerModal onClose={() => setShowCustomerModal(false)} onSave={handleSaveCustomer} />
+              <CustomerModal onClose={() => { setShowCustomerModal(false); setEditingCustomer(null); }} onSave={handleSaveCustomer} editCustomer={editingCustomer} />
             )}
             {confirmDeleteCustomer && (
               <div onClick={() => setConfirmDeleteCustomer(null)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(8px)" }}>
