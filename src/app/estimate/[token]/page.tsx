@@ -73,6 +73,9 @@ export default function EstimatePage() {
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [showChangeForm, setShowChangeForm] = useState(false);
+  const [changeMessage, setChangeMessage] = useState("");
+  const [changeSent, setChangeSent] = useState(false);
 
   // PDF preview state
   const [showPdf, setShowPdf] = useState(false);
@@ -286,30 +289,28 @@ export default function EstimatePage() {
           {/* Line items */}
           <div style={{
             background: "linear-gradient(160deg, #0d1f0d, #091409)",
-            border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px",
+            border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 16px",
             marginBottom: 24, animation: "fadeIn 0.5s ease 0.1s both",
           }}>
             <h3 style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>
               SCOPE OF WORK
             </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, overflowX: "hidden" }}>
               {/* Header */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 90px 90px", gap: 8, padding: "8px 0", borderBottom: "1px solid #1a3a1a" }}>
-                <span style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Description</span>
-                <span style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "center" }}>Qty</span>
-                <span style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "right" }}>Rate</span>
-                <span style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "right" }}>Amount</span>
+              <div style={{ display: "flex", padding: "8px 0", borderBottom: "1px solid #1a3a1a", gap: 8 }}>
+                <span style={{ flex: "1 1 0", minWidth: 0, color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Description</span>
+                <span style={{ width: 36, color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "center", flexShrink: 0 }}>Qty</span>
+                <span style={{ width: 72, color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "right", flexShrink: 0 }}>Amount</span>
               </div>
               {/* Items */}
               {quote.line_items.map((item, i) => (
                 <div key={i} style={{
-                  display: "grid", gridTemplateColumns: "1fr 60px 90px 90px", gap: 8,
+                  display: "flex", gap: 8, alignItems: "flex-start",
                   padding: "14px 0", borderBottom: i < quote.line_items.length - 1 ? "1px solid rgba(26,58,26,0.5)" : "none",
                 }}>
-                  <span style={{ color: "#e8f5e8", fontSize: 14 }}>{item.description}</span>
-                  <span style={{ color: "#8aba8a", fontSize: 14, textAlign: "center" }}>{item.quantity}</span>
-                  <span style={{ color: "#8aba8a", fontSize: 14, fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>{fmt(item.unit_price)}</span>
-                  <span style={{ color: "#e8f5e8", fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>{fmt(item.amount)}</span>
+                  <span style={{ flex: "1 1 0", minWidth: 0, color: "#e8f5e8", fontSize: 14, wordBreak: "break-word" }}>{item.description}</span>
+                  <span style={{ width: 36, color: "#8aba8a", fontSize: 14, textAlign: "center", flexShrink: 0 }}>{item.quantity}</span>
+                  <span style={{ width: 72, color: "#e8f5e8", fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", textAlign: "right", flexShrink: 0 }}>{fmt(item.amount)}</span>
                 </div>
               ))}
             </div>
@@ -437,6 +438,85 @@ export default function EstimatePage() {
                 ⬇ Download PDF
               </button>
             </div>
+
+            {/* Request Changes */}
+            {!isExpired && !isAcceptedStatus && (
+              <div style={{ marginTop: 12 }}>
+                {!showChangeForm ? (
+                  <button
+                    onClick={() => setShowChangeForm(true)}
+                    style={{
+                      width: "100%", padding: "14px", borderRadius: 14,
+                      border: "1px solid rgba(255,183,77,0.25)", background: "rgba(255,183,77,0.06)",
+                      color: "#FFB74D", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    }}
+                  >
+                    ✏️ Request Changes
+                  </button>
+                ) : changeSent ? (
+                  <div style={{
+                    padding: "20px", borderRadius: 14,
+                    background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+                    textAlign: "center",
+                  }}>
+                    <p style={{ color: "#66bb6a", fontSize: 15, fontWeight: 700 }}>✓ Change Request Sent</p>
+                    <p style={{ color: "#5a8a5a", fontSize: 13, marginTop: 4 }}>We&apos;ll review your request and get back to you shortly.</p>
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: "20px", borderRadius: 14,
+                    background: "rgba(255,183,77,0.04)", border: "1px solid rgba(255,183,77,0.15)",
+                  }}>
+                    <p style={{ color: "#FFB74D", fontSize: 14, fontWeight: 700, marginBottom: 12 }}>✏️ Request Changes</p>
+                    <textarea
+                      value={changeMessage}
+                      onChange={e => setChangeMessage(e.target.value)}
+                      placeholder="Describe what you'd like changed — scope, pricing, scheduling, etc."
+                      rows={4}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(255,183,77,0.2)",
+                        background: "rgba(0,0,0,0.3)", color: "#e8f5e8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+                        resize: "vertical", outline: "none",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button
+                        onClick={async () => {
+                          if (!changeMessage.trim()) return;
+                          try {
+                            await fetch("/api/quote/change-request", {
+                              method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ token, message: changeMessage, customer_name: quote.customer_name, customer_email: quote.customer_email }),
+                            });
+                          } catch { /* */ }
+                          setChangeSent(true);
+                        }}
+                        disabled={!changeMessage.trim()}
+                        style={{
+                          flex: 1, padding: "12px", borderRadius: 10, border: "none",
+                          background: changeMessage.trim() ? "linear-gradient(135deg, #F57C00, #E65100)" : "#1a3a1a",
+                          color: "#fff", fontSize: 14, fontWeight: 700, cursor: changeMessage.trim() ? "pointer" : "not-allowed",
+                          opacity: changeMessage.trim() ? 1 : 0.5,
+                        }}
+                      >
+                        Send Request
+                      </button>
+                      <button
+                        onClick={() => { setShowChangeForm(false); setChangeMessage(""); }}
+                        style={{
+                          padding: "12px 20px", borderRadius: 10, border: "1px solid #1a3a1a",
+                          background: "transparent", color: "#5a8a5a", fontSize: 14, cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Accept button */}
             {!isExpired && !isAcceptedStatus && (
