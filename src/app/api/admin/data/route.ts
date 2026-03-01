@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
     switch (resource) {
       case "jobs": {
         if (action === "create") {
-          const { customer_id, service_type, description, status: jobStatus, scheduled_date, amount, crew_notes, admin_notes, job_site_id } = payload;
+          const { customer_id, service_type, description, status: jobStatus, scheduled_date, amount, crew_notes, admin_notes, job_site_id, quote_id, invoice_id } = payload;
           if (!customer_id || !service_type) return NextResponse.json({ error: "customer_id and service_type required" }, { status: 400 });
           const insert: Record<string, unknown> = { customer_id, service_type };
           if (description) insert.description = description;
@@ -288,6 +288,8 @@ export async function POST(request: NextRequest) {
           if (crew_notes) insert.crew_notes = crew_notes;
           if (admin_notes) insert.admin_notes = admin_notes;
           if (job_site_id) insert.job_site_id = job_site_id;
+          if (quote_id) insert.quote_id = quote_id;
+          if (invoice_id) insert.invoice_id = invoice_id;
 
           const { data, error } = await supabase.from("jobs").insert(insert).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -360,6 +362,7 @@ export async function POST(request: NextRequest) {
                 payment_link: payload.payment_link || null,
                 sent_at: payload.sent_at || null,
                 payment_terms: payload.payment_terms || null,
+                quote_id: payload.quote_id || null,
               })
               .select(`*, customers ( name, email, phone )`)
               .single();
@@ -372,7 +375,7 @@ export async function POST(request: NextRequest) {
               "customer_id", "invoice_number", "status", "subtotal",
               "tax_rate", "tax_amount", "total", "amount_paid",
               "due_date", "paid_date", "notes", "line_items",
-              "payment_link", "sent_at", "payment_terms"
+              "payment_link", "sent_at", "payment_terms", "quote_id"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];

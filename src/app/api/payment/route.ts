@@ -190,7 +190,7 @@ export async function POST(request: Request) {
           // Mark invoice as paid + link customer if invoice had none
           if (invoiceNumber) {
             const { data: inv } = await supabase.from('invoices')
-              .select('id, customer_id')
+              .select('id, customer_id, quote_id, line_items, notes, total')
               .eq('invoice_number', invoiceNumber)
               .limit(1)
               .single();
@@ -205,6 +205,41 @@ export async function POST(request: Request) {
                 invoiceUpdate.customer_id = customerId;
               }
               await supabase.from('invoices').update(invoiceUpdate).eq('id', inv.id);
+
+              // Auto-create a job if none exists for this invoice
+              const effectiveCustomerId = inv.customer_id || customerId;
+              if (effectiveCustomerId) {
+                const { data: existingJob } = await supabase.from('jobs')
+                  .select('id')
+                  .eq('invoice_id', inv.id)
+                  .limit(1)
+                  .maybeSingle();
+                if (!existingJob) {
+                  // Derive service type from line items
+                  const lineItems = (inv.line_items as Array<{ description?: string }>) || [];
+                  const allText = lineItems.map(li => li.description || '').join(' ').toLowerCase();
+                  let serviceType = 'general';
+                  if (allText.includes('lawn') || allText.includes('mow')) serviceType = 'lawn_care';
+                  else if (allText.includes('pressure') || allText.includes('wash')) serviceType = 'pressure_washing';
+                  else if (allText.includes('junk') || allText.includes('removal') || allText.includes('haul')) serviceType = 'junk_removal';
+                  else if (allText.includes('clear') || allText.includes('land')) serviceType = 'land_clearing';
+                  else if (allText.includes('clean')) serviceType = 'property_cleanup';
+                  else if (allText.includes('fence')) serviceType = 'fence';
+                  else if (allText.includes('tree') || allText.includes('trim')) serviceType = 'tree_service';
+
+                  const jobDesc = lineItems.map(li => li.description).filter(Boolean).join('; ') || inv.notes || service || '';
+                  await supabase.from('jobs').insert({
+                    customer_id: effectiveCustomerId,
+                    service_type: serviceType,
+                    description: (jobDesc as string).slice(0, 500),
+                    status: 'completed',
+                    completed_date: new Date().toISOString().split('T')[0],
+                    amount: inv.total || parseFloat(amount),
+                    invoice_id: inv.id,
+                    quote_id: inv.quote_id || null,
+                  });
+                }
+              }
             }
           }
         }

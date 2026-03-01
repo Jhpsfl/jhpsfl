@@ -469,7 +469,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
 
   // ─── Convert to Invoice ───
   const handleConvertToInvoice = async (quote: Quote) => {
-    // Create a new invoice from the quote data
+    // Create a new invoice from the quote data (with quote_id link)
     const invoiceRes = await adminPost("invoices", "create", {
       customer_id: quote.customer_id,
       invoice_number: `INV-${quote.quote_number.replace("QTE-", "")}`,
@@ -482,6 +482,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       notes: quote.notes,
       line_items: quote.line_items,
       payment_terms: quote.payment_terms || null,
+      quote_id: quote.id,
     });
 
     if (invoiceRes?.success || invoiceRes?.data) {
@@ -494,7 +495,23 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
         converted_invoice_id: newInvoiceId,
       });
 
-      showToast("Estimate converted to invoice");
+      // Auto-create a job from the estimate
+      const serviceType = deriveServiceType(quote.line_items);
+      const jobDescription = quote.line_items
+        ?.map((li: { description?: string }) => li.description)
+        .filter(Boolean)
+        .join("; ") || quote.notes || "";
+      await adminPost("jobs", "create", {
+        customer_id: quote.customer_id,
+        service_type: serviceType,
+        description: jobDescription.slice(0, 500),
+        status: "scheduled",
+        amount: quote.total,
+        quote_id: quote.id,
+        invoice_id: newInvoiceId || null,
+      });
+
+      showToast("Estimate → Invoice + Job created");
       await loadQuotes();
 
       // Switch to invoices tab with the new invoice open
@@ -504,6 +521,24 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     } else {
       showToast(invoiceRes?.error || "Failed to convert to invoice", "error");
     }
+  };
+
+  // Derive service type from line items
+  const deriveServiceType = (lineItems?: Array<{ description?: string; service_type?: string }>) => {
+    if (!lineItems || lineItems.length === 0) return "general";
+    // Check if any line item has a service_type field
+    const typed = lineItems.find(li => li.service_type);
+    if (typed?.service_type) return typed.service_type;
+    // Try to guess from description keywords
+    const allText = lineItems.map(li => li.description || "").join(" ").toLowerCase();
+    if (allText.includes("lawn") || allText.includes("mow")) return "lawn_care";
+    if (allText.includes("pressure") || allText.includes("wash")) return "pressure_washing";
+    if (allText.includes("junk") || allText.includes("removal") || allText.includes("haul")) return "junk_removal";
+    if (allText.includes("clear") || allText.includes("land")) return "land_clearing";
+    if (allText.includes("clean")) return "property_cleanup";
+    if (allText.includes("fence")) return "fence";
+    if (allText.includes("tree") || allText.includes("trim")) return "tree_service";
+    return "general";
   };
 
   // ─── Delete quote ───

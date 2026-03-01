@@ -67,6 +67,8 @@ export interface Job {
   amount: number | null;
   crew_notes: string | null;
   admin_notes: string | null;
+  quote_id: string | null;
+  invoice_id: string | null;
   created_at: string;
   customers?: { name: string; phone: string; email: string };
 }
