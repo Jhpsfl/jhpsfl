@@ -16,14 +16,14 @@ export const siteSettings = defineType({
       description: 'Upload your logo. Works best as a PNG with transparent background.',
     }),
     defineField({
-      name: 'logoMaxWidth', title: 'Logo Max Width (px)', type: 'number', initialValue: 160,
-      description: 'Maximum width of the logo in the navbar. Default: 160. Try 120–200.',
+      name: 'logoMaxWidth', title: 'Logo Max Width (px)', type: 'number', initialValue: 200,
+      description: 'Max width cap — the logo height setting drives the actual size. Default: 200.',
       validation: (Rule) => Rule.min(40).max(400),
     }),
     defineField({
-      name: 'logoMaxHeight', title: 'Logo Max Height (px)', type: 'number', initialValue: 64,
-      description: 'Maximum height of the logo in the navbar. Default: 64. Try 48–80.',
-      validation: (Rule) => Rule.min(24).max(160),
+      name: 'logoMaxHeight', title: 'Logo Height (px)', type: 'number', initialValue: 80,
+      description: 'Controls the actual logo size in the navbar. Increase this to make the logo bigger. Default: 80. Try 60–100.',
+      validation: (Rule) => Rule.min(24).max(120),
     }),
     defineField({
       name: 'logoFit', title: 'Logo Fit', type: 'string', initialValue: 'contain',
