@@ -774,7 +774,9 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           quote={selectedQuote}
           customers={customers}
           sendingQuote={sendingQuote}
+          copiedLink={copiedLink}
           onSend={handleSendQuote}
+          onCopyLink={handleCopyLink}
           onClose={() => setShowSendModal(false)}
         />
       )}

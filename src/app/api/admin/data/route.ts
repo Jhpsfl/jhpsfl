@@ -579,9 +579,11 @@ export async function POST(request: NextRequest) {
                 tax_amount: payload.tax_amount || 0,
                 total: payload.total,
                 expiration_date: payload.expiration_date || null,
+                due_date: payload.due_date || null,
                 notes: payload.notes || null,
                 line_items: payload.line_items || [],
                 show_financing: payload.show_financing || false,
+                is_commercial: payload.is_commercial || false,
                 payment_terms: payload.payment_terms || null,
                 sent_at: payload.sent_at || null,
               })
@@ -594,8 +596,8 @@ export async function POST(request: NextRequest) {
             const updateData: Record<string, unknown> = {};
             const allowedFields = [
               "customer_id", "quote_number", "status", "subtotal",
-              "tax_rate", "tax_amount", "total", "expiration_date",
-              "notes", "line_items", "show_financing", "payment_terms",
+              "tax_rate", "tax_amount", "total", "expiration_date", "due_date",
+              "notes", "line_items", "show_financing", "is_commercial", "payment_terms",
               "sent_at", "accepted_at", "declined_at", "converted_invoice_id"
             ];
             for (const field of allowedFields) {
