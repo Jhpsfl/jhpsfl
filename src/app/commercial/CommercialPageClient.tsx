@@ -937,7 +937,7 @@ export default function CommercialPage({ data, siteSettings }: { data?: SanityDa
             <img
               src={logoSrc}
               alt={companyName}
-              style={{ width: logoMaxWidth, height: "auto", maxHeight: 60, padding: logoPadding }}
+              style={{ width: logoMaxWidth, height: "auto", maxHeight: logoMaxHeight, padding: logoPadding }}
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
