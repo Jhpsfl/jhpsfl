@@ -135,6 +135,25 @@ interface OverviewData {
 interface CustomerNote { id: string; customer_id: string; note: string; created_at: string; updated_at: string; }
 interface CustomerQuote { id: string; quote_number: string; status: string; total: number; created_at: string; is_commercial?: boolean; public_token?: string; expiration_date?: string; line_items?: { description: string }[]; }
 
+interface FeedbackRequest {
+  id: string;
+  type: string;
+  status: string;
+  sent_at: string;
+  responded_at: string | null;
+  created_at: string;
+  feedback_responses: Array<{
+    id: string;
+    rating: number | null;
+    comment: string | null;
+    google_review_clicked: boolean;
+    resolution_requested: boolean;
+    lost_estimate_reason: string | null;
+    lost_estimate_detail: string | null;
+    created_at: string;
+  }>;
+}
+
 interface CustomerDetail {
   customer: Customer;
   jobSites: JobSite[];
@@ -145,6 +164,7 @@ interface CustomerDetail {
   storedCards: StoredCard[];
   quotes: CustomerQuote[];
   notes: CustomerNote[];
+  feedbackRequests: FeedbackRequest[];
 }
 
 export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes";
@@ -185,6 +205,7 @@ export default function AdminDashboard() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string; address?: string } | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
+  const [sendingFeedback, setSendingFeedback] = useState<string | null>(null); // "post_service" | "lost_estimate" | null
   const [cashModalPreselectedCustomer, setCashModalPreselectedCustomer] = useState<string | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<{ id: string; name: string } | null>(null);
 
@@ -549,6 +570,33 @@ export default function AdminDashboard() {
     } else {
       showToast(res?.error || `Failed to ${action} customer`, "error");
     }
+  };
+
+  // ─── Send feedback request ───
+  const handleSendFeedback = async (customerId: string, type: "post_service" | "lost_estimate", quoteId?: string) => {
+    if (!user?.id) return;
+    setSendingFeedback(type);
+    try {
+      const res = await fetch("/api/feedback/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerk_user_id: user.id, customer_id: customerId, type, quote_id: quoteId || null }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(type === "post_service" ? "Feedback request sent!" : "Follow-up sent!");
+        // Reload customer detail
+        if (customerDetail) {
+          const r = await fetch(`/api/admin/data?resource=customer_detail&customer_id=${customerDetail.customer.id}`, { headers: { "x-clerk-user-id": user.id } });
+          if (r.ok) setCustomerDetail(await r.json());
+        }
+      } else {
+        showToast(data.error || "Failed to send");
+      }
+    } catch {
+      showToast("Failed to send feedback request");
+    }
+    setSendingFeedback(null);
   };
 
   const handleSaveCashPayment = async (data: Record<string, unknown>) => {
@@ -1276,6 +1324,7 @@ export default function AdminDashboard() {
                           <button className="action-btn" onClick={() => { pushSentinel(); setPendingInvoiceCustomerId(cd.customer.id); switchTab("invoices"); }} style={{ background: "rgba(255,183,77,0.1)", border: "1px solid rgba(255,183,77,0.25)", color: "#FFB74D" }}>📄 Invoice</button>
                           <button className="action-btn" onClick={() => { pushSentinel(); setEditingJob(null); setShowJobModal(true); }} style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.25)", color: "#66bb6a" }}>+ Job</button>
                           <button className="action-btn" onClick={() => { pushSentinel(); setCashModalPreselectedCustomer(cd.customer.id); setShowCashModal(true); }} style={{ background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.25)", color: "#4CAF50" }}>💵 Cash</button>
+                          <button className="action-btn" disabled={sendingFeedback === "post_service"} onClick={() => handleSendFeedback(cd.customer.id, "post_service")} style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.25)", color: "#FFD700", opacity: sendingFeedback === "post_service" ? 0.5 : 1 }}>{sendingFeedback === "post_service" ? "Sending..." : "⭐ Feedback"}</button>
                           <button className="action-btn" onClick={() => setConfirmDeleteCustomer({ id: cd.customer.id, name: cd.customer.name || cd.customer.email || "this customer" })} style={{ background: "rgba(198,40,40,0.08)", border: "1px solid rgba(198,40,40,0.2)", color: "#ef9a9a" }}>🗑️</button>
                         </div>
 
@@ -1321,6 +1370,9 @@ export default function AdminDashboard() {
                                     )}
                                     {q.public_token && (
                                       <button className="quick-action" onClick={() => window.open(`/estimate/${q.public_token}`, "_blank")}>👁 View</button>
+                                    )}
+                                    {(q.status === "declined" || q.status === "expired") && (
+                                      <button className="quick-action" disabled={sendingFeedback === "lost_estimate"} onClick={() => handleSendFeedback(cd.customer.id, "lost_estimate", q.id)} style={{ color: "#42a5f5", borderColor: "rgba(66,165,245,0.3)" }}>{sendingFeedback === "lost_estimate" ? "..." : "📊 Follow-Up"}</button>
                                     )}
                                   </div>
                                 </div>
@@ -1567,6 +1619,47 @@ export default function AdminDashboard() {
                             </div>
                           )}
                         </div>
+
+                        {/* ═══ FEEDBACK HISTORY ═══ */}
+                        {(cd.feedbackRequests && cd.feedbackRequests.length > 0) && (
+                        <div style={{ marginBottom: 24 }}>
+                          <h3 style={{ fontSize: 14, color: "#FFD700", fontWeight: 700, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 4, height: 18, borderRadius: 2, background: "#FFD700", display: "inline-block" }} />
+                            Feedback History
+                          </h3>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {cd.feedbackRequests.map((fb: FeedbackRequest) => {
+                              const resp = fb.feedback_responses?.[0];
+                              const reasonLabels: Record<string, string> = { price: "💰 Budget", timing: "📅 Timing", postponed: "⏸️ Postponed", reviews: "⭐ Reviews", proposal: "📋 Proposal", other: "💬 Other" };
+                              return (
+                                <div key={fb.id} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,215,0,0.03)", border: "1px solid rgba(255,215,0,0.1)" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <span style={{ fontSize: 12, color: "#FFD700", fontWeight: 700 }}>{fb.type === "post_service" ? "⭐ Service Feedback" : "📊 Estimate Follow-Up"}</span>
+                                      <span style={{ fontSize: 11, color: "#3a5a3a" }}>{formatDate(fb.sent_at)}</span>
+                                    </div>
+                                    <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: fb.status === "responded" ? "rgba(76,175,80,0.15)" : "rgba(255,183,77,0.15)", color: fb.status === "responded" ? "#4CAF50" : "#FFB74D" }}>{fb.status.toUpperCase()}</span>
+                                  </div>
+                                  {resp && fb.type === "post_service" && (
+                                    <div style={{ fontSize: 13, color: "#8aaa8a" }}>
+                                      {resp.rating && <span style={{ marginRight: 12 }}>{"⭐".repeat(resp.rating)}{"☆".repeat(5 - resp.rating)}</span>}
+                                      {resp.google_review_clicked && <span style={{ padding: "1px 6px", borderRadius: 4, background: "rgba(66,133,244,0.15)", fontSize: 9, fontWeight: 700, color: "#4285F4", marginRight: 8 }}>CLICKED GOOGLE</span>}
+                                      {resp.resolution_requested && <span style={{ padding: "1px 6px", borderRadius: 4, background: "rgba(198,40,40,0.15)", fontSize: 9, fontWeight: 700, color: "#EF5350" }}>NEEDS FOLLOW-UP</span>}
+                                      {resp.comment && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6a8a6a", fontStyle: "italic" }}>&ldquo;{resp.comment}&rdquo;</p>}
+                                    </div>
+                                  )}
+                                  {resp && fb.type === "lost_estimate" && (
+                                    <div style={{ fontSize: 13, color: "#8aaa8a" }}>
+                                      <span>{resp.lost_estimate_reason ? (reasonLabels[resp.lost_estimate_reason] || resp.lost_estimate_reason) : "No reason given"}</span>
+                                      {resp.lost_estimate_detail && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6a8a6a", fontStyle: "italic" }}>&ldquo;{resp.lost_estimate_detail}&rdquo;</p>}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        )}
                       </>
                       );
                     })()}
