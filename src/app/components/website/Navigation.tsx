@@ -27,15 +27,14 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
           transition: "all 0.4s", padding: "0 24px",
         }}
       >
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: Math.max(72, logoMaxHeight + 16) }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {logoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoSrc} alt={companyName} style={{ height: logoMaxHeight, width: "auto", maxWidth: logoMaxWidth, objectFit: logoFit as React.CSSProperties['objectFit'], padding: logoPadding }} />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/jhps-nav-logo.svg" alt={companyName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc || "/jhps-nav-logo.svg"}
+              alt={companyName}
+              style={{ height: logoMaxHeight, width: "auto", maxWidth: logoMaxWidth, objectFit: logoFit as React.CSSProperties['objectFit'], padding: logoPadding }}
+            />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 32 }} className="desktop-nav">
