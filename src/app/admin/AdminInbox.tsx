@@ -1009,10 +1009,10 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                     {isOutbound && msg.resend_message_id && <div style={{ fontSize: 11, color: "#2E7D32", marginBottom: 8 }}>{"\u2713"} Delivered</div>}
 
                     {/* Body: render HTML in sandboxed iframe, fallback to plain text */}
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 8, overflow: "hidden" }}>
                       {hasHtml ? (
                         <iframe
-                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;width:100%!important;}td{background:transparent!important;}h1,h2,h3,p,div,span{color:#c8dcc8!important;background:transparent!important;}strong,b{color:#e8f5e8!important;}a{color:#4CAF50!important;}</style></head><body>${msg.body_html}</body></html>`}
+                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8!important;background:#0a160a!important;overflow-wrap:break-word;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#4CAF50!important;word-break:break-all;}table{max-width:100%!important;width:100%!important;background:transparent!important;background-color:transparent!important;}td,th{background:transparent!important;background-color:transparent!important;}h1,h2,h3,h4,h5,h6,p,div,span,li,ul,ol,blockquote,pre{color:#c8dcc8!important;background:transparent!important;background-color:transparent!important;}strong,b{color:#e8f5e8!important;}blockquote{border-left:3px solid #2E7D32!important;padding-left:12px!important;color:#8ab88a!important;}*{max-width:100%!important;box-sizing:border-box!important;}</style></head><body>${msg.body_html}</body></html>`}
                           sandbox="allow-same-origin"
                           style={{ width: "100%", minHeight: 120, border: "1px solid #1a3a1a", borderRadius: 8, background: "#0a160a" }}
                           onLoad={e => {
