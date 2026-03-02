@@ -74,8 +74,11 @@ export interface Invoice {
   updated_at: string;
   customers?: { name: string | null; email: string | null; phone: string | null };
 
-  // ─── New: Payment Terms ───
+  // ─── Payment Terms ───
   payment_terms?: PaymentTerms | null;
+
+  // ─── Brand / Division ───
+  brand?: 'jhps' | 'nexa';
 
   // ─── Verification settings (per-invoice overrides) ───
   verification_settings?: {

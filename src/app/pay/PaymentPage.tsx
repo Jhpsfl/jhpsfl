@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
+import { getBrand, type BrandConfig } from "@/lib/brand-config";
 
 // Square Web Payments SDK type shim
 declare global {
@@ -27,10 +28,11 @@ interface SquareCard {
 // Each time the user enters the payment step a fresh instance mounts,
 // Square is fully re-initialized, and on unmount the card is destroyed.
 function SquareCardSection({
-  onReady, onError,
+  onReady, onError, squareStyle,
 }: {
   onReady: (card: SquareCard) => void;
   onError: (msg: string) => void;
+  squareStyle?: Record<string, Record<string, string>>;
 }) {
   const [loading, setLoading] = useState(true);
 
@@ -60,25 +62,7 @@ function SquareCardSection({
 
         const payments = window.Square!.payments(appId, locationId);
         card = await payments.card({
-          style: {
-            ".input-container": {
-              borderColor: "#1a3a1a",
-              borderRadius: "12px",
-            },
-            ".input-container.is-focus": {
-              borderColor: "#4CAF50",
-            },
-            ".input-container.is-error": {
-              borderColor: "#ef5350",
-            },
-            "input": {
-              backgroundColor: "#0d1a0d",
-              color: "#e8f5e8",
-            },
-            "input::placeholder": {
-              color: "#3a5a3a",
-            },
-          },
+          style: squareStyle || {},
         });
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
@@ -184,6 +168,7 @@ interface InvoicePublicData {
   tax_amount: number;
   total: number;
   status: string;
+  brand?: string;
 }
 
 export default function PaymentPage() {
@@ -206,6 +191,11 @@ export default function PaymentPage() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [saveCard, setSaveCard] = useState(false);
+
+  // ─── Brand theming ───
+  const brandParam = searchParams.get("brand");
+  const [brandKey, setBrandKey] = useState<string>(brandParam || "jhps");
+  const brand: BrandConfig = getBrand(brandKey);
   const { userId: clerkUserId, isSignedIn } = useAuth();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
@@ -260,6 +250,8 @@ export default function PaymentPage() {
         .then(data => {
           if (data.invoice) {
             setInvoiceData(data.invoice);
+            // Set brand from invoice if present
+            if (data.invoice.brand) setBrandKey(data.invoice.brand);
             // Lock the amount to the real invoice total — UNLESS a specific amount was passed in URL (e.g. deposit)
             const urlAmount = searchParams.get("amount");
             if (!urlAmount) {
@@ -471,18 +463,35 @@ export default function PaymentPage() {
   };
 
   const labelStyle: CSSProperties = {
-    fontSize: 12, fontWeight: 600, color: "#7a9a7a", letterSpacing: 1.5,
+    fontSize: 12, fontWeight: 600, color: brand.colors.textMuted, letterSpacing: 1.5,
     textTransform: "uppercase" as const, marginBottom: 6, display: "block",
   };
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        @import url('${brand.fonts.googleImport}');
+
+        :root {
+          --pay-bg: ${brand.colors.bg};
+          --pay-bg-elevated: ${brand.colors.bgElevated};
+          --pay-bg-card: ${brand.colors.bgCard};
+          --pay-accent: ${brand.colors.primary};
+          --pay-accent-dark: ${brand.colors.primaryDark};
+          --pay-accent-glow: ${brand.colors.glow};
+          --pay-text: ${brand.colors.textPrimary};
+          --pay-text-secondary: ${brand.colors.textSecondary};
+          --pay-text-muted: ${brand.colors.textMuted};
+          --pay-border: ${brand.colors.border};
+          --pay-border-hover: ${brand.colors.borderHover};
+          --pay-font-display: ${brand.fonts.display};
+          --pay-font-body: ${brand.fonts.body};
+          --pay-font-mono: ${brand.fonts.mono};
+        }
 
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
-        body { font-family: 'DM Sans', sans-serif; background: #050e05; color: #c8e0c8; overflow-x: hidden; }
+        body { font-family: var(--pay-font-body); background: var(--pay-bg); color: ${brand.colors.textSecondary}; overflow-x: hidden; }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
@@ -510,28 +519,28 @@ export default function PaymentPage() {
         .nav-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 
         .pay-input {
-          width: 100%; padding: 14px 16px; background: #0d1a0d;
-          border: 1px solid #1a3a1a; border-radius: 12px; color: #e8f5e8;
-          font-size: 15px; outline: none; font-family: 'DM Sans', sans-serif;
+          width: 100%; padding: 14px 16px; background: var(--pay-bg-elevated);
+          border: 1px solid var(--pay-border); border-radius: 12px; color: var(--pay-text);
+          font-size: 15px; outline: none; font-family: var(--pay-font-body);
           transition: border-color 0.3s, box-shadow 0.3s;
         }
         .pay-input:focus {
-          border-color: #4CAF50;
-          box-shadow: 0 0 0 3px rgba(76,175,80,0.15);
+          border-color: var(--pay-accent);
+          box-shadow: 0 0 0 3px var(--pay-accent-glow);
         }
-        .pay-input::placeholder { color: #3a5a3a; }
+        .pay-input::placeholder { color: var(--pay-text-muted); }
         .pay-input-mono {
           font-family: 'JetBrains Mono', monospace;
           letter-spacing: 1.5px;
         }
 
         .pay-select {
-          width: 100%; padding: 14px 16px; background: #0d1a0d;
-          border: 1px solid #1a3a1a; border-radius: 12px; color: #e8f5e8;
-          font-size: 15px; outline: none; font-family: 'DM Sans', sans-serif;
+          width: 100%; padding: 14px 16px; background: var(--pay-bg-elevated);
+          border: 1px solid var(--pay-border); border-radius: 12px; color: var(--pay-text);
+          font-size: 15px; outline: none; font-family: var(--pay-font-body);
           transition: border-color 0.3s, box-shadow 0.3s;
           appearance: none; cursor: pointer;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234CAF50' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='${encodeURIComponent(brand.colors.primary)}' stroke-width='2' fill='none'/%3E%3C/svg%3E");
           background-repeat: no-repeat;
           background-position: right 16px center;
         }
@@ -583,42 +592,42 @@ export default function PaymentPage() {
           flex-shrink: 0;
         }
         .step-dot.active {
-          background: linear-gradient(135deg, #4CAF50, #2E7D32);
-          color: #fff;
-          box-shadow: 0 0 20px rgba(76,175,80,0.4);
+          background: ${brand.colors.primaryDark ? `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark})` : brand.colors.primary};
+          color: ${brand.key === 'nexa' ? '#0A1628' : '#fff'};
+          box-shadow: 0 0 20px var(--pay-accent-glow);
         }
         .step-dot.completed {
-          background: #4CAF50;
-          color: #fff;
+          background: var(--pay-accent);
+          color: ${brand.key === 'nexa' ? '#0A1628' : '#fff'};
         }
         .step-dot.inactive {
-          background: #0d1a0d;
-          border: 2px solid #1a3a1a;
-          color: #3a5a3a;
+          background: var(--pay-bg-elevated);
+          border: 2px solid var(--pay-border);
+          color: var(--pay-text-muted);
         }
         .step-line {
           flex: 1;
           height: 2px;
-          background: #1a3a1a;
+          background: var(--pay-border);
           transition: background 0.4s;
         }
         .step-line.active {
-          background: linear-gradient(90deg, #4CAF50, #2E7D32);
+          background: ${brand.colors.primaryDark ? `linear-gradient(90deg, ${brand.colors.primary}, ${brand.colors.primaryDark})` : brand.colors.primary};
         }
 
         .cta-pay {
-          background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
-          color: #fff; border: none; padding: 18px 40px; border-radius: 14px;
+          background: ${brand.colors.primaryDark ? `linear-gradient(135deg, ${brand.colors.primary} 0%, ${brand.colors.primaryDark} 100%)` : brand.colors.primary};
+          color: ${brand.key === 'nexa' ? '#0A1628' : '#fff'}; border: none; padding: 18px 40px; border-radius: 14px;
           font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
-          box-shadow: 0 4px 24px rgba(76,175,80,0.4);
+          box-shadow: 0 4px 24px var(--pay-accent-glow);
           transition: transform 0.3s, box-shadow 0.3s;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--pay-font-body);
           width: 100%;
           display: flex; align-items: center; justify-content: center; gap: 10px;
         }
         .cta-pay:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 8px 40px rgba(76,175,80,0.5);
+          box-shadow: 0 8px 40px var(--pay-accent-glow);
         }
         .cta-pay:disabled {
           opacity: 0.5;
@@ -626,19 +635,19 @@ export default function PaymentPage() {
         }
 
         .cta-secondary-pay {
-          background: transparent; color: #4CAF50; border: 2px solid #1a3a1a;
+          background: transparent; color: var(--pay-accent); border: 2px solid var(--pay-border);
           padding: 14px 32px; border-radius: 14px; font-size: 15px; font-weight: 600;
-          cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
+          cursor: pointer; transition: all 0.3s; font-family: var(--pay-font-body);
           width: 100%; text-align: center;
         }
         .cta-secondary-pay:hover {
-          background: rgba(76,175,80,0.08);
-          border-color: #4CAF50;
+          background: var(--pay-accent-glow);
+          border-color: var(--pay-accent);
         }
 
         .summary-card {
-          background: linear-gradient(160deg, #0d1f0d 0%, #091409 100%);
-          border: 1px solid #1a3a1a;
+          background: linear-gradient(160deg, ${brand.colors.bgElevated} 0%, ${brand.colors.bgCard} 100%);
+          border: 1px solid var(--pay-border);
           border-radius: 20px;
           padding: 32px;
           position: sticky;
@@ -650,22 +659,22 @@ export default function PaymentPage() {
           align-items: center;
           gap: 6px;
           padding: 6px 14px;
-          background: rgba(76,175,80,0.08);
-          border: 1px solid rgba(76,175,80,0.15);
+          background: var(--pay-accent-glow);
+          border: 1px solid ${brand.colors.borderHover};
           border-radius: 8px;
           font-size: 12px;
-          color: #7a9a7a;
+          color: var(--pay-text-secondary);
           font-weight: 500;
         }
 
         .mobile-menu {
           position: fixed; inset: 0; z-index: 9997;
-          background: rgba(5,14,5,0.98); backdrop-filter: blur(20px);
+          background: ${brand.key === 'nexa' ? 'rgba(10,22,40,0.98)' : 'rgba(5,14,5,0.98)'}; backdrop-filter: blur(20px);
           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
           animation: fadeIn 0.3s ease;
         }
-        .mobile-menu a { color: #e8f5e8; font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: 'Playfair Display', serif; }
-        .mobile-menu a:hover { color: #4CAF50; }
+        .mobile-menu a { color: var(--pay-text); font-size: 28px; font-weight: 600; text-decoration: none; transition: color 0.3s; font-family: var(--pay-font-display); }
+        .mobile-menu a:hover { color: var(--pay-accent); }
 
         .same-billing-toggle {
           display: flex; align-items: center; gap: 12px; cursor: pointer;
@@ -704,33 +713,36 @@ export default function PaymentPage() {
       {/* ─── NAVIGATION ─── */}
       <nav className="nav-blur" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 9996,
-        background: scrollY > 50 ? "rgba(5,14,5,0.92)" : "rgba(5,14,5,0.8)",
-        borderBottom: "1px solid rgba(76,175,80,0.15)",
+        background: scrollY > 50 ? `${brand.key === 'nexa' ? 'rgba(10,22,40,0.92)' : 'rgba(5,14,5,0.92)'}` : `${brand.key === 'nexa' ? 'rgba(10,22,40,0.8)' : 'rgba(5,14,5,0.8)'}`,
+        borderBottom: `1px solid ${brand.colors.borderHover}`,
         transition: "all 0.4s", padding: "0 24px",
       }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
+          <Link href={brand.key === 'nexa' ? 'https://nexavisiongroup.com' : '/'} style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/jhps-nav-logo.svg" alt="JHPS Florida" style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
+            <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
           </Link>
 
           <div style={{ display: "flex", alignItems: "center", gap: 28 }} className="desktop-nav">
-            <Link href="/" style={{ color: "#8aba8a", fontSize: 14, fontWeight: 500, textDecoration: "none", transition: "color 0.3s" }}
-              onMouseOver={(e) => { e.currentTarget.style.color = "#4CAF50"; }}
-              onMouseOut={(e) => { e.currentTarget.style.color = "#8aba8a"; }}>
+            <Link href={brand.key === 'nexa' ? 'https://nexavisiongroup.com' : '/'} style={{ color: brand.colors.textSecondary, fontSize: 14, fontWeight: 500, textDecoration: "none", transition: "color 0.3s" }}
+              onMouseOver={(e) => { e.currentTarget.style.color = brand.colors.primary; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = brand.colors.textSecondary; }}>
               ← Back to Home
             </Link>
-            <Link href="/account" style={{
-              color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
-              padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
-              transition: "all 0.3s",
-            }}
-              onMouseOver={(e) => { e.currentTarget.style.background = "rgba(76,175,80,0.1)"; e.currentTarget.style.borderColor = "#4CAF50"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#2a5a2a"; }}>
-              My Account
-            </Link>
-            <a href="tel:4076869817" style={{
-              background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+            {brand.key === 'jhps' && (
+              <Link href="/account" style={{
+                color: brand.colors.primary, fontSize: 14, fontWeight: 600, textDecoration: "none",
+                padding: "8px 20px", border: `1px solid ${brand.colors.border}`, borderRadius: 10,
+                transition: "all 0.3s",
+              }}
+                onMouseOver={(e) => { e.currentTarget.style.background = brand.colors.glow; e.currentTarget.style.borderColor = brand.colors.primary; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = brand.colors.border; }}>
+                My Account
+              </Link>
+            )}
+            <a href={`tel:${brand.phone.replace(/[^0-9]/g, '')}`} style={{
+              background: brand.colors.primaryDark ? `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark})` : brand.colors.primary,
+              color: brand.key === 'nexa' ? '#0A1628' : '#fff',
               padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 700,
               textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6,
             }}>
@@ -759,16 +771,16 @@ export default function PaymentPage() {
       )}
 
       {/* ─── MAIN CONTENT ─── */}
-      <main style={{ minHeight: "100vh", paddingTop: 72, background: "linear-gradient(170deg, #050e05 0%, #081808 40%, #050e05 100%)" }}>
+      <main style={{ minHeight: "100vh", paddingTop: 72, background: brand.key === 'nexa' ? `linear-gradient(170deg, #050B18 0%, #0A1628 40%, #050B18 100%)` : `linear-gradient(170deg, #050e05 0%, #081808 40%, #050e05 100%)` }}>
         {/* Background accents */}
         <div style={{
           position: "fixed", top: "20%", right: "-10%", width: 600, height: 600,
-          borderRadius: "50%", background: "radial-gradient(circle, rgba(76,175,80,0.04) 0%, transparent 70%)",
+          borderRadius: "50%", background: `radial-gradient(circle, ${brand.colors.glow.replace('0.35', '0.04').replace('0.2', '0.04')} 0%, transparent 70%)`,
           pointerEvents: "none", zIndex: 0,
         }} />
         <div style={{
           position: "fixed", bottom: "10%", left: "-10%", width: 500, height: 500,
-          borderRadius: "50%", background: "radial-gradient(circle, rgba(46,125,50,0.03) 0%, transparent 70%)",
+          borderRadius: "50%", background: `radial-gradient(circle, ${brand.colors.glow.replace('0.35', '0.03').replace('0.2', '0.03')} 0%, transparent 70%)`,
           pointerEvents: "none", zIndex: 0,
         }} />
 
@@ -778,28 +790,30 @@ export default function PaymentPage() {
             <div style={{ textAlign: "center", marginBottom: 48 }}>
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px",
-                background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
+                background: brand.colors.glow, border: `1px solid ${brand.colors.borderHover}`,
                 borderRadius: 40, marginBottom: 20,
               }}>
                 <span style={{ fontSize: 16 }}>💳</span>
-                <span style={{ fontSize: 13, color: "#4CAF50", fontWeight: 600, letterSpacing: 1 }}>SECURE PAYMENT</span>
+                <span style={{ fontSize: 13, color: brand.colors.primary, fontWeight: 600, letterSpacing: 1 }}>SECURE PAYMENT</span>
               </div>
               <h1 style={{
-                fontFamily: "'Playfair Display', serif", fontSize: 42, fontWeight: 800,
-                color: "#e8f5e8", lineHeight: 1.15, marginBottom: 12,
+                fontFamily: brand.fonts.display, fontSize: 42, fontWeight: 800,
+                color: brand.colors.textPrimary, lineHeight: 1.15, marginBottom: 12,
               }}>
                 Make a{" "}
                 <span style={{
-                  background: "linear-gradient(135deg, #4CAF50, #81C784, #4CAF50)",
+                  background: brand.key === 'nexa'
+                    ? "linear-gradient(135deg, #33FFD8, #00E5CC, #009E8F)"
+                    : "linear-gradient(135deg, #4CAF50, #81C784, #4CAF50)",
                   backgroundSize: "200% 200%", animation: "gradientShift 4s ease infinite",
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
                 }}>Payment</span>
               </h1>
-              <p style={{ color: "#7a9a7a", fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
-                Pay for services quickly and securely. Have an account?{" "}
-                <Link href="/account" style={{ color: "#4CAF50", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+              <p style={{ color: brand.colors.textMuted, fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
+                Pay for services quickly and securely.{brand.key === 'jhps' && (<>{" "}Have an account?{" "}
+                <Link href="/account" style={{ color: brand.colors.primary, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
                   Sign in for faster checkout
-                </Link>
+                </Link></>)}
               </p>
             </div>
           </FadeIn>
@@ -818,10 +832,10 @@ export default function PaymentPage() {
                 <div className={`step-line ${step === "confirm" ? "active" : ""}`} />
                 <div className={`step-dot ${step === "confirm" ? "active" : "inactive"}`}>3</div>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#5a8a5a", letterSpacing: 1, fontWeight: 600 }}>
-                <span style={{ color: step === "form" ? "#4CAF50" : "#5a8a5a" }}>DETAILS</span>
-                <span style={{ color: step === "payment" ? "#4CAF50" : "#5a8a5a" }}>PAYMENT</span>
-                <span style={{ color: step === "confirm" ? "#4CAF50" : "#5a8a5a" }}>DONE</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: brand.colors.textMuted, letterSpacing: 1, fontWeight: 600 }}>
+                <span style={{ color: step === "form" ? brand.colors.primary : brand.colors.textMuted }}>DETAILS</span>
+                <span style={{ color: step === "payment" ? brand.colors.primary : brand.colors.textMuted }}>PAYMENT</span>
+                <span style={{ color: step === "confirm" ? brand.colors.primary : brand.colors.textMuted }}>DONE</span>
               </div>
             </div>
           </FadeIn>
@@ -831,22 +845,22 @@ export default function PaymentPage() {
             <FadeIn delay={0.1}>
               <div style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
                 <div style={{
-                  background: "linear-gradient(160deg, #0d1f0d, #091409)",
-                  border: "1px solid #1a3a1a", borderRadius: 24, padding: "60px 40px",
+                  background: `linear-gradient(160deg, ${brand.colors.bgElevated}, ${brand.colors.bgCard})`,
+                  border: `1px solid ${brand.colors.border}`, borderRadius: 24, padding: "60px 40px",
                 }}>
                   <div style={{
                     width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
-                    background: "linear-gradient(135deg, rgba(76,175,80,0.2), rgba(46,125,50,0.1))",
-                    border: "2px solid #4CAF50",
+                    background: brand.colors.glow,
+                    border: `2px solid ${brand.colors.primary}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 36, animation: "checkmark 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
                   }}>✓</div>
-                  <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", fontWeight: 700, marginBottom: 12 }}>
+                  <h2 style={{ fontFamily: brand.fonts.display, fontSize: 28, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 12 }}>
                     Payment Received!
                   </h2>
-                  <p style={{ color: "#8aba8a", fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
-                    Thank you, <strong style={{ color: "#e8f5e8" }}>{formData.name}</strong>. Your {isDeposit ? "deposit" : "payment"} of{" "}
-                    <strong style={{ color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>${formData.amount}</strong>{" "}
+                  <p style={{ color: brand.colors.textSecondary, fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
+                    Thank you, <strong style={{ color: brand.colors.textPrimary }}>{formData.name}</strong>. Your {isDeposit ? "deposit" : "payment"} of{" "}
+                    <strong style={{ color: brand.colors.primary, fontFamily: brand.fonts.mono }}>${formData.amount}</strong>{" "}
                     has been processed successfully.
                   </p>
 
@@ -1354,7 +1368,8 @@ export default function PaymentPage() {
 
                         <SquareCardSection
                           onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
-                          onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at 407-686-9817.`)}
+                          onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at ${brand.phone}.`)}
+                          squareStyle={brand.squareCardStyle}
                         />
 
                         {paymentError && (
@@ -1506,8 +1521,8 @@ export default function PaymentPage() {
 
                   {/* Help */}
                   <div style={{ marginTop: 20, textAlign: "center" }}>
-                    <p style={{ fontSize: 12, color: "#3a5a3a" }}>
-                      Need help? <a href="tel:4076869817" style={{ color: "#4CAF50", textDecoration: "none" }}>407-686-9817</a>
+                    <p style={{ fontSize: 12, color: brand.colors.textMuted }}>
+                      Need help? <a href={`tel:${brand.phone.replace(/[^0-9]/g, '')}`} style={{ color: brand.colors.primary, textDecoration: "none" }}>{brand.phone}</a>
                     </p>
                   </div>
                 </div>
@@ -1518,21 +1533,21 @@ export default function PaymentPage() {
       </main>
 
       {/* ─── FOOTER ─── */}
-      <footer style={{ background: "#030a03", borderTop: "1px solid #1a3a1a", padding: "40px 24px" }}>
+      <footer style={{ background: brand.key === 'nexa' ? '#040A14' : '#030a03', borderTop: `1px solid ${brand.colors.border}`, padding: "40px 24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <Link href="/" style={{ textDecoration: "none" }}>
+            <Link href={brand.key === 'nexa' ? 'https://nexavisiongroup.com' : '/'} style={{ textDecoration: "none" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/jhps-nav-logo.svg" alt="JHPS" style={{ maxWidth: 160, height: "auto", maxHeight: 36, opacity: 0.7 }} />
+              <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 160, height: "auto", maxHeight: 36, opacity: 0.7 }} />
             </Link>
           </div>
           <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-            <a href="tel:4076869817" style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>📞 407-686-9817</a>
-            <a href="mailto:Info@jhpsfl.com" style={{ color: "#4CAF50", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>✉️ Email</a>
-            <Link href="/account" style={{ color: "#5a8a5a", fontSize: 13, textDecoration: "none" }}>My Account</Link>
+            <a href={`tel:${brand.phone.replace(/[^0-9]/g, '')}`} style={{ color: brand.colors.primary, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>📞 {brand.phone}</a>
+            <a href={`mailto:${brand.email}`} style={{ color: brand.colors.primary, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>✉️ Email</a>
+            {brand.key === 'jhps' && <Link href="/account" style={{ color: brand.colors.textMuted, fontSize: 13, textDecoration: "none" }}>My Account</Link>}
           </div>
-          <div style={{ color: "#2a4a2a", fontSize: 12, width: "100%", textAlign: "center", marginTop: 16 }}>
-            © 2025 Jenkins Home & Property Solutions. All rights reserved.
+          <div style={{ color: brand.colors.textMuted, fontSize: 12, width: "100%", textAlign: "center", marginTop: 16, opacity: 0.6 }}>
+            © {new Date().getFullYear()} {brand.name}. All rights reserved.
           </div>
         </div>
       </footer>

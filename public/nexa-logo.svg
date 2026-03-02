@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 48" fill="none">
+  <defs>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#33FFD8"/>
+      <stop offset="50%" stop-color="#00E5CC"/>
+      <stop offset="100%" stop-color="#009E8F"/>
+    </linearGradient>
+  </defs>
+  <!-- "Nexa" in white -->
+  <text x="0" y="34" font-family="'Outfit', 'Segoe UI', system-ui, sans-serif" font-size="32" font-weight="700" fill="#F0F4F8" letter-spacing="-0.5">Nexa</text>
+  <!-- "Vision" in teal gradient -->
+  <text x="94" y="34" font-family="'Outfit', 'Segoe UI', system-ui, sans-serif" font-size="32" font-weight="700" fill="url(#tealGrad)" letter-spacing="-0.5">Vision</text>
+  <!-- "Group" smaller, muted -->
+  <text x="210" y="34" font-family="'Outfit', 'Segoe UI', system-ui, sans-serif" font-size="18" font-weight="400" fill="#8896A6" letter-spacing="1">Group</text>
+</svg>

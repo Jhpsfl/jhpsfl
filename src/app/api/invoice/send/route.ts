@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail } from '@/lib/email';
 import { generateInvoicePDF, getInvoiceFilename } from '@/lib/receipt-generator';
 import type { InvoiceData } from '@/lib/receipt-generator';
+import { getBrand } from '@/lib/brand-config';
 import { generateAgreementText, type QuoteSnapshot, type PaymentScheduleSnapshot } from '@/lib/agreement';
 import { randomUUID } from 'crypto';
 
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
     customerPhone: customer.phone || undefined,
+    brandKey: invoice.brand || 'jhps',
     lineItems: (invoice.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
       name: item.description,
       quantity: item.quantity || 1,
@@ -182,11 +184,17 @@ export async function POST(req: NextRequest) {
   const shortAgreementUrl = agreementUrl ? await shortenUrl(agreementUrl, `Agreement: ${invoice.invoice_number}`, supabase) : null;
   const docLabel = isContract ? 'Service Contract' : 'Invoice';
 
+  // ─── Resolve brand for email template ───
+  const brand = getBrand(invoice.brand || 'jhps');
+  const emailAccent = brand.key === 'nexa' ? '#00C9B7' : '#2E7D32';
+  const emailAccentLight = brand.key === 'nexa' ? '#00E5CC' : '#4CAF50';
+  const emailTextOnAccent = brand.key === 'nexa' ? '#0A1628' : '#fff';
+
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
-      <div style="background:linear-gradient(135deg,#2E7D32,#4CAF50);padding:28px 32px;border-radius:12px 12px 0 0;">
-        <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Jenkins Home &amp; Property Solutions</h1>
-        <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">${docLabel} ${invoiceData.invoiceNumber}</p>
+      <div style="background:linear-gradient(135deg,${emailAccent},${emailAccentLight});padding:28px 32px;border-radius:12px 12px 0 0;">
+        <h1 style="margin:0;color:${emailTextOnAccent};font-size:22px;font-weight:700;">${brand.name}</h1>
+        <p style="margin:6px 0 0;color:${brand.key === 'nexa' ? 'rgba(10,22,40,0.7)' : 'rgba(255,255,255,0.85)'};font-size:13px;">${docLabel} ${invoiceData.invoiceNumber}</p>
       </div>
       <div style="background:#fff;padding:32px;border:1px solid #e0e0e0;border-top:none;">
         <p style="margin:0 0 16px;font-size:15px;">Hi ${invoiceData.customerName},</p>
@@ -199,7 +207,7 @@ export async function POST(req: NextRequest) {
         <div style="background:${isOverdue ? '#FFEBEE' : '#FFF3E0'};border:1px solid ${statusColor};border-radius:8px;padding:16px;margin-bottom:24px;">
           <p style="margin:4px 0;font-size:14px;"><strong>${docLabel} #:</strong> ${invoiceData.invoiceNumber}</p>
           <p style="margin:4px 0;font-size:14px;"><strong>${isContract ? 'Total Contract Price' : 'Amount Due'}:</strong> ${fmt(totalCents)}</p>
-          ${isContract && invoiceData.paymentTerms ? `<p style="margin:4px 0;font-size:14px;"><strong>Deposit Due Now:</strong> <span style="color:#2E7D32;font-weight:bold;">${fmt(Math.round(invoiceData.paymentTerms.deposit_amount * 100))}</span></p>` : ''}
+          ${isContract && invoiceData.paymentTerms ? `<p style="margin:4px 0;font-size:14px;"><strong>Deposit Due Now:</strong> <span style="color:${emailAccent};font-weight:bold;">${fmt(Math.round(invoiceData.paymentTerms.deposit_amount * 100))}</span></p>` : ''}
           ${invoiceData.dueDate ? `<p style="margin:4px 0;font-size:14px;"><strong>Due Date:</strong> <span style="color:${statusColor};font-weight:bold;">${new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }).format(invoiceData.dueDate)}</span></p>` : ''}
         </div>
         ${isContract && shortAgreementUrl ? `
@@ -210,23 +218,23 @@ export async function POST(req: NextRequest) {
           <p style="text-align:center;font-size:12px;color:#999;margin-top:4px;">After signing, you'll be directed to make your deposit payment.</p>
         ` : shortPaymentLink ? `
           <div style="text-align:center;margin:24px 0;">
-            <a href="${shortPaymentLink}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Pay Now →</a>
+            <a href="${shortPaymentLink}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,${emailAccentLight},${emailAccent});color:${emailTextOnAccent};text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Pay Now →</a>
           </div>
           <p style="text-align:center;font-size:12px;color:#999;margin-top:8px;">Or copy this link: ${shortPaymentLink}</p>
         ` : ''}
         <p style="margin:24px 0 0;font-size:15px;">If you have any questions, please don't hesitate to reach out.</p>
         <p style="margin:16px 0 0;font-size:15px;">
           Best regards,<br/>
-          <strong style="color:#2E7D32;">Jenkins Home &amp; Property Solutions</strong>
+          <strong style="color:${emailAccent};">${brand.name}</strong>
         </p>
       </div>
       <div style="background:#fafafa;padding:20px 32px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
         <p style="margin:0 0 4px;color:#888;font-size:12px;">
-          📞 <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
+          📞 <a href="tel:${brand.phone.replace(/[^0-9]/g, '')}" style="color:${emailAccent};text-decoration:none;">${brand.phone}</a>
           &nbsp;·&nbsp;
-          ✉️ <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
+          ✉️ <a href="mailto:${brand.email}" style="color:${emailAccent};text-decoration:none;">${brand.email}</a>
         </p>
-        <p style="margin:0;color:#aaa;font-size:11px;">Serving Deltona, Orlando, Sanford, DeLand, Daytona Beach &amp; all of Central Florida</p>
+        <p style="margin:0;color:#aaa;font-size:11px;">${brand.serviceArea}</p>
       </div>
     </div>
   `;
@@ -236,9 +244,9 @@ export async function POST(req: NextRequest) {
   let resendMessageId: string | undefined;
   try {
     const { data, error } = await getResend().emails.send({
-      from: 'JHPS Florida <info@jhpsfl.com>',
+      from: `${brand.name} <info@jhpsfl.com>`,
       to: [customer.email],
-      subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— Jenkins Home & Property Solutions`,
+      subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— ${brand.name}`,
       html,
       attachments: [
         {
@@ -263,7 +271,7 @@ export async function POST(req: NextRequest) {
     direction: 'outbound',
     from_email: 'info@jhpsfl.com',
     to_email: customer.email,
-    subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— Jenkins Home & Property Solutions`,
+    subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— ${brand.name}`,
     body_html: html,
     resend_message_id: resendMessageId,
   });

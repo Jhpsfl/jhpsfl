@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from "./invoiceHelpers";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconPlus, IconSend, IconTrash, IconBack } from "./InvoiceIcons";
 import PaymentTermsConfig from "./PaymentTermsConfig";
+import { BRANDS, getBrand, type BrandKey } from "@/lib/brand-config";
 
 export default function InvoiceForm({
   view, isMobile, form, setForm, customers, selectedInvoice,
@@ -27,6 +28,7 @@ export default function InvoiceForm({
     notes: string;
     line_items: InvoiceLineItem[];
     payment_terms: PaymentTerms | null;
+    brand: BrandKey;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -52,6 +54,7 @@ export default function InvoiceForm({
   onNavigate?: () => void;
   onPreviewPdf?: () => void;
 }) {
+  const activeBrand = getBrand(form.brand);
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "12px 14px", background: "#0d1a0d",
     border: "1px solid #1a3a1a", borderRadius: 10, color: "#e8f5e8",
@@ -112,6 +115,71 @@ export default function InvoiceForm({
         <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
           {view === "edit" ? "Edit Invoice" : "New Invoice"}
         </h1>
+      </div>
+
+      {/* ─── Brand / Division Toggle ─── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16, marginBottom: 20,
+        padding: "12px 16px",
+        background: form.brand === 'nexa' ? "rgba(0,229,204,0.04)" : "rgba(76,175,80,0.04)",
+        border: `1px solid ${form.brand === 'nexa' ? "rgba(0,229,204,0.15)" : "rgba(76,175,80,0.15)"}`,
+        borderRadius: 14,
+        transition: "all 0.3s",
+      }}>
+        <span style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+          BRAND
+        </span>
+        <div style={{ display: "flex", gap: 0, background: "#0a160a", borderRadius: 10, padding: 3, border: "1px solid #1a3a1a" }}>
+          {(Object.keys(BRANDS) as BrandKey[]).map(bk => {
+            const b = BRANDS[bk];
+            const isActive = form.brand === bk;
+            return (
+              <button
+                key={bk}
+                onClick={() => setForm(prev => ({ ...prev, brand: bk }))}
+                style={{
+                  padding: "7px 18px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 500,
+                  fontFamily: "'DM Sans', sans-serif",
+                  letterSpacing: 0.5,
+                  transition: "all 0.25s",
+                  background: isActive
+                    ? bk === 'nexa'
+                      ? "linear-gradient(135deg, rgba(0,229,204,0.2), rgba(0,229,204,0.08))"
+                      : "linear-gradient(135deg, rgba(76,175,80,0.2), rgba(76,175,80,0.08))"
+                    : "transparent",
+                  color: isActive
+                    ? bk === 'nexa' ? "#00E5CC" : "#4CAF50"
+                    : "#5a8a5a",
+                  boxShadow: isActive
+                    ? bk === 'nexa'
+                      ? "0 0 12px rgba(0,229,204,0.15)"
+                      : "0 0 12px rgba(76,175,80,0.15)"
+                    : "none",
+                }}
+              >
+                {b.shortName}
+              </button>
+            );
+          })}
+        </div>
+        {form.brand === 'nexa' && (
+          <span style={{
+            fontSize: 11, color: "#00E5CC", fontWeight: 500,
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            Customer will see NexaVision branding
+          </span>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 24, alignItems: "start", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
@@ -519,31 +587,57 @@ export default function InvoiceForm({
 
         {/* ─── Right: Live Preview ─── */}
         <div style={{
-          background: "linear-gradient(160deg, #0d1f0d, #091409)",
-          border: "1px solid #1a3a1a", borderRadius: 20, padding: "24px 20px",
+          background: form.brand === 'nexa'
+            ? "linear-gradient(160deg, #0F1D32, #0A1628)"
+            : "linear-gradient(160deg, #0d1f0d, #091409)",
+          border: `1px solid ${form.brand === 'nexa' ? "rgba(255,255,255,0.06)" : "#1a3a1a"}`,
+          borderRadius: 20, padding: "24px 20px",
           position: "sticky", top: 80,
+          transition: "all 0.35s",
         }}>
-          <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e8f5e8", fontWeight: 700, marginBottom: 16 }}>
-            Invoice Preview
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ fontFamily: activeBrand.fonts.display, fontSize: 16, color: activeBrand.colors.textPrimary, fontWeight: 700 }}>
+              Invoice Preview
+            </h3>
+            {form.brand === 'nexa' && (
+              <span style={{
+                fontSize: 9, color: "#00E5CC", fontWeight: 700, letterSpacing: 1.5,
+                textTransform: "uppercase", padding: "3px 8px", borderRadius: 6,
+                background: "rgba(0,229,204,0.08)", border: "1px solid rgba(0,229,204,0.15)",
+              }}>NEXA</span>
+            )}
+          </div>
 
           <div style={{
-            background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 14,
+            background: activeBrand.colors.bgCard,
+            border: `1px solid ${activeBrand.colors.border}`,
+            borderRadius: 14,
             padding: "20px 16px", marginBottom: 16,
+            transition: "all 0.35s",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Invoice</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 10, color: activeBrand.colors.textMuted, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Invoice</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: activeBrand.colors.primary, fontFamily: "'JetBrains Mono', monospace" }}>
                   {form.invoice_number}
                 </div>
               </div>
               <InvoiceStatusBadge status={view === "edit" ? (selectedInvoice?.status || "draft") : "draft"} />
             </div>
 
-            <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 12, marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>Bill To</div>
-              <div style={{ fontSize: 13, color: (form.customer_id && form.customer_id !== "__link_only__") ? "#c8e0c8" : "#64b5f6" }}>
+            {/* Brand logo/name in preview */}
+            <div style={{
+              borderTop: `1px solid ${activeBrand.colors.border}`, paddingTop: 10, marginBottom: 10,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={activeBrand.logo} alt={activeBrand.shortName} style={{ height: 20, opacity: 0.7 }} />
+              <span style={{ fontSize: 10, color: activeBrand.colors.textMuted }}>{activeBrand.name}</span>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${activeBrand.colors.border}`, paddingTop: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: activeBrand.colors.textMuted, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>Bill To</div>
+              <div style={{ fontSize: 13, color: (form.customer_id && form.customer_id !== "__link_only__") ? activeBrand.colors.textSecondary : "#64b5f6" }}>
                 {(form.customer_id && form.customer_id !== "__link_only__")
                   ? (customers.find(c => c.id === form.customer_id)?.name || "Customer Selected")
                   : (form.customer_id === "__link_only__" ? "🔗 Link Only — no customer" : "Select a customer...")
@@ -551,9 +645,9 @@ export default function InvoiceForm({
               </div>
             </div>
 
-            <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 12 }}>
+            <div style={{ borderTop: `1px solid ${activeBrand.colors.border}`, paddingTop: 12 }}>
               {form.line_items.filter(item => item.description).map(item => (
-                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#8aba8a", marginBottom: 6 }}>
+                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: activeBrand.colors.textSecondary, marginBottom: 6 }}>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {item.description} {item.quantity > 1 ? `×${item.quantity}` : ""}
                   </span>

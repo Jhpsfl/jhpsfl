@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Invoice, InvoiceLineItem, Customer, CustomerJob, PaymentTerms, PaymentScheduleItem } from "./components/invoices/invoiceTypes";
 import { generateInvoiceNumber, formatCurrency, getDefaultDueDate, createLineItemId, getDisclaimer } from "./components/invoices/invoiceHelpers";
+import type { BrandKey } from "@/lib/brand-config";
 import InvoiceListView from "./components/invoices/InvoiceListView";
 import InvoiceForm from "./components/invoices/InvoiceForm";
 import InvoiceDetailView from "./components/invoices/InvoiceDetailView";
@@ -37,7 +38,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   const [newCustomerForm, setNewCustomerForm] = useState({ name: "", email: "", phone: "", customer_type: "residential" as "residential" | "commercial", company_name: "" });
   const [savingNewCustomer, setSavingNewCustomer] = useState(false);
 
-  // Invoice form state — now includes payment_terms
+  // Invoice form state — now includes payment_terms + brand
   const [form, setForm] = useState({
     customer_id: null as string | null,
     invoice_number: generateInvoiceNumber(),
@@ -47,6 +48,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as InvoiceLineItem[],
     payment_terms: null as PaymentTerms | null,
+    brand: 'jhps' as BrandKey,
   });
 
   // Send modal
@@ -433,6 +435,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       status: asDraft ? "draft" : "sent",
       line_items: form.line_items.filter(item => item.description && item.amount > 0),
       payment_terms: form.payment_terms || null,
+      brand: form.brand || 'jhps',
     };
 
     if (view === "edit" && selectedInvoice) {
@@ -645,6 +648,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       payment_terms: null,
+      brand: 'jhps' as BrandKey,
     });
   };
 
@@ -663,6 +667,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
         ? invoice.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
         : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       payment_terms: invoice.payment_terms || null,
+      brand: (invoice.brand || 'jhps') as BrandKey,
     });
     setView("edit");
   };

@@ -31,6 +31,8 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer';
 
+import { getBrand, type BrandKey } from './brand-config';
+
 // ═══════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════
@@ -86,6 +88,8 @@ export interface InvoiceData extends BaseDocumentData {
   invoiceStatus: 'DUE' | 'OVERDUE' | 'SENT';
   paymentLink?: string;
   jobAddress?: string;
+  /** Brand key for multi-brand support */
+  brandKey?: BrandKey;
   /** When present, the invoice becomes a multi-page Service Contract */
   paymentTerms?: {
     type: string;
@@ -137,6 +141,43 @@ const BRAND = {
   serviceArea: 'Central Florida — Deltona · Orlando · Sanford · DeLand · Daytona Beach',
   tagline: 'Reliable & Insured · Central Florida',
 };
+
+/** Resolve BRAND constants for a given brand key */
+function resolveBrand(key?: BrandKey) {
+  const b = getBrand(key || 'jhps');
+  return {
+    name: b.name,
+    shortName: b.shortName,
+    phone: b.phone,
+    email: b.email,
+    website: b.website,
+    serviceArea: b.serviceArea,
+    tagline: b.tagline,
+  };
+}
+
+/** Resolve PDF color palette for a given brand key */
+function resolveColors(key?: BrandKey) {
+  const b = getBrand(key || 'jhps');
+  return {
+    primary: b.pdfColors.primary,
+    primaryLight: b.pdfColors.primaryLight,
+    accent: b.pdfColors.accent,
+    black: '#1A1A1A',
+    dark: '#333333',
+    mid: '#666666',
+    light: '#999999',
+    border: '#E0E0E0',
+    bg: '#F5F5F5',
+    white: '#FFFFFF',
+    paidGreen: '#2E7D32',
+    paidBg: '#E8F5E9',
+    dueBlue: '#1565C0',
+    dueBg: '#E3F2FD',
+    overdueRed: '#C62828',
+    overdueBg: '#FFEBEE',
+  };
+}
 
 const C = {
   primary: '#1B5E20', primaryLight: '#2E7D32', accent: '#F9A825',
@@ -340,13 +381,13 @@ const NotesSection: React.FC<{ text: string }> = ({ text }) => (
   </View>
 );
 
-const Footer: React.FC = () => (
+const Footer: React.FC<{ brandName?: string; brandPhone?: string; brandEmail?: string; brandShort?: string; brandTagline?: string }> = ({ brandName, brandPhone, brandEmail, brandShort, brandTagline }) => (
   <View style={s.footer} fixed>
-    <Text style={s.footerLine}>Thank you for choosing {BRAND.name}!</Text>
-    <Text style={s.footerLine}>Questions? Call {BRAND.phone} or email {BRAND.email}</Text>
+    <Text style={s.footerLine}>Thank you for choosing {brandName || BRAND.name}!</Text>
+    <Text style={s.footerLine}>Questions? Call {brandPhone || BRAND.phone} or email {brandEmail || BRAND.email}</Text>
     <Text style={s.footerLine}>Please keep this document for your records.</Text>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-      <Text style={s.footerBrand}>{BRAND.shortName} · {BRAND.tagline}</Text>
+      <Text style={s.footerBrand}>{brandShort || BRAND.shortName} · {brandTagline || BRAND.tagline}</Text>
       <Text style={{ fontSize: 7, color: C.light }} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   </View>
@@ -525,6 +566,10 @@ const LegalTermsPages: React.FC<{ docNumber: string }> = ({ docNumber }) => (
 // ═══════════════════════════════════════════════════════════════
 
 const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, logoUrl }) => {
+  // Resolve brand for this invoice
+  const docBrand = resolveBrand(data.brandKey);
+  const docColors = resolveColors(data.brandKey);
+  
   const isOverdue = data.invoiceStatus === 'OVERDUE';
   const badge = isOverdue ? s.badgeOverdue : s.badgeDue;
   const badgeText = isOverdue ? s.badgeOverdueText : s.badgeDueText;
@@ -535,12 +580,29 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   const docType = hasPaymentTerms ? 'SERVICE CONTRACT' : 'INVOICE';
   const docTypeShort = hasPaymentTerms ? 'CONTRACT' : 'INVOICE';
 
+  // Brand-aware header border and grand total
+  const headerBorderColor = docColors.primary;
+  const grandTotalBg = docColors.primary;
+
   return (
-    <Document title={`JHPS ${docType} - ${data.invoiceNumber}`} author={BRAND.name} subject={docType}>
+    <Document title={`${docBrand.shortName} ${docType} - ${data.invoiceNumber}`} author={docBrand.name} subject={docType}>
       <Page size="LETTER" style={s.page}>
         <ContinuationHeader docType={docTypeShort} docNumber={data.invoiceNumber} />
-        <View style={s.header}>
-          <CompanyHeader logoUrl={logoUrl} />
+        <View style={[s.header, { borderBottomColor: headerBorderColor }]}>
+          {/* Brand-aware company header */}
+          <View style={s.headerLeft}>
+            {logoUrl ? (
+              <Image src={logoUrl} style={s.logo} />
+            ) : (
+              <Text style={[s.logoText, { color: docColors.primary }]}>{docBrand.shortName}</Text>
+            )}
+            <Text style={s.logoSubtext}>{docBrand.tagline}</Text>
+            <View style={s.companyInfo}>
+              <Text style={s.companyLine}>{docBrand.phone} · {docBrand.email}</Text>
+              <Text style={s.companyLine}>{docBrand.website}</Text>
+              <Text style={s.companyLine}>{docBrand.serviceArea}</Text>
+            </View>
+          </View>
           <View style={s.headerRight}>
             <Text style={s.docTitle}>{docType}</Text>
             <View style={badge}><Text style={badgeText}>{label}</Text></View>
@@ -609,7 +671,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </>
         )}
 
-        <Footer />
+        <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} />
       </Page>
 
       {/* ══════ CONTRACT PAGE 2: Payment Schedule + Info + Lien Notice ══════ */}
@@ -676,7 +738,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             </Text>
           </View>
 
-          <Footer />
+          <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} />
         </Page>
       )}
 
@@ -819,7 +881,8 @@ export function getReceiptFilename(data: ReceiptData): string {
 }
 
 export function getInvoiceFilename(data: InvoiceData): string {
-  return `JHPS-Invoice-${data.invoiceNumber}.pdf`;
+  const b = getBrand(data.brandKey || 'jhps');
+  return `${b.shortName}-Invoice-${data.invoiceNumber}.pdf`;
 }
 
 export async function generateEstimatePDF(data: EstimateData, logoUrl?: string): Promise<Buffer> {
