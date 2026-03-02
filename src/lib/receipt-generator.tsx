@@ -597,7 +597,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               <Text style={[s.logoText, { color: docColors.primary }]}>{docBrand.shortName}</Text>
             )}
             <Text style={s.logoSubtext}>{docBrand.tagline}</Text>
-            <View style={s.companyInfo}>
+            <View>
               <Text style={s.companyLine}>{docBrand.phone} · {docBrand.email}</Text>
               <Text style={s.companyLine}>{docBrand.website}</Text>
               <Text style={s.companyLine}>{docBrand.serviceArea}</Text>
