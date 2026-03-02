@@ -191,11 +191,6 @@ export default function PaymentPage() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [saveCard, setSaveCard] = useState(false);
-
-  // ─── Brand theming ───
-  const brandParam = searchParams.get("brand");
-  const [brandKey, setBrandKey] = useState<string>(brandParam || "jhps");
-  const brand: BrandConfig = getBrand(brandKey);
   const { userId: clerkUserId, isSignedIn } = useAuth();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
@@ -204,6 +199,11 @@ export default function PaymentPage() {
   const paymentLabel = searchParams.get("payment_label") || "";
   const isDeposit = paymentLabel.toLowerCase().includes("deposit");
   const isTestMode = searchParams.get("test") === "1";
+
+  // ─── Brand theming ───
+  const brandParam = searchParams.get("brand");
+  const [brandKey, setBrandKey] = useState<string>(brandParam || "jhps");
+  const brand: BrandConfig = getBrand(brandKey);
 
   // Account creation for deposit payments
   const [password, setPassword] = useState("");
