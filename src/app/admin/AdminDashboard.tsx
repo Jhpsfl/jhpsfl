@@ -8,6 +8,7 @@ import {
   UserButton,
   useUser,
   useAuth,
+  useClerk,
 } from "@clerk/nextjs";
 import AdminVideoLeads from "./AdminVideoLeads";
 import AdminInbox from "./AdminInbox";
@@ -181,6 +182,7 @@ export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscription
 export default function AdminDashboard() {
   const { userId } = useAuth();
   const { user } = useUser();
+  const { signOut } = useClerk();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const tabHistoryRef = useRef<Tab[]>(["overview"]);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -913,8 +915,18 @@ export default function AdminDashboard() {
             <div style={{ textAlign: "center", maxWidth: 400 }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#e8f5e8", marginBottom: 12 }}>Access Denied</h1>
-              <p style={{ color: "#5a8a5a", marginBottom: 24 }}>Your account does not have admin privileges. Contact the business owner to request access.</p>
-              <Link href="/" style={{ color: "#4CAF50", textDecoration: "underline", textUnderlineOffset: 3 }}>← Back to Home</Link>
+              <p style={{ color: "#5a8a5a", marginBottom: 8 }}>Your account does not have admin privileges.</p>
+              <p style={{ color: "#3a6a3a", fontSize: 13, marginBottom: 28 }}>Signed in as: <strong style={{ color: "#8aba8a" }}>{user?.primaryEmailAddress?.emailAddress || 'Unknown'}</strong></p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+                <button onClick={() => signOut({ redirectUrl: '/admin' })} style={{
+                  background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                  padding: "12px 32px", borderRadius: 12, fontSize: 14, fontWeight: 700,
+                  border: "none", cursor: "pointer", width: 220,
+                }}>
+                  Sign Out & Switch Account
+                </button>
+                <Link href="/" style={{ color: "#4CAF50", textDecoration: "underline", textUnderlineOffset: 3, fontSize: 13 }}>← Back to Home</Link>
+              </div>
             </div>
           </main>
         )}
