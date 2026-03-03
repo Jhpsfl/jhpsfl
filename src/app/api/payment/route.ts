@@ -10,7 +10,8 @@ const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
-    const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note, saveCard, clerkUserId } =
+    const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note, saveCard, clerkUserId,
+      customerAddress, customerCity, customerZip, billingAddress, billingCity, billingZip } =
       await request.json();
 
     if (!token || !amount) {
@@ -133,7 +134,14 @@ export async function POST(request: Request) {
 
         // Find or create customer
         let customerId: string | null = null;
-        if (customerEmail) {
+
+        // First: if invoice-based payment, use the invoice's linked customer
+        if (invoiceNumber && !customerId) {
+          const { data: inv } = await supabase.from('invoices').select('customer_id').eq('invoice_number', invoiceNumber).limit(1).single();
+          if (inv?.customer_id) customerId = inv.customer_id;
+        }
+        // Then try email/phone lookup
+        if (!customerId && customerEmail) {
           const { data } = await supabase.from('customers').select('id').eq('email', customerEmail).limit(1).single();
           if (data) customerId = data.id;
         }
@@ -148,6 +156,48 @@ export async function POST(request: Request) {
             phone: customerPhone || null,
           }).select('id').single();
           if (data) customerId = data.id;
+        }
+
+        // ─── Enrich customer record with payment form data ───
+        // Only fill in fields that are currently empty — never overwrite existing data
+        if (customerId) {
+          try {
+            const { data: existing } = await supabase.from('customers')
+              .select('name, email, phone, address, nickname, billing_address, billing_city, billing_zip')
+              .eq('id', customerId).single();
+
+            if (existing) {
+              const enrichment: Record<string, string> = {};
+
+              // If current name looks like a nickname (short, no space) and they gave a full name, update it
+              // Also save the old name as nickname if nickname field is empty
+              const currentName = existing.name || '';
+              const isNickname = currentName.length > 0 && currentName.length <= 15 && !currentName.includes(' ');
+              if (customerName && customerName.includes(' ') && isNickname) {
+                enrichment.name = customerName;
+                if (!existing.nickname) enrichment.nickname = currentName;
+              } else if (!existing.name && customerName) {
+                enrichment.name = customerName;
+              }
+
+              // Backfill empty fields
+              if (!existing.email && customerEmail) enrichment.email = customerEmail;
+              if (!existing.phone && customerPhone) enrichment.phone = customerPhone;
+              if (!existing.address && customerAddress) {
+                enrichment.address = [customerAddress, customerCity, customerZip].filter(Boolean).join(', ');
+              }
+              if (!existing.billing_address && billingAddress) enrichment.billing_address = billingAddress;
+              if (!existing.billing_city && billingCity) enrichment.billing_city = billingCity;
+              if (!existing.billing_zip && billingZip) enrichment.billing_zip = billingZip;
+
+              if (Object.keys(enrichment).length > 0) {
+                await supabase.from('customers').update(enrichment).eq('id', customerId);
+              }
+            }
+          } catch (enrichErr) {
+            // Enrichment failure should NOT affect the successful payment
+            console.error('CUSTOMER_ENRICH_ERROR:', enrichErr);
+          }
         }
 
         if (customerId) {

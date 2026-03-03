@@ -584,10 +584,17 @@ export async function POST(request: NextRequest) {
 
       case "customers": {
         if (action === "create") {
-          const { name, email, phone } = payload;
-          if (!name && !email && !phone) return NextResponse.json({ error: "At least one of name, email, or phone is required" }, { status: 400 });
+          const { name, email, phone, address, customer_type, company_name, nickname, billing_address, billing_city, billing_zip } = payload;
+          if (!name && !email && !phone && !nickname) return NextResponse.json({ error: "At least one of name, email, phone, or nickname is required" }, { status: 400 });
           const { data, error } = await supabase.from("customers").insert({
             name: name || null, email: email || null, phone: phone || null,
+            address: address || null,
+            customer_type: customer_type || "residential",
+            company_name: company_name || null,
+            nickname: nickname || null,
+            billing_address: billing_address || null,
+            billing_city: billing_city || null,
+            billing_zip: billing_zip || null,
           }).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });

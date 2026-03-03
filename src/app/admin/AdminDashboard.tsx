@@ -37,6 +37,10 @@ export interface Customer {
   address: string | null;
   customer_type: string | null;
   company_name: string | null;
+  nickname: string | null;
+  billing_address: string | null;
+  billing_city: string | null;
+  billing_zip: string | null;
   created_at: string;
   updated_at: string;
   job_sites?: { count: number }[];
@@ -207,7 +211,7 @@ export default function AdminDashboard() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string; address?: string } | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name?: string; email?: string; phone?: string; address?: string; customer_type?: string; company_name?: string; nickname?: string; billing_address?: string; billing_city?: string; billing_zip?: string } | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [sendingFeedback, setSendingFeedback] = useState<string | null>(null); // "post_service" | "lost_estimate" | null
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -1300,9 +1304,11 @@ export default function AdminDashboard() {
                               </div>
                               {cd.customer.address && <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 4 }}>📍 {cd.customer.address}</p>}
                               {cd.customer.company_name && <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 2 }}>🏢 {cd.customer.company_name}</p>}
+                              {cd.customer.nickname && <p style={{ color: "#5a8a5a", fontSize: 12, marginTop: 2 }}>👤 Goes by "{cd.customer.nickname}"</p>}
+                              {cd.customer.billing_address && <p style={{ color: "#3a5a3a", fontSize: 11, marginTop: 2 }}>📋 Billing: {[cd.customer.billing_address, cd.customer.billing_city, cd.customer.billing_zip].filter(Boolean).join(", ")}</p>}
                               <p style={{ color: "#3a5a3a", fontSize: 11, marginTop: 6 }}>Customer since {formatDate(cd.customer.created_at)}</p>
                             </div>
-                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: cd.customer.id, name: cd.customer.name || undefined, email: cd.customer.email || undefined, phone: cd.customer.phone || undefined, address: cd.customer.address || undefined }); setShowCustomerModal(true); }} style={{ flexShrink: 0 }}>✏️ Edit</button>
+                            <button className="action-btn action-btn-primary" onClick={() => { pushSentinel(); setEditingCustomer({ id: cd.customer.id, name: cd.customer.name || undefined, email: cd.customer.email || undefined, phone: cd.customer.phone || undefined, address: cd.customer.address || undefined, customer_type: cd.customer.customer_type || undefined, company_name: cd.customer.company_name || undefined, nickname: cd.customer.nickname || undefined, billing_address: cd.customer.billing_address || undefined, billing_city: cd.customer.billing_city || undefined, billing_zip: cd.customer.billing_zip || undefined }); setShowCustomerModal(true); }} style={{ flexShrink: 0 }}>✏️ Edit</button>
                           </div>
 
                           {/* Quick stats */}

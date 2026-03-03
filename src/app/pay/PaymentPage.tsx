@@ -448,11 +448,14 @@ export default function PaymentPage() {
           customerName: formData.name,
           customerPhone: formData.phone,
           customerEmail: formData.email,
+          customerAddress: formData.address,
+          customerCity: formData.city,
+          customerZip: formData.zip,
           service: formData.service,
           invoiceNumber: formData.invoiceNumber,
-          billingAddress: sameBilling
-            ? `${formData.address}${formData.city ? `, ${formData.city}` : ""}${formData.zip ? ` ${formData.zip}` : ""}`
-            : `${formData.billingAddress}${formData.billingCity ? `, ${formData.billingCity}` : ""}${formData.billingZip ? ` ${formData.billingZip}` : ""}`,
+          billingAddress: sameBilling ? formData.address : formData.billingAddress,
+          billingCity: sameBilling ? formData.city : formData.billingCity,
+          billingZip: sameBilling ? formData.zip : formData.billingZip,
           note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
             .filter(Boolean).join(" — "),
           saveCard: saveCard && !!clerkUserId,
