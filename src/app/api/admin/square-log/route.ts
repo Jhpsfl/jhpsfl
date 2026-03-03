@@ -29,39 +29,50 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Get recent payments from Square — filter by invoice if provided
-    const result = await squareClient.payments.list({
+    // Square SDK v44 returns an async iterable from list()
+    const allPayments: Array<Record<string, unknown>> = [];
+    const iter = squareClient.payments.list({
       sortOrder: "DESC",
-      limit: 25,
     });
+    let count = 0;
+    for await (const p of iter) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      allPayments.push(p as any);
+      count++;
+      if (count >= 50) break; // limit to 50 results
+    }
 
-    const payments = (result.payments || [])
+    const payments = allPayments
       .filter((p) => {
         if (!invoiceNumber) return true;
-        return (p.note || "").includes(invoiceNumber);
+        return (String(p.note || "")).includes(invoiceNumber);
       })
-      .map((p) => ({
-        id: p.id,
-        createdAt: p.createdAt,
-        amount: p.amountMoney?.amount ? Number(p.amountMoney.amount) / 100 : 0,
-        status: p.status,
-        note: p.note || "",
-        cardBrand: p.cardDetails?.card?.cardBrand || null,
-        cardLast4: p.cardDetails?.card?.last4 || null,
-        cardType: p.cardDetails?.card?.cardType || null,
-        prepaidType: p.cardDetails?.card?.prepaidType || null,
-        cvvStatus: p.cardDetails?.cvvStatus || null,
-        avsStatus: p.cardDetails?.avsStatus || null,
-        entryMethod: p.cardDetails?.entryMethod || null,
-        errors: (p.cardDetails?.errors || []).map((e) => ({
-          code: e.code,
-          detail: e.detail,
-          category: e.category,
-        })),
-        buyerEmail: p.buyerEmailAddress || null,
-        orderId: p.orderId || null,
-        receiptUrl: p.receiptUrl || null,
-      }));
+      .map((p) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pay = p as any;
+        return {
+          id: pay.id,
+          createdAt: pay.createdAt,
+          amount: pay.amountMoney?.amount ? Number(pay.amountMoney.amount) / 100 : 0,
+          status: pay.status,
+          note: pay.note || "",
+          cardBrand: pay.cardDetails?.card?.cardBrand || null,
+          cardLast4: pay.cardDetails?.card?.last4 || null,
+          cardType: pay.cardDetails?.card?.cardType || null,
+          prepaidType: pay.cardDetails?.card?.prepaidType || null,
+          cvvStatus: pay.cardDetails?.cvvStatus || null,
+          avsStatus: pay.cardDetails?.avsStatus || null,
+          entryMethod: pay.cardDetails?.entryMethod || null,
+          errors: (pay.cardDetails?.errors || []).map((e: { code?: string; detail?: string; category?: string }) => ({
+            code: e.code,
+            detail: e.detail,
+            category: e.category,
+          })),
+          buyerEmail: pay.buyerEmailAddress || null,
+          orderId: pay.orderId || null,
+          receiptUrl: pay.receiptUrl || null,
+        };
+      });
 
     return NextResponse.json({ payments });
   } catch (err) {
