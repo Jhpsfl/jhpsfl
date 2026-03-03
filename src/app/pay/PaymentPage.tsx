@@ -817,13 +817,7 @@ export default function PaymentPage() {
               }}>
                 Make a{" "}
                 <span style={{
-                  background: brand.key === 'nexa'
-                    ? "linear-gradient(135deg, #33FFD8, #00E5CC, #009E8F)"
-                    : `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark}, ${brand.colors.primary})`,
-                  backgroundSize: "200% 200%", animation: "gradientShift 4s ease infinite",
-                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                  backgroundClip: "text", color: "transparent",
-                  display: "inline",
+                  color: brand.colors.primary,
                 }}>Payment</span>
               </h1>
               <p style={{ color: brand.colors.textMuted, fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
