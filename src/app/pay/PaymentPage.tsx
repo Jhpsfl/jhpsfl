@@ -91,7 +91,7 @@ function SquareCardSection({
     <>
       {loading && (
         <div style={{ color: "#4a7a4a", fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+          <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
           Loading secure payment form…
         </div>
       )}
