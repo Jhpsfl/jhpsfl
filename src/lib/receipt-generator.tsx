@@ -68,6 +68,8 @@ export interface ReceiptData extends BaseDocumentData {
   paymentDate: Date;
   paymentMethod?: string;
   paymentStatus: 'COMPLETED' | 'APPROVED';
+  /** Brand key for multi-brand support */
+  brandKey?: BrandKey;
 }
 
 /** Generate a short human-readable receipt number: REC-YYMMDD-XXXX */
@@ -399,14 +401,31 @@ const Footer: React.FC<{ brandName?: string; brandPhone?: string; brandEmail?: s
 
 const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, logoUrl }) => {
   const refNum = data.receiptNumber || data.paymentId.slice(-8).toUpperCase();
+  // Resolve brand for this receipt
+  const docBrand = resolveBrand(data.brandKey);
+  const docColors = resolveColors(data.brandKey);
+
   return (
-  <Document title={`JHPS Receipt - ${refNum}`} author={BRAND.name} subject="Payment Receipt">
+  <Document title={`${docBrand.shortName} Receipt - ${refNum}`} author={docBrand.name} subject="Payment Receipt">
     <Page size="LETTER" style={s.page}>
-      <ContinuationHeader docType="RECEIPT" docNumber={refNum} />
-      <View style={s.header}>
-        <CompanyHeader logoUrl={logoUrl} />
+      <ContinuationHeader docType="RECEIPT" docNumber={refNum} primaryColor={docColors.primary} brandShort={docBrand.shortName} />
+      <View style={[s.header, { borderBottomColor: docColors.primary }]}>
+        {/* Brand-aware company header */}
+        <View style={s.headerLeft}>
+          {logoUrl ? (
+            <Image src={logoUrl} style={s.logo} />
+          ) : (
+            <Text style={[s.logoText, { color: docColors.primary }]}>{docBrand.shortName}</Text>
+          )}
+          <Text style={s.logoSubtext}>{docBrand.tagline}</Text>
+          <View>
+            <Text style={s.companyLine}>{docBrand.serviceArea}</Text>
+            <Text style={s.companyLine}>Phone: {docBrand.phone} · Email: {docBrand.email}</Text>
+            <Text style={s.companyLine}>{docBrand.website}</Text>
+          </View>
+        </View>
         <View style={s.headerRight}>
-          <Text style={s.docTitle}>RECEIPT</Text>
+          <Text style={[s.docTitle, { color: docColors.primary }]}>RECEIPT</Text>
           <View style={s.badgePaid}><Text style={s.badgePaidText}>✓ PAID</Text></View>
         </View>
       </View>
@@ -439,7 +458,7 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
         {data.receiptNumber && <View style={s.infoRow}><Text style={[s.infoLabel, { fontSize: 7 }]}>Transaction ID</Text><Text style={[s.infoVal, { fontSize: 7, color: C.light }]}>{data.paymentId}</Text></View>}
       </View>
       {data.notes && <NotesSection text={data.notes} />}
-      <Footer />
+      <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
     </Page>
   </Document>
   );
@@ -878,7 +897,8 @@ export async function generateInvoicePDF(data: InvoiceData, logoUrl?: string): P
 }
 
 export function getReceiptFilename(data: ReceiptData): string {
-  return `JHPS-Receipt-${formatFileDate(data.paymentDate)}-${data.paymentId.slice(-8)}.pdf`;
+  const b = getBrand(data.brandKey || 'jhps');
+  return `${b.shortName}-Receipt-${formatFileDate(data.paymentDate)}-${data.paymentId.slice(-8)}.pdf`;
 }
 
 export function getInvoiceFilename(data: InvoiceData): string {

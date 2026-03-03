@@ -5,6 +5,7 @@ import { squareClient, locationId as sqLocationId, ensureSquareCustomer, storeCa
 import { Resend } from 'resend';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
+import { getBrand, type BrandKey } from '@/lib/brand-config';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     const locationId = sqLocationId;
     const supabase = createSupabaseAdmin();
     const paymentNote =
-      note || [service, invoiceNumber ? 'INV#' + invoiceNumber : ''].filter(Boolean).join(' - ') || 'JHPS Payment';
+      note || [service, invoiceNumber ? 'INV#' + invoiceNumber : ''].filter(Boolean).join(' - ') || 'Payment';
 
     // ─── 1. Build Square Order line items ───
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -297,6 +298,10 @@ export async function POST(request: Request) {
         // ─── 5. Send receipt email with PDF attachment ───
         if (customerEmail) {
           try {
+            // Resolve brand from invoice record
+            const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
+            const brand = getBrand(brandKey);
+
             const paymentAmountCents = Math.round(parseFloat(amount) * 100);
             const lineItemsCents: ReceiptData['lineItems'] = invoiceRecord?.line_items?.length
               ? invoiceRecord.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => {
@@ -309,7 +314,7 @@ export async function POST(request: Request) {
                     totalPrice: unitCents * qty,
                   };
                 })
-              : [{ name: service || 'JHPS Service', quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
+              : [{ name: service || `${brand.shortName} Service`, quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
 
             const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
             const subtotalCents = paymentAmountCents - taxCents;
@@ -330,6 +335,7 @@ export async function POST(request: Request) {
                 ? `${result.payment.cardDetails.card?.cardBrand || 'Card'} ending in ${result.payment.cardDetails.card?.last4 || '????'}`
                 : undefined,
               orderId: orderId || undefined,
+              brandKey,
             };
 
             const pdfBuffer = await generateReceiptPDF(receiptData);
@@ -338,19 +344,20 @@ export async function POST(request: Request) {
             const receiptHtml = buildReceiptHtml({ receiptNumber: receiptNum,
               customerName: customerName || 'Valued Customer',
               amount: parseFloat(amount),
-              service: service || 'JHPS Service',
+              service: service || `${brand.shortName} Service`,
               invoiceNumber: invoiceNumber || null,
               paymentId: result.payment.id || null,
               receiptUrl,
               date: new Date(),
               lineItems: invoiceRecord?.line_items || null,
               taxRate: taxRate || 0,
+              brandKey,
             });
 
             await getResend().emails.send({
-              from: 'JHPS Florida <info@jhpsfl.com>',
+              from: `${brand.name} <${brand.email}>`,
               to: [customerEmail],
-              subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — Jenkins Home & Property Solutions`,
+              subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
               html: receiptHtml,
               attachments: [
                 {
@@ -407,8 +414,20 @@ function buildReceiptHtml(params: {
   date: Date;
   lineItems: Array<{ description: string; quantity: number; amount: number }> | null;
   taxRate: number;
+  brandKey?: BrandKey;
 }): string {
-  const { customerName, amount, service, invoiceNumber, paymentId, receiptNumber, receiptUrl, date, lineItems, taxRate } = params;
+  const { customerName, amount, service, invoiceNumber, paymentId, receiptNumber, receiptUrl, date, lineItems, taxRate, brandKey } = params;
+  const brand = getBrand(brandKey || 'jhps');
+
+  // Brand-specific colors
+  const isNexa = brandKey === 'nexa';
+  const gradientStart = isNexa ? '#005C50' : '#2E7D32';
+  const gradientEnd = isNexa ? '#00A99D' : '#4CAF50';
+  const accentColor = isNexa ? '#00897B' : '#2E7D32';
+  const bgTint = isNexa ? '#f0faf9' : '#f8faf8';
+  const borderTint = isNexa ? '#d0e8e5' : '#e0e8e0';
+  const headerBgTint = isNexa ? '#e8f5f3' : '#f0f5f0';
+
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const formattedDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -422,12 +441,12 @@ function buildReceiptHtml(params: {
     const subtotal = lineItems.reduce((s, i) => s + i.amount, 0);
     const taxAmt = taxRate > 0 ? subtotal * (taxRate / 100) : 0;
     itemsHtml = `
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 20px;border:1px solid #e0e8e0;border-radius:8px;overflow:hidden;">
-        <tr style="background:#f0f5f0;"><th style="padding:10px 12px;text-align:left;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Service</th><th style="padding:10px 12px;text-align:right;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Amount</th></tr>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 20px;border:1px solid ${borderTint};border-radius:8px;overflow:hidden;">
+        <tr style="background:${headerBgTint};"><th style="padding:10px 12px;text-align:left;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Service</th><th style="padding:10px 12px;text-align:right;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Amount</th></tr>
         ${rows}
         <tr><td style="padding:10px 12px;font-size:13px;color:#888;text-align:right;">Subtotal</td><td style="padding:10px 12px;font-size:14px;color:#333;text-align:right;font-family:monospace;">${fmt(subtotal)}</td></tr>
         ${taxRate > 0 ? `<tr><td style="padding:8px 12px;font-size:13px;color:#888;text-align:right;">Tax (${taxRate}%)</td><td style="padding:8px 12px;font-size:14px;color:#333;text-align:right;font-family:monospace;">${fmt(taxAmt)}</td></tr>` : ''}
-        <tr style="background:#f0f5f0;"><td style="padding:12px;font-size:14px;color:#2E7D32;font-weight:700;text-align:right;">Total Paid</td><td style="padding:12px;font-size:16px;color:#2E7D32;font-weight:700;text-align:right;font-family:monospace;">${fmt(amount)}</td></tr>
+        <tr style="background:${headerBgTint};"><td style="padding:12px;font-size:14px;color:${accentColor};font-weight:700;text-align:right;">Total Paid</td><td style="padding:12px;font-size:16px;color:${accentColor};font-weight:700;text-align:right;font-family:monospace;">${fmt(amount)}</td></tr>
       </table>`;
   }
 
@@ -438,31 +457,31 @@ function buildReceiptHtml(params: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:24px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <tr><td style="background:linear-gradient(135deg,#2E7D32,#4CAF50);padding:28px 32px;border-radius:12px 12px 0 0;">
-          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Jenkins Home &amp; Property Solutions</h1>
+        <tr><td style="background:linear-gradient(135deg,${gradientStart},${gradientEnd});padding:28px 32px;border-radius:12px 12px 0 0;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${brand.name}</h1>
           <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Payment Confirmation</p>
         </td></tr>
         <tr><td style="background:#fff;padding:32px;">
           <p style="margin:0 0 20px;color:#333;font-size:15px;">Hi ${customerName},</p>
           <p style="margin:0 0 24px;color:#333;font-size:15px;line-height:1.6;">Thank you for your payment! Here are the details:</p>
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8faf8;border-radius:12px;border:1px solid #e0e8e0;margin-bottom:20px;">
-            <tr><td style="padding:20px 24px;border-bottom:1px solid #e0e8e0;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:${bgTint};border-radius:12px;border:1px solid ${borderTint};margin-bottom:20px;">
+            <tr><td style="padding:20px 24px;border-bottom:1px solid ${borderTint};">
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Amount Paid</div>
-              <div style="color:#2E7D32;font-size:28px;font-weight:700;">${fmt(amount)}</div>
+              <div style="color:${accentColor};font-size:28px;font-weight:700;">${fmt(amount)}</div>
             </td></tr>
-            <tr><td style="padding:16px 24px;border-bottom:1px solid #e0e8e0;">
+            <tr><td style="padding:16px 24px;border-bottom:1px solid ${borderTint};">
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Service</div>
               <div style="color:#333;font-size:15px;font-weight:600;">${service}</div>
             </td></tr>
-            ${invoiceNumber ? `<tr><td style="padding:16px 24px;border-bottom:1px solid #e0e8e0;">
+            ${invoiceNumber ? `<tr><td style="padding:16px 24px;border-bottom:1px solid ${borderTint};">
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Invoice</div>
               <div style="color:#333;font-size:15px;font-weight:600;">${invoiceNumber}</div>
             </td></tr>` : ''}
-            <tr><td style="padding:16px 24px;${paymentId ? 'border-bottom:1px solid #e0e8e0;' : ''}">
+            <tr><td style="padding:16px 24px;${paymentId ? `border-bottom:1px solid ${borderTint};` : ''}">
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Date</div>
               <div style="color:#333;font-size:15px;">${formattedDate} at ${formattedTime}</div>
             </td></tr>
-            ${receiptNumber ? `<tr><td style="padding:16px 24px;border-bottom:1px solid #e0e8e0;">
+            ${receiptNumber ? `<tr><td style="padding:16px 24px;border-bottom:1px solid ${borderTint};">
               <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Receipt #</div>
               <div style="color:#333;font-size:15px;font-weight:700;font-family:monospace;">${receiptNumber}</div>
             </td></tr>` : ''}
@@ -472,17 +491,17 @@ function buildReceiptHtml(params: {
             </td></tr>` : ''}
           </table>
           ${itemsHtml}
-          ${receiptUrl ? `<p style="margin:0 0 24px;text-align:center;"><a href="${receiptUrl}" target="_blank" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#2E7D32,#4CAF50);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">View Full Receipt</a></p>` : ''}
+          ${receiptUrl ? `<p style="margin:0 0 24px;text-align:center;"><a href="${receiptUrl}" target="_blank" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,${gradientStart},${gradientEnd});color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">View Full Receipt</a></p>` : ''}
           <p style="margin:0;color:#333;font-size:15px;line-height:1.6;">If you have any questions about this payment, please don't hesitate to contact us.</p>
-          <p style="margin:16px 0 0;color:#333;font-size:15px;">Best regards,<br><strong style="color:#2E7D32;">Jenkins Home &amp; Property Solutions</strong></p>
+          <p style="margin:16px 0 0;color:#333;font-size:15px;">Best regards,<br><strong style="color:${accentColor};">${brand.name}</strong></p>
         </td></tr>
         <tr><td style="background:#fafafa;padding:20px 32px;border-radius:0 0 12px 12px;border-top:1px solid #eee;">
           <p style="margin:0 0 4px;color:#888;font-size:12px;">
-            &#128222; <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
+            &#128222; <a href="tel:${brand.phone.replace(/[^0-9]/g, '')}" style="color:${accentColor};text-decoration:none;">${brand.phone}</a>
             &nbsp;&middot;&nbsp;
-            &#9993; <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
+            &#9993; <a href="mailto:${brand.email}" style="color:${accentColor};text-decoration:none;">${brand.email}</a>
           </p>
-          <p style="margin:0;color:#aaa;font-size:11px;">Serving Deltona, Orlando, Sanford, DeLand, Daytona Beach &amp; all of Central Florida</p>
+          <p style="margin:0;color:#aaa;font-size:11px;">${brand.serviceArea}</p>
         </td></tr>
       </table>
     </td></tr>
