@@ -12,7 +12,7 @@ const getResend = () => new Resend(process.env.RESEND_API_KEY);
 export async function POST(request: Request) {
   try {
     const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note, saveCard, clerkUserId,
-      customerAddress, customerCity, customerZip, billingAddress, billingCity, billingZip } =
+      customerAddress, customerCity, customerZip, billingAddress, billingCity, billingZip, testMode } =
       await request.json();
 
     if (!token || !amount) {
@@ -66,14 +66,13 @@ export async function POST(request: Request) {
     if (orderLineItems.length === 0) {
       const isCommercial = (service || '').toLowerCase().includes('commercial');
       if (isCommercial) {
-        // Amount entered includes tax — use INCLUSIVE so total stays the same
         taxRate = 6.5;
         orderLineItems = [{
           name: service || 'Commercial Service',
           quantity: '1',
           basePriceMoney: { amount: BigInt(amountInCents), currency: Currency.Usd },
         }];
-        useAdditionalTax = false; // INCLUSIVE, not additive
+        useAdditionalTax = false;
       } else {
         orderLineItems = [{
           name: service || 'JHPS Service',
@@ -81,6 +80,149 @@ export async function POST(request: Request) {
           basePriceMoney: { amount: BigInt(amountInCents), currency: Currency.Usd },
         }];
       }
+    }
+
+    // ─── TEST MODE: skip Square, simulate payment result ───
+    if (testMode) {
+      const testPaymentId = `TEST-${Date.now()}`;
+      const testOrderId = `TEST-ORD-${Date.now()}`;
+      const receiptUrl: string | null = null;
+
+      // Record in Supabase
+      try {
+        if (invoiceRecord) {
+          await supabase.from('invoices').update({
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            square_payment_id: testPaymentId,
+          }).eq('id', invoiceRecord.id);
+        }
+
+        await supabase.from('payments').insert({
+          invoice_id: invoiceRecord?.id || null,
+          customer_id: invoiceRecord?.customer_id || null,
+          amount: parseFloat(amount),
+          square_payment_id: testPaymentId,
+          square_order_id: testOrderId,
+          status: 'completed',
+          payment_method: 'TEST',
+          customer_name: customerName || null,
+          customer_email: customerEmail || null,
+          customer_phone: customerPhone || null,
+          note: `[TEST] ${paymentNote}`,
+        });
+      } catch (dbErr) {
+        console.error('TEST_DB_ERROR:', dbErr);
+      }
+
+      // Customer enrichment (same as real flow)
+      try {
+        let customerId = invoiceRecord?.customer_id;
+        if (!customerId && customerEmail) {
+          const { data: byEmail } = await supabase.from('customers').select('id').eq('email', customerEmail).limit(1).single();
+          if (byEmail) customerId = byEmail.id;
+        }
+        if (!customerId && customerPhone) {
+          const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
+          const { data: byPhone } = await supabase.from('customers').select('id, phone').ilike('phone', `%${cleanPhone}`).limit(1).single();
+          if (byPhone) customerId = byPhone.id;
+        }
+        if (customerId) {
+          const { data: existing } = await supabase.from('customers')
+            .select('name, email, phone, address, nickname, billing_address, billing_city, billing_zip')
+            .eq('id', customerId).single();
+          if (existing) {
+            const enrichment: Record<string, string> = {};
+            const currentName = existing.name || '';
+            const isNickname = currentName.length > 0 && currentName.length <= 15 && !currentName.includes(' ');
+            if (customerName && customerName.includes(' ') && isNickname) {
+              enrichment.name = customerName;
+              if (!existing.nickname) enrichment.nickname = currentName;
+            } else if (!existing.name && customerName) {
+              enrichment.name = customerName;
+            }
+            if (!existing.email && customerEmail) enrichment.email = customerEmail;
+            if (!existing.phone && customerPhone) enrichment.phone = customerPhone;
+            if (!existing.address && customerAddress) {
+              enrichment.address = [customerAddress, customerCity, customerZip].filter(Boolean).join(', ');
+            }
+            if (!existing.billing_address && billingAddress) enrichment.billing_address = billingAddress;
+            if (!existing.billing_city && billingCity) enrichment.billing_city = billingCity;
+            if (!existing.billing_zip && billingZip) enrichment.billing_zip = billingZip;
+            if (Object.keys(enrichment).length > 0) {
+              await supabase.from('customers').update(enrichment).eq('id', customerId);
+            }
+          }
+        }
+      } catch (enrichErr) {
+        console.error('TEST_ENRICH_ERROR:', enrichErr);
+      }
+
+      // Send receipt email (same as real flow)
+      if (customerEmail) {
+        try {
+          const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
+          const brand = getBrand(brandKey);
+
+          const paymentAmountCents = amountInCents;
+          const lineItemsCents: ReceiptData['lineItems'] = invoiceRecord?.line_items?.length
+            ? invoiceRecord.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => {
+                const unitCents = Math.round((item.unit_price || item.amount || 0) * 100);
+                const qty = item.quantity || 1;
+                return { name: item.description || 'Service', quantity: qty, unitPrice: unitCents, totalPrice: unitCents * qty };
+              })
+            : [{ name: service || `${brand.shortName} Service`, quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
+
+          const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
+          const subtotalCents = paymentAmountCents - taxCents;
+
+          const receiptNum = generateReceiptNumber();
+          const receiptData: ReceiptData = {
+            paymentId: testPaymentId,
+            receiptNumber: receiptNum,
+            paymentDate: new Date(),
+            customerName: customerName || 'Valued Customer',
+            customerEmail,
+            lineItems: lineItemsCents,
+            subtotal: subtotalCents,
+            taxAmount: taxCents,
+            totalAmount: paymentAmountCents,
+            paymentStatus: 'COMPLETED',
+            paymentMethod: 'TEST MODE',
+            orderId: testOrderId,
+            brandKey,
+          };
+
+          const pdfBuffer = await generateReceiptPDF(receiptData);
+          const pdfFilename = getReceiptFilename(receiptData);
+
+          const receiptHtml = buildReceiptHtml({
+            receiptNumber: receiptNum,
+            customerName: customerName || 'Valued Customer',
+            amount: parseFloat(amount),
+            service: service || `${brand.shortName} Service`,
+            invoiceNumber: invoiceNumber || null,
+            paymentId: testPaymentId,
+            receiptUrl: null,
+            date: new Date(),
+            lineItems: invoiceRecord?.line_items || null,
+            taxRate: taxRate || 0,
+            brandKey,
+          });
+
+          await getResend().emails.send({
+            from: `${brand.name} <${brand.email}>`,
+            to: [customerEmail],
+            subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
+            html: receiptHtml,
+            attachments: [{ filename: pdfFilename, content: pdfBuffer.toString('base64') }],
+          });
+        } catch (emailErr) {
+          console.error('TEST_RECEIPT_EMAIL_ERROR:', emailErr);
+        }
+      }
+
+      return NextResponse.json({ success: true, paymentId: testPaymentId, test: true });
     }
 
     // ─── 2. Create Square Order ───

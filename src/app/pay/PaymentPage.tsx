@@ -1461,19 +1461,54 @@ export default function PaymentPage() {
                           className="cta-pay"
                           onClick={async () => {
                             setIsProcessing(true);
+                            setPaymentError(null);
                             // Create account + sign in if deposit
                             if (isDeposit && !isSignedIn && !accountCreated && password) {
                               const ok = await createAndSignIn();
                               if (!ok) { setIsProcessing(false); return; }
                             }
-                            setPaymentId("TEST-" + Date.now());
-                            setStep("confirm");
-                            setIsProcessing(false);
+                            try {
+                              const response = await fetch("/api/payment", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  token: "TEST_TOKEN",
+                                  amount: formData.amount,
+                                  customerName: formData.name,
+                                  customerPhone: formData.phone,
+                                  customerEmail: formData.email,
+                                  customerAddress: formData.address,
+                                  customerCity: formData.city,
+                                  customerZip: formData.zip,
+                                  service: formData.service,
+                                  invoiceNumber: formData.invoiceNumber,
+                                  billingAddress: sameBilling ? formData.address : formData.billingAddress,
+                                  billingCity: sameBilling ? formData.city : formData.billingCity,
+                                  billingZip: sameBilling ? formData.zip : formData.billingZip,
+                                  note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
+                                    .filter(Boolean).join(" — "),
+                                  saveCard: false,
+                                  clerkUserId: clerkUserId || undefined,
+                                  testMode: true,
+                                }),
+                              });
+                              const data = await response.json();
+                              if (data.success) {
+                                setPaymentId(data.paymentId || "TEST-" + Date.now());
+                                setStep("confirm");
+                              } else {
+                                setPaymentError(data.error || "Test payment failed.");
+                              }
+                            } catch {
+                              setPaymentError("Test payment request failed.");
+                            } finally {
+                              setIsProcessing(false);
+                            }
                           }}
                           disabled={isProcessing || accountCreating}
                           style={{ background: "linear-gradient(135deg, #ff9800, #e65100)", marginTop: 8 }}
                         >
-                          {accountCreating ? "Creating account..." : "⚡ TEST: Skip Payment →"}
+                          {isProcessing ? "Processing test…" : accountCreating ? "Creating account..." : "⚡ TEST: Skip Payment →"}
                         </button>
                       )}
                     </div>
