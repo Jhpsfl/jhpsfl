@@ -1,13 +1,32 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { Invoice, PaymentScheduleItem } from "./invoiceTypes";
 import { formatCurrency, formatDate } from "./invoiceHelpers";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { IconSend, IconCopy, IconEdit, IconTrash, IconBack } from "./InvoiceIcons";
 import PaymentScheduleView from "./PaymentScheduleView";
 
-export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf, onUpdateSettings, onViewAgreement }: {
+interface SquarePaymentLog {
+  id: string;
+  createdAt: string;
+  amount: number;
+  status: string;
+  note: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  cardType: string | null;
+  prepaidType: string | null;
+  cvvStatus: string | null;
+  avsStatus: string | null;
+  entryMethod: string | null;
+  errors: Array<{ code: string; detail: string; category: string }>;
+  buyerEmail: string | null;
+  orderId: string | null;
+  receiptUrl: string | null;
+}
+
+export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBack, onSend, onCopyLink, onMarkPaid, onEdit, onDelete, onNavigate, onRecordPayment, onPreviewPdf, onUpdateSettings, onViewAgreement, userId }: {
   invoice: Invoice;
   isMobile: boolean;
   copiedLink: boolean;
@@ -22,8 +41,33 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   onPreviewPdf?: () => void;
   onUpdateSettings?: (settings: Record<string, unknown>) => void;
   onViewAgreement?: (invoiceId: string) => void;
+  userId?: string;
 }) {
   const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
+  const [showPaymentLog, setShowPaymentLog] = useState(false);
+  const [paymentLog, setPaymentLog] = useState<SquarePaymentLog[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  const fetchPaymentLog = async () => {
+    if (!userId) return;
+    setShowPaymentLog(true);
+    setLogLoading(true);
+    setLogError(null);
+    try {
+      const res = await fetch(`/api/admin/square-log?clerk_user_id=${encodeURIComponent(userId)}&invoice_number=${encodeURIComponent(invoice.invoice_number)}`);
+      const data = await res.json();
+      if (data.payments) {
+        setPaymentLog(data.payments);
+      } else {
+        setLogError(data.error || "Failed to load");
+      }
+    } catch {
+      setLogError("Network error");
+    } finally {
+      setLogLoading(false);
+    }
+  };
 
   return (
     <>
@@ -230,6 +274,24 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
               </button>
             )}
 
+            {/* Payment Log */}
+            <button
+              onClick={fetchPaymentLog}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                padding: "12px", borderRadius: 12,
+                border: "1px solid rgba(255,183,77,0.3)",
+                background: "rgba(255,183,77,0.08)", color: "#ffb74d",
+                fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                <line x1="1" y1="10" x2="23" y2="10" />
+              </svg>
+              Payment Log
+            </button>
+
             {invoice.status !== "paid" && (
               <button
                 onClick={() => onCopyLink(invoice)}
@@ -375,6 +437,132 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
           )}
         </div>
       </div>
+
+      {/* Payment Log Modal */}
+      {showPaymentLog && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+        }} onClick={() => setShowPaymentLog(false)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "linear-gradient(160deg, #0d1f0d, #091409)",
+              border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 24px",
+              width: "100%", maxWidth: 680, maxHeight: "80vh", overflow: "auto",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700 }}>
+                Payment Log — {invoice.invoice_number}
+              </h2>
+              <button onClick={() => setShowPaymentLog(false)} style={{
+                background: "none", border: "none", color: "#5a8a5a", fontSize: 22, cursor: "pointer",
+              }}>✕</button>
+            </div>
+
+            {logLoading && (
+              <div style={{ textAlign: "center", padding: 40, color: "#5a8a5a" }}>Loading Square payments...</div>
+            )}
+
+            {logError && (
+              <div style={{ padding: 20, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 12, color: "#ef5350", fontSize: 14 }}>
+                {logError}
+              </div>
+            )}
+
+            {!logLoading && !logError && paymentLog.length === 0 && (
+              <div style={{ textAlign: "center", padding: 40, color: "#5a8a5a" }}>
+                No payment attempts found for this invoice.
+              </div>
+            )}
+
+            {!logLoading && paymentLog.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {paymentLog.map((p) => {
+                  const isFailed = p.status === "FAILED";
+                  const borderColor = isFailed ? "rgba(239,83,80,0.3)" : "rgba(76,175,80,0.3)";
+                  const statusColor = isFailed ? "#ef5350" : "#66bb6a";
+                  const statusBg = isFailed ? "rgba(239,83,80,0.08)" : "rgba(76,175,80,0.08)";
+                  const dt = p.createdAt ? new Date(p.createdAt) : null;
+
+                  return (
+                    <div key={p.id} style={{
+                      border: `1px solid ${borderColor}`, borderRadius: 14,
+                      padding: "16px 18px", background: "rgba(5,14,5,0.5)",
+                    }}>
+                      {/* Status + Amount row */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{
+                            padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                            letterSpacing: 0.5, background: statusBg, color: statusColor,
+                            border: `1px solid ${borderColor}`,
+                          }}>
+                            {p.status}
+                          </span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: "#e8f5e8" }}>
+                            ${p.amount.toFixed(2)}
+                          </span>
+                        </div>
+                        {dt && (
+                          <span style={{ fontSize: 12, color: "#5a8a5a" }}>
+                            {dt.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
+                            {dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Card info */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: isFailed && p.errors.length ? 10 : 0 }}>
+                        {p.cardBrand && (
+                          <span style={{ fontSize: 12, color: "#8aba8a", background: "rgba(76,175,80,0.06)", padding: "3px 8px", borderRadius: 6, border: "1px solid #1a3a1a" }}>
+                            {p.cardBrand} •••{p.cardLast4}
+                          </span>
+                        )}
+                        {p.cardType && (
+                          <span style={{ fontSize: 11, color: "#5a8a5a", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 6, border: "1px solid #1a3a1a" }}>
+                            {p.cardType}{p.prepaidType === "PREPAID" ? " (Prepaid)" : ""}
+                          </span>
+                        )}
+                        {p.cvvStatus && (
+                          <span style={{ fontSize: 11, color: p.cvvStatus === "CVV_ACCEPTED" ? "#66bb6a" : "#ef5350", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 6, border: "1px solid #1a3a1a" }}>
+                            CVV: {p.cvvStatus.replace("CVV_", "")}
+                          </span>
+                        )}
+                        {p.buyerEmail && (
+                          <span style={{ fontSize: 11, color: "#5a8a5a" }}>
+                            {p.buyerEmail}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Error details */}
+                      {isFailed && p.errors.length > 0 && (
+                        <div style={{
+                          padding: "10px 14px", borderRadius: 8,
+                          background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)",
+                        }}>
+                          {p.errors.map((err, i) => (
+                            <div key={i}>
+                              <div style={{ fontSize: 13, color: "#ef5350", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                                {err.code}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#e57373", marginTop: 2 }}>{err.detail}</div>
+                              <div style={{ fontSize: 10, color: "#5a8a5a", marginTop: 2 }}>{err.category}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

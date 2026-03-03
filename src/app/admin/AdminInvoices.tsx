@@ -787,6 +787,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             await loadInvoices();
           }}
           onViewAgreement={handleViewAgreement}
+          userId={userId}
         />
       )}
 
