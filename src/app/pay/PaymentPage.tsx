@@ -91,7 +91,7 @@ function SquareCardSection({
     <>
       {loading && (
         <div style={{ color: "#4a7a4a", fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+          <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
           Loading secure payment form…
         </div>
       )}
@@ -203,6 +203,7 @@ export default function PaymentPage() {
   // ─── Brand theming ───
   const brandParam = searchParams.get("brand");
   const [brandKey, setBrandKey] = useState<string>(brandParam || "jhps");
+  const [brandResolved, setBrandResolved] = useState<boolean>(!!brandParam);
   const brand: BrandConfig = getBrand(brandKey);
 
   // Account creation for deposit payments
@@ -252,6 +253,7 @@ export default function PaymentPage() {
             setInvoiceData(data.invoice);
             // Set brand from invoice if present
             if (data.invoice.brand) setBrandKey(data.invoice.brand);
+            setBrandResolved(true);
             // Lock the amount to the real invoice total — UNLESS a specific amount was passed in URL (e.g. deposit)
             const urlAmount = searchParams.get("amount");
             if (!urlAmount) {
@@ -259,10 +261,13 @@ export default function PaymentPage() {
             }
           } else {
             setInvoiceError(data.error || "Could not load invoice details.");
+            setBrandResolved(true);
           }
         })
-        .catch(() => setInvoiceError("Could not load invoice details."))
+        .catch(() => { setInvoiceError("Could not load invoice details."); setBrandResolved(true); })
         .finally(() => setInvoiceLoading(false));
+    } else {
+      setBrandResolved(true);
     }
   }, [searchParams]);
 
@@ -469,6 +474,16 @@ export default function PaymentPage() {
 
   return (
     <>
+      {!brandResolved && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#080808",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ width: 28, height: 28, border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "rgba(255,255,255,0.5)", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "block" }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
       <style>{`
         @import url('${brand.fonts.googleImport}');
 
@@ -545,8 +560,8 @@ export default function PaymentPage() {
           background-position: right 16px center;
         }
         .pay-select:focus {
-          border-color: #4CAF50;
-          box-shadow: 0 0 0 3px rgba(76,175,80,0.15);
+          border-color: var(--pay-accent);
+          box-shadow: 0 0 0 3px var(--pay-accent-glow);
         }
 
         .amount-input-wrapper {
@@ -558,10 +573,10 @@ export default function PaymentPage() {
           left: 16px;
           top: 50%;
           transform: translateY(-50%);
-          color: #4CAF50;
+          color: var(--pay-accent);
           font-size: 22px;
           font-weight: 700;
-          font-family: 'JetBrains Mono', monospace;
+          font-family: var(--pay-font-mono);
           z-index: 1;
         }
         .amount-input {
@@ -679,17 +694,17 @@ export default function PaymentPage() {
         .same-billing-toggle {
           display: flex; align-items: center; gap: 12px; cursor: pointer;
           padding: 12px 16px; border-radius: 10px;
-          border: 1px solid #1a3a1a; background: rgba(76,175,80,0.04);
+          border: 1px solid var(--pay-border); background: var(--pay-accent-glow);
           transition: border-color 0.2s, background 0.2s;
           user-select: none; width: 100%; box-sizing: border-box;
         }
         .same-billing-toggle:hover {
-          border-color: rgba(76,175,80,0.3);
-          background: rgba(76,175,80,0.07);
+          border-color: var(--pay-accent);
+          background: var(--pay-accent-glow);
         }
         .same-billing-toggle.checked {
-          border-color: rgba(76,175,80,0.35);
-          background: rgba(76,175,80,0.08);
+          border-color: var(--pay-accent);
+          background: var(--pay-accent-glow);
         }
 
         .noise-overlay {
@@ -754,19 +769,19 @@ export default function PaymentPage() {
             display: "none", background: "none", border: "none", cursor: "pointer",
             flexDirection: "column", gap: 5, padding: 8,
           }} className="mobile-hamburger">
-            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(45deg) translateY(7px)" : "none" }} />
-            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", opacity: menuOpen ? 0 : 1 }} />
-            <span style={{ width: 24, height: 2, background: "#4CAF50", borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(-45deg) translateY(-7px)" : "none" }} />
+            <span style={{ width: 24, height: 2, background: brand.colors.primary, borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(45deg) translateY(7px)" : "none" }} />
+            <span style={{ width: 24, height: 2, background: brand.colors.primary, borderRadius: 2, display: "block", transition: "all 0.3s", opacity: menuOpen ? 0 : 1 }} />
+            <span style={{ width: 24, height: 2, background: brand.colors.primary, borderRadius: 2, display: "block", transition: "all 0.3s", transform: menuOpen ? "rotate(-45deg) translateY(-7px)" : "none" }} />
           </button>
         </div>
       </nav>
 
       {menuOpen && (
         <div className="mobile-menu">
-          <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: "#4CAF50", fontSize: 32, cursor: "pointer" }}>✕</button>
+          <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: brand.colors.primary, fontSize: 32, cursor: "pointer" }}>✕</button>
           <Link href="/" onClick={() => setMenuOpen(false)}>Home</Link>
           <Link href="/account" onClick={() => setMenuOpen(false)}>My Account</Link>
-          <a href="tel:4076869817" style={{ color: "#4CAF50" }}>📞 407-686-9817</a>
+          <a href="tel:4076869817" style={{ color: brand.colors.primary }}>📞 407-686-9817</a>
         </div>
       )}
 
@@ -804,9 +819,11 @@ export default function PaymentPage() {
                 <span style={{
                   background: brand.key === 'nexa'
                     ? "linear-gradient(135deg, #33FFD8, #00E5CC, #009E8F)"
-                    : "linear-gradient(135deg, #4CAF50, #81C784, #4CAF50)",
+                    : `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark}, ${brand.colors.primary})`,
                   backgroundSize: "200% 200%", animation: "gradientShift 4s ease infinite",
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                  backgroundClip: "text", color: "transparent",
+                  display: "inline",
                 }}>Payment</span>
               </h1>
               <p style={{ color: brand.colors.textMuted, fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
@@ -867,35 +884,35 @@ export default function PaymentPage() {
                   {/* Deposit: prompt to go to their new account */}
                   {isDeposit && accountCreated && (
                     <div style={{
-                      background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.2)",
+                      background: brand.colors.glow, border: `1px solid ${brand.colors.border}`,
                       borderRadius: 14, padding: "16px 20px", marginTop: 20, marginBottom: 4,
                     }}>
-                      <p style={{ color: "#4CAF50", fontSize: 14, fontWeight: 700, marginBottom: 6 }}>🎉 Your account has been created!</p>
-                      <p style={{ color: "#8aba8a", fontSize: 13, lineHeight: 1.6 }}>
+                      <p style={{ color: brand.colors.primary, fontSize: 14, fontWeight: 700, marginBottom: 6 }}>🎉 Your account has been created!</p>
+                      <p style={{ color: brand.colors.textSecondary, fontSize: 13, lineHeight: 1.6 }}>
                         Sign in to your customer portal to view your payment plan, job details, and contract documents.
                       </p>
                     </div>
                   )}
-                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 24, marginTop: 24, marginBottom: 24 }}>
-                    <p style={{ color: "#5a8a5a", fontSize: 13, marginBottom: 16 }}>Payment confirmation:</p>
+                  <div style={{ borderTop: `1px solid ${brand.colors.border}`, paddingTop: 24, marginTop: 24, marginBottom: 24 }}>
+                    <p style={{ color: brand.colors.textMuted, fontSize: 13, marginBottom: 16 }}>Payment confirmation:</p>
                     <div style={{
                       background: "#080f08", borderRadius: 12, padding: "16px 20px",
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#6a9a6a",
                       textAlign: "left", lineHeight: 1.8,
                     }}>
-                      <div><span style={{ color: "#3a5a3a" }}>Name:</span> {formData.name}</div>
-                      <div><span style={{ color: "#3a5a3a" }}>Phone:</span> {formData.phone}</div>
-                      <div><span style={{ color: "#3a5a3a" }}>Service:</span> {formData.service || "General"}</div>
-                      <div><span style={{ color: "#3a5a3a" }}>Amount:</span> <span style={{ color: "#4CAF50" }}>${formData.amount}</span></div>
-                      {formData.invoiceNumber && <div><span style={{ color: "#3a5a3a" }}>Invoice #:</span> {formData.invoiceNumber}</div>}
-                      {paymentId && <div><span style={{ color: "#3a5a3a" }}>Transaction ID:</span> <span style={{ fontSize: 11 }}>{paymentId}</span></div>}
+                      <div><span style={{ color: brand.colors.textMuted }}>Name:</span> {formData.name}</div>
+                      <div><span style={{ color: brand.colors.textMuted }}>Phone:</span> {formData.phone}</div>
+                      <div><span style={{ color: brand.colors.textMuted }}>Service:</span> {formData.service || "General"}</div>
+                      <div><span style={{ color: brand.colors.textMuted }}>Amount:</span> <span style={{ color: brand.colors.primary }}>${formData.amount}</span></div>
+                      {formData.invoiceNumber && <div><span style={{ color: brand.colors.textMuted }}>Invoice #:</span> {formData.invoiceNumber}</div>}
+                      {paymentId && <div><span style={{ color: brand.colors.textMuted }}>Transaction ID:</span> <span style={{ fontSize: 11 }}>{paymentId}</span></div>}
                     </div>
                   </div>
-                  <p style={{ color: "#5a8a5a", fontSize: 14, marginBottom: 20 }}>
+                  <p style={{ color: brand.colors.textMuted, fontSize: 14, marginBottom: 20 }}>
                     Questions? We&apos;re here to help.
                   </p>
                   <a href="tel:4076869817" style={{
-                    background: "transparent", color: "#4CAF50", border: "2px solid #2a5a2a",
+                    background: "transparent", color: brand.colors.primary, border: `2px solid ${brand.colors.border}`,
                     padding: "14px 32px", borderRadius: 14, fontSize: 15, fontWeight: 600,
                     textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                   }}>
@@ -907,9 +924,9 @@ export default function PaymentPage() {
                     <div style={{ marginTop: 20 }}>
                       <Link href="/account?welcome=true" style={{
                         display: "block", textAlign: "center", padding: "16px",
-                        background: "linear-gradient(135deg, #4CAF50, #2E7D32)", color: "#fff",
+                        background: `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark})`, color: "#fff",
                         borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: "none",
-                        boxShadow: "0 4px 20px rgba(76,175,80,0.35)",
+                        boxShadow: `0 4px 20px ${brand.colors.glow}`,
                       }}>
                         Go to Your Dashboard →
                       </Link>
@@ -917,13 +934,13 @@ export default function PaymentPage() {
                   )}
                   <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
                     <button onClick={() => { setStep("form"); setPaymentId(null); setSameBilling(true); setFormData({ name: "", email: "", phone: "", address: "", city: "", zip: "", billingAddress: "", billingCity: "", billingZip: "", service: "", jobDescription: "", invoiceNumber: "", amount: "" }); }}
-                      style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                      style={{ background: "none", border: "none", color: brand.colors.textMuted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
                       Make another payment
                     </button>
                     {isSignedIn && (
                       <>
-                        <span style={{ color: "#2a4a2a" }}>·</span>
-                        <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#5a8a5a", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                        <span style={{ color: `${brand.colors.border}` }}>·</span>
+                        <button onClick={() => signOut()} style={{ background: "none", border: "none", color: brand.colors.textMuted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>
                           Sign out
                         </button>
                       </>
@@ -947,18 +964,18 @@ export default function PaymentPage() {
                       {/* ── Invoice Summary (invoice mode only) ── */}
                       {invoiceMode && (
                         <div style={{
-                          background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
-                          border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                          background: brand.colors.bgElevated,
+                          border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                         }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700 }}>
+                            <h2 style={{ fontFamily: brand.fonts.display, fontSize: 20, color: brand.colors.textPrimary, fontWeight: 700 }}>
                               Invoice Summary
                             </h2>
                             {invoiceData && (
                               <span style={{
                                 fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-                                color: "#4CAF50", background: "rgba(76,175,80,0.1)",
-                                border: "1px solid rgba(76,175,80,0.2)", borderRadius: 8,
+                                color: brand.colors.primary, background: brand.colors.glow,
+                                border: `1px solid ${brand.colors.border}`, borderRadius: 8,
                                 padding: "4px 12px", fontWeight: 600,
                               }}>
                                 {invoiceData.invoice_number}
@@ -968,7 +985,7 @@ export default function PaymentPage() {
 
                           {invoiceLoading && (
                             <div style={{ color: "#4a7a4a", fontSize: 14, textAlign: "center", padding: "20px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                              <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+                              <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
                               Loading invoice…
                             </div>
                           )}
@@ -982,7 +999,7 @@ export default function PaymentPage() {
                           {invoiceData && !invoiceLoading && (
                             <>
                               {invoiceData.due_date && (
-                                <div style={{ fontSize: 13, color: "#7a9a7a", marginBottom: 16 }}>
+                                <div style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 16 }}>
                                   Due: <span style={{ color: "#c8e0c8", fontWeight: 600 }}>
                                     {new Date(invoiceData.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                                   </span>
@@ -1000,10 +1017,10 @@ export default function PaymentPage() {
                                     <div style={{ flex: 1, marginRight: 16 }}>
                                       <span style={{ fontSize: 14, color: "#c8e0c8" }}>{item.description}</span>
                                       {item.quantity > 1 && (
-                                        <span style={{ fontSize: 12, color: "#5a8a5a", marginLeft: 8 }}>× {item.quantity}</span>
+                                        <span style={{ fontSize: 12, color: brand.colors.textMuted, marginLeft: 8 }}>× {item.quantity}</span>
                                       )}
                                     </div>
-                                    <span style={{ fontSize: 14, color: "#e8f5e8", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                                    <span style={{ fontSize: 14, color: brand.colors.textPrimary, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
                                       ${item.amount.toFixed(2)}
                                     </span>
                                   </div>
@@ -1011,35 +1028,35 @@ export default function PaymentPage() {
                               </div>
 
                               {/* Totals */}
-                              <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                              <div style={{ borderTop: `1px solid ${brand.colors.border}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                                 {isDeposit ? (
                                   <>
-                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
                                       <span>Total Contract Price</span>
                                       <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.total.toFixed(2)}</span>
                                     </div>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4, paddingTop: 8, borderTop: `1px dashed ${brand.colors.border}` }}>
                                       <span style={{ fontSize: 15, fontWeight: 700, color: "#ffa726" }}>{paymentLabel || "Deposit Due Now"}</span>
-                                      <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                      <span style={{ fontSize: 26, fontWeight: 800, color: brand.colors.primary, fontFamily: "'JetBrains Mono', monospace" }}>
                                         ${formData.amount || "0.00"}
                                       </span>
                                     </div>
                                   </>
                                 ) : (
                                   <>
-                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
                                       <span>Subtotal</span>
                                       <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.subtotal.toFixed(2)}</span>
                                     </div>
                                     {invoiceData.tax_rate > 0 && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#7a9a7a" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
                                         <span>Tax ({invoiceData.tax_rate}%)</span>
                                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
                                       </div>
                                     )}
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
-                                      <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f5e8" }}>Total Due</span>
-                                      <span style={{ fontSize: 26, fontWeight: 800, color: "#4CAF50", fontFamily: "'JetBrains Mono', monospace" }}>
+                                      <span style={{ fontSize: 15, fontWeight: 700, color: brand.colors.textPrimary }}>Total Due</span>
+                                      <span style={{ fontSize: 26, fontWeight: 800, color: brand.colors.primary, fontFamily: "'JetBrains Mono', monospace" }}>
                                         ${invoiceData.total.toFixed(2)}
                                       </span>
                                     </div>
@@ -1053,10 +1070,10 @@ export default function PaymentPage() {
 
                       {/* ── Contact Information ── */}
                       <div style={{
-                        background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
-                        border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                        background: brand.colors.bgElevated,
+                        border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
-                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700, marginBottom: 20 }}>
+                        <h2 style={{ fontFamily: brand.fonts.display, fontSize: 20, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 20 }}>
                           {invoiceMode ? "Contact Information" : "Your Information"}
                         </h2>
 
@@ -1088,16 +1105,16 @@ export default function PaymentPage() {
                           {/* Create Account — for deposit payments when not signed in */}
                           {isDeposit && !isSignedIn && !accountCreated && (
                             <div style={{
-                              background: "rgba(76,175,80,0.06)",
-                              border: `1px solid ${showErrors && isDeposit && (!password || password.length < 8 || password !== confirmPassword) ? "rgba(239,83,80,0.5)" : "rgba(76,175,80,0.2)"}`,
+                              background: brand.colors.glow,
+                              border: `1px solid ${showErrors && isDeposit && (!password || password.length < 8 || password !== confirmPassword) ? "rgba(239,83,80,0.5)" : `${brand.colors.glow}`}`,
                               borderRadius: 14, padding: "20px 20px 16px",
                               transition: "border-color 0.3s",
                             }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                                 <span style={{ fontSize: 18 }}>🔐</span>
                                 <div>
-                                  <p style={{ color: "#e8f5e8", fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Create Your Account</p>
-                                  <p style={{ color: "#5a8a5a", fontSize: 12 }}>Set a password to access your customer portal after payment</p>
+                                  <p style={{ color: brand.colors.textPrimary, fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Create Your Account</p>
+                                  <p style={{ color: brand.colors.textMuted, fontSize: 12 }}>Set a password to access your customer portal after payment</p>
                                 </div>
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1116,7 +1133,7 @@ export default function PaymentPage() {
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
                                       position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
                                       background: "none", border: "none", cursor: "pointer", padding: 4,
-                                      fontSize: 13, color: "#5a8a5a",
+                                      fontSize: 13, color: brand.colors.textMuted,
                                     }}>
                                       {showPassword ? "Hide" : "Show"}
                                     </button>
@@ -1146,13 +1163,13 @@ export default function PaymentPage() {
                           )}
                           {isDeposit && isSignedIn && (
                             <div style={{
-                              background: "rgba(76,175,80,0.06)",
-                              border: "1px solid rgba(76,175,80,0.15)",
+                              background: brand.colors.glow,
+                              border: `1px solid ${brand.colors.border}`,
                               borderRadius: 14, padding: "12px 16px",
                               display: "flex", alignItems: "center", gap: 8,
                             }}>
-                              <span style={{ color: "#4CAF50", fontSize: 14 }}>✓</span>
-                              <span style={{ color: "#8aba8a", fontSize: 13 }}>Signed in — payment will be linked to your account</span>
+                              <span style={{ color: brand.colors.primary, fontSize: 14 }}>✓</span>
+                              <span style={{ color: brand.colors.textSecondary, fontSize: 13 }}>Signed in — payment will be linked to your account</span>
                             </div>
                           )}
 
@@ -1207,13 +1224,13 @@ export default function PaymentPage() {
 
                       {/* ── Service Address ── */}
                       <div style={{
-                        background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
-                        border: "1px solid #1a3a1a", borderRadius: 20, padding: "28px 28px",
+                        background: brand.colors.bgElevated,
+                        border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
-                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: "#e8f5e8", fontWeight: 700, marginBottom: 8 }}>
+                        <h2 style={{ fontFamily: brand.fonts.display, fontSize: 20, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 8 }}>
                           Service Address
                         </h2>
-                        <p style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 20 }}>
+                        <p style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 20 }}>
                           Where the work is or was performed.
                         </p>
 
@@ -1247,23 +1264,23 @@ export default function PaymentPage() {
                             {/* Custom checkbox */}
                             <div style={{
                               width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                              border: `2px solid ${sameBilling ? "#4CAF50" : "#2a4a2a"}`,
-                              background: sameBilling ? "rgba(76,175,80,0.2)" : "transparent",
+                              border: `2px solid ${sameBilling ? "#4CAF50" : `${brand.colors.border}`}`,
+                              background: sameBilling ? `${brand.colors.glow}` : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "all 0.2s",
                             }}>
                               {sameBilling && (
                                 <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
-                                  <path d="M1 4.5L4 7.5L10 1" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M1 4.5L4 7.5L10 1" stroke="${brand.colors.primary}" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
                               )}
                             </div>
                             <div>
-                              <p style={{ fontSize: 14, fontWeight: 600, color: sameBilling ? "#8aba8a" : "#5a8a5a" }}>
+                              <p style={{ fontSize: 14, fontWeight: 600, color: sameBilling ? brand.colors.textSecondary : brand.colors.textMuted }}>
                                 Billing address same as service address
                               </p>
                               {!sameBilling && (
-                                <p style={{ fontSize: 12, color: "#3a5a3a", marginTop: 2 }}>
+                                <p style={{ fontSize: 12, color: brand.colors.textMuted, marginTop: 2 }}>
                                   Enter a different billing address below
                                 </p>
                               )}
@@ -1334,32 +1351,32 @@ export default function PaymentPage() {
                   {/* ─── Step 2: Payment ─── */}
                   {step === "payment" && (
                     <div style={{
-                      background: "linear-gradient(160deg, #0d1f0d 0%, #091409 100%)",
-                      border: "1px solid #1a3a1a", borderRadius: 20, padding: "36px 32px",
+                      background: brand.colors.bgElevated,
+                      border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "36px 32px",
                     }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-                        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#e8f5e8", fontWeight: 700 }}>
+                        <h2 style={{ fontFamily: brand.fonts.display, fontSize: 24, color: brand.colors.textPrimary, fontWeight: 700 }}>
                           Payment Details
                         </h2>
                         <button onClick={() => { setStep("form"); setShowErrors(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
-                          background: "none", border: "none", color: "#5a8a5a", fontSize: 14,
+                          background: "none", border: "none", color: brand.colors.textMuted, fontSize: 14,
                           cursor: "pointer", fontFamily: "inherit",
                         }}>← Edit Info</button>
                       </div>
 
                       {/* Square card — SquareCardSection mounts fresh on each visit */}
                       <div style={{
-                        border: "1px solid #1a3a1a", borderRadius: 16, padding: "24px",
-                        background: "#0a160a", marginBottom: 24,
+                        border: `1px solid ${brand.colors.border}`, borderRadius: 16, padding: "24px",
+                        background: brand.colors.bgCard, marginBottom: 24,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
                           <span style={{ fontSize: 20 }}>💳</span>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: "#8aba8a" }}>Card Information</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: brand.colors.textSecondary }}>Card Information</span>
                           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                             {["VISA", "MC", "AMEX"].map(brand => (
                               <span key={brand} style={{
-                                padding: "2px 8px", background: "#0d1a0d", border: "1px solid #1a3a1a",
-                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: "#5a8a5a",
+                                padding: "2px 8px", background: "#0d1a0d", border: `1px solid ${brand.colors.border}`,
+                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: brand.colors.textMuted,
                                 fontFamily: "'JetBrains Mono', monospace",
                               }}>{brand}</span>
                             ))}
@@ -1383,9 +1400,9 @@ export default function PaymentPage() {
                         )}
 
                         <div style={{
-                          marginTop: 16, padding: "10px 14px", background: "rgba(76,175,80,0.05)",
-                          borderRadius: 8, border: "1px solid rgba(76,175,80,0.1)",
-                          fontSize: 11, color: "#4a7a4a", lineHeight: 1.6,
+                          marginTop: 16, padding: "10px 14px", background: brand.colors.glow,
+                          borderRadius: 8, border: `1px solid ${brand.colors.border}`,
+                          fontSize: 11, color: brand.colors.textMuted, lineHeight: 1.6,
                         }}>
                           🔒 Secured by Square. Your card details are encrypted and never stored on our servers.
                         </div>
@@ -1395,16 +1412,16 @@ export default function PaymentPage() {
                       {clerkUserId && (
                         <label style={{
                           display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-                          padding: "14px 16px", background: "rgba(76,175,80,0.05)",
-                          border: "1px solid rgba(76,175,80,0.15)", borderRadius: 12, marginBottom: 20,
+                          padding: "14px 16px", background: brand.colors.glow,
+                          border: `1px solid ${brand.colors.border}`, borderRadius: 12, marginBottom: 20,
                         }}>
                           <input
                             type="checkbox"
                             checked={saveCard}
                             onChange={(e) => setSaveCard(e.target.checked)}
-                            style={{ width: 18, height: 18, accentColor: "#4CAF50", cursor: "pointer" }}
+                            style={{ width: 18, height: 18, accentColor: brand.colors.primary, cursor: "pointer" }}
                           />
-                          <span style={{ fontSize: 14, color: "#8aba8a", fontWeight: 500 }}>
+                          <span style={{ fontSize: 14, color: brand.colors.textSecondary, fontWeight: 500 }}>
                             Save this card for future payments
                           </span>
                         </label>
@@ -1447,7 +1464,7 @@ export default function PaymentPage() {
               {/* Right: Summary Card */}
               <FadeIn delay={0.25} direction="left">
                 <div className="summary-card">
-                  <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: "#e8f5e8", fontWeight: 700, marginBottom: 24 }}>
+                  <h3 style={{ fontFamily: brand.fonts.display, fontSize: 18, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 24 }}>
                     Payment Summary
                   </h3>
 
@@ -1459,7 +1476,7 @@ export default function PaymentPage() {
                       ["Invoice", formData.invoiceNumber || "—"],
                     ].map(([label, value]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                        <span style={{ color: "#5a8a5a" }}>{label}</span>
+                        <span style={{ color: brand.colors.textMuted }}>{label}</span>
                         <span style={{ color: "#c8e0c8", fontWeight: 500, textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
                       </div>
                     ))}
@@ -1467,11 +1484,11 @@ export default function PaymentPage() {
 
                   {/* Invoice line items in summary sidebar */}
                   {invoiceMode && invoiceData && invoiceData.line_items.length > 0 && (
-                    <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 16 }}>
-                      <div style={{ fontSize: 11, color: "#5a8a5a", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Services</div>
+                    <div style={{ borderTop: `1px solid ${brand.colors.border}`, paddingTop: 16, marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, color: brand.colors.textMuted, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Services</div>
                       {invoiceData.line_items.map((item, i) => (
                         <div key={item.id || i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
-                          <span style={{ color: "#8aba8a", flex: 1, marginRight: 8, lineHeight: 1.4 }}>
+                          <span style={{ color: brand.colors.textSecondary, flex: 1, marginRight: 8, lineHeight: 1.4 }}>
                             {item.description}{item.quantity > 1 ? ` ×${item.quantity}` : ""}
                           </span>
                           <span style={{ color: "#c8e0c8", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
@@ -1480,7 +1497,7 @@ export default function PaymentPage() {
                         </div>
                       ))}
                       {invoiceData.tax_rate > 0 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: "#5a8a5a" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: brand.colors.textMuted }}>
                           <span>Tax ({invoiceData.tax_rate}%)</span>
                           <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.tax_amount.toFixed(2)}</span>
                         </div>
@@ -1488,11 +1505,11 @@ export default function PaymentPage() {
                     </div>
                   )}
 
-                  <div style={{ borderTop: "1px solid #1a3a1a", paddingTop: 16, marginBottom: 24 }}>
+                  <div style={{ borderTop: `1px solid ${brand.colors.border}`, paddingTop: 16, marginBottom: 24 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: 14, color: "#7a9a7a", fontWeight: 600 }}>{paymentLabel || "Total Due"}</span>
+                      <span style={{ fontSize: 14, color: brand.colors.textMuted, fontWeight: 600 }}>{paymentLabel || "Total Due"}</span>
                       <span style={{
-                        fontSize: 32, fontWeight: 800, color: "#4CAF50",
+                        fontSize: 32, fontWeight: 800, color: brand.colors.primary,
                         fontFamily: "'JetBrains Mono', monospace",
                       }}>
                         ${formData.amount || "0.00"}
@@ -1508,8 +1525,8 @@ export default function PaymentPage() {
                   </div>
 
                   {/* Account CTA */}
-                  <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #1a3a1a" }}>
-                    <p style={{ fontSize: 13, color: "#5a8a5a", marginBottom: 12, lineHeight: 1.6 }}>
+                  <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${brand.colors.border}` }}>
+                    <p style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
                       Want to track payments, view history & manage subscriptions?
                     </p>
                     <Link href="/account" className="cta-secondary-pay" style={{
