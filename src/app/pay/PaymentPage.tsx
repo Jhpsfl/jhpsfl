@@ -208,6 +208,15 @@ interface InvoicePublicData {
 }
 
 export default function PaymentPage() {
+  // Preload Square SDK immediately so it's ready by the time user reaches step 2
+  useEffect(() => {
+    if (!window.Square && !document.querySelector('script[src*="squarecdn"]')) {
+      const s = document.createElement("script");
+      s.src = "https://web.squarecdn.com/v1/square.js";
+      s.async = true;
+      document.head.appendChild(s);
+    }
+  }, []);
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
