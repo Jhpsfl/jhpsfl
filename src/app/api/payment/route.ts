@@ -211,7 +211,8 @@ export async function POST(request: Request) {
           });
 
           await getResend().emails.send({
-            from: `${brand.name} <${brand.email}>`,
+            from: `${brand.name} <info@jhpsfl.com>`,
+            replyTo: brand.email,
             to: [customerEmail],
             subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
             html: receiptHtml,
@@ -497,7 +498,8 @@ export async function POST(request: Request) {
             });
 
             await getResend().emails.send({
-              from: `${brand.name} <${brand.email}>`,
+              from: `${brand.name} <info@jhpsfl.com>`,
+              replyTo: brand.email,
               to: [customerEmail],
               subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
               html: receiptHtml,
