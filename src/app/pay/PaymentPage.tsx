@@ -40,19 +40,37 @@ function SquareCardSection({
     let cancelled = false;
     let card: SquareCard | null = null;
 
-    const init = async () => {
+    const init = async (attempt = 1) => {
       try {
         // Load SDK script if not already present
         if (!window.Square) {
-          await new Promise<void>((resolve, reject) => {
-            const existing = document.querySelector('script[src*="squarecdn"]');
-            if (existing) { resolve(); return; }
-            const s = document.createElement("script");
-            s.src = "https://web.squarecdn.com/v1/square.js";
-            s.onload = () => resolve();
-            s.onerror = () => reject(new Error("Square SDK failed to load"));
-            document.head.appendChild(s);
-          });
+          const existing = document.querySelector('script[src*="squarecdn"]') as HTMLScriptElement | null;
+          if (existing) {
+            // Script tag exists but SDK not ready yet — wait for it
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error("Square SDK load timeout")), 10000);
+              const check = () => {
+                if (window.Square) { clearTimeout(timeout); resolve(); }
+                else { setTimeout(check, 100); }
+              };
+              check();
+            });
+          } else {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://web.squarecdn.com/v1/square.js";
+              s.onload = () => {
+                // SDK script loaded but window.Square might need a moment
+                const check = () => {
+                  if (window.Square) resolve();
+                  else setTimeout(check, 50);
+                };
+                check();
+              };
+              s.onerror = () => reject(new Error("Square SDK failed to load"));
+              document.head.appendChild(s);
+            });
+          }
         }
         if (cancelled) return;
 
@@ -66,6 +84,17 @@ function SquareCardSection({
         });
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
+        // Wait a tick for the container div to be in the DOM
+        await new Promise(r => setTimeout(r, 50));
+        const container = document.getElementById("sq-card-container");
+        if (!container) {
+          if (attempt < 3 && !cancelled) {
+            await new Promise(r => setTimeout(r, 200));
+            return init(attempt + 1);
+          }
+          throw new Error("Card container not found in DOM");
+        }
+
         await card.attach("#sq-card-container");
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
@@ -74,6 +103,13 @@ function SquareCardSection({
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
+        // Retry once on attach failure (race condition with DOM)
+        if (attempt < 3 && !cancelled) {
+          console.warn(`Square init attempt ${attempt} failed: ${msg}, retrying...`);
+          if (card) { card.destroy().catch(() => {}); card = null; }
+          await new Promise(r => setTimeout(r, 300 * attempt));
+          return init(attempt + 1);
+        }
         console.error("Square init error:", msg);
         setLoading(false);
         onError(msg);
