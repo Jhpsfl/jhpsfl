@@ -272,7 +272,8 @@ const CompanyHeader: React.FC<{ logoUrl?: string }> = ({ logoUrl }) => (
 
 /** Table column header row — used inline on page 1 and in the fixed continuation bar */
 const TableColumnHeaders: React.FC = () => (
-  <View style={s.tHead}>
+const TableColumnHeaders: React.FC<{ primaryColor?: string }> = ({ primaryColor }) => (
+  <View style={[s.tHead, primaryColor ? { backgroundColor: primaryColor } : {}]}>
     <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
     <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
     <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
@@ -281,14 +282,14 @@ const TableColumnHeaders: React.FC = () => (
 );
 
 /** Fixed continuation bar — repeats at the top of every page */
-const ContinuationHeader: React.FC<{ docType: string; docNumber: string }> = ({ docType, docNumber }) => (
+const ContinuationHeader: React.FC<{ docType: string; docNumber: string; primaryColor?: string; brandShort?: string }> = ({ docType, docNumber, primaryColor, brandShort }) => (
   <View fixed style={{
     position: 'absolute', top: 12, left: 50, right: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingBottom: 8, borderBottomWidth: 1.5, borderBottomColor: C.primary,
+    paddingBottom: 8, borderBottomWidth: 1.5, borderBottomColor: primaryColor || C.primary,
   }}>
-    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 1 }}>
-      {BRAND.shortName}
+    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: primaryColor || C.primary, letterSpacing: 1 }}>
+      {brandShort || BRAND.shortName}
     </Text>
     <Text style={{ fontSize: 8, color: C.mid }}>
       {docType} #{docNumber}
@@ -302,10 +303,10 @@ const ContinuationHeader: React.FC<{ docType: string; docNumber: string }> = ({ 
  * The column header is rendered inline (page 1) and also appears in the
  * fixed ContinuationHeader on subsequent pages.
  */
-const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
+const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }> = ({ items, primaryColor }) => (
   <>
     <View style={{ marginTop: 8 }}>
-      <TableColumnHeaders />
+      <TableColumnHeaders primaryColor={primaryColor} />
     </View>
     {items.map((item, i) => (
       <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
@@ -325,7 +326,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[] }> = ({ items }) => (
 const TotalsBlock: React.FC<{
   subtotal: number; taxAmount: number; discountAmount?: number;
   tipAmount?: number; totalAmount: number; totalLabel: string;
-  depositAmount?: number; balanceAmount?: number;
+  depositAmount?: number; balanceAmount?: number; primaryColor?: string;
 }> = (p) => (
   <View style={s.totalsWrap} wrap={false}>
     <View style={s.totalsBlock}>
@@ -352,7 +353,7 @@ const TotalsBlock: React.FC<{
         </View>
       )}
       <View style={s.totalsDivider} />
-      <View style={s.grandTotal}>
+      <View style={[s.grandTotal, p.primaryColor ? { backgroundColor: p.primaryColor } : {}]}>
         <Text style={s.grandTotalText}>{p.totalLabel}</Text>
         <Text style={s.grandTotalText}>{fmt(p.totalAmount)}</Text>
       </View>
@@ -381,13 +382,13 @@ const NotesSection: React.FC<{ text: string }> = ({ text }) => (
   </View>
 );
 
-const Footer: React.FC<{ brandName?: string; brandPhone?: string; brandEmail?: string; brandShort?: string; brandTagline?: string }> = ({ brandName, brandPhone, brandEmail, brandShort, brandTagline }) => (
+const Footer: React.FC<{ brandName?: string; brandPhone?: string; brandEmail?: string; brandShort?: string; brandTagline?: string; primaryColor?: string }> = ({ brandName, brandPhone, brandEmail, brandShort, brandTagline, primaryColor }) => (
   <View style={s.footer} fixed>
     <Text style={s.footerLine}>Thank you for choosing {brandName || BRAND.name}!</Text>
     <Text style={s.footerLine}>Questions? Call {brandPhone || BRAND.phone} or email {brandEmail || BRAND.email}</Text>
     <Text style={s.footerLine}>Please keep this document for your records.</Text>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-      <Text style={s.footerBrand}>{brandShort || BRAND.shortName} · {brandTagline || BRAND.tagline}</Text>
+      <Text style={[s.footerBrand, primaryColor ? { color: primaryColor } : {}]}>{brandShort || BRAND.shortName} · {brandTagline || BRAND.tagline}</Text>
       <Text style={{ fontSize: 7, color: C.light }} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   </View>
@@ -587,7 +588,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   return (
     <Document title={`${docBrand.shortName} ${docType} - ${data.invoiceNumber}`} author={docBrand.name} subject={docType}>
       <Page size="LETTER" style={s.page}>
-        <ContinuationHeader docType={docTypeShort} docNumber={data.invoiceNumber} />
+        <ContinuationHeader docType={docTypeShort} docNumber={data.invoiceNumber} primaryColor={docColors.primary} brandShort={docBrand.shortName} />
         <View style={[s.header, { borderBottomColor: headerBorderColor }]}>
           {/* Brand-aware company header */}
           <View style={s.headerLeft}>
@@ -604,7 +605,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             </View>
           </View>
           <View style={s.headerRight}>
-            <Text style={s.docTitle}>{docType}</Text>
+            <Text style={[s.docTitle, { color: docColors.primary }]}>{docType}</Text>
             <View style={badge}><Text style={badgeText}>{label}</Text></View>
           </View>
         </View>
@@ -639,7 +640,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             </Text>
           </View>
         )}
-        <ItemsTable items={data.lineItems} />
+        <ItemsTable items={data.lineItems} primaryColor={docColors.primary} />
         <TotalsBlock
           subtotal={data.subtotal}
           taxAmount={data.taxAmount}
@@ -648,6 +649,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           totalLabel={hasPaymentTerms ? 'Total Contract Price' : 'Amount Due'}
           depositAmount={hasPaymentTerms ? data.paymentTerms!.deposit_amount : undefined}
           balanceAmount={hasPaymentTerms ? (data.totalAmount / 100) - data.paymentTerms!.deposit_amount : undefined}
+          primaryColor={docColors.primary}
         />
 
         {/* Regular invoice: everything stays on one page */}
@@ -662,8 +664,8 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             </View>
             {data.paymentLink && (
               <View style={s.payLinkBox} wrap={false}>
-                <Text style={s.payLinkTitle}>Pay Online</Text>
-                <Text style={s.payLinkUrl}>{data.paymentLink}</Text>
+                <Text style={[s.payLinkTitle, { color: docColors.primary }]}>Pay Online</Text>
+                <Text style={[s.payLinkUrl, { color: docColors.primaryLight }]}>{data.paymentLink}</Text>
                 <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
               </View>
             )}
@@ -671,7 +673,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </>
         )}
 
-        <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} />
+        <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
       </Page>
 
       {/* ══════ CONTRACT PAGE 2: Payment Schedule + Info + Lien Notice ══════ */}
@@ -738,7 +740,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             </Text>
           </View>
 
-          <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} />
+          <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
         </Page>
       )}
 
