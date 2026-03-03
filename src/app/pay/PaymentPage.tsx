@@ -41,39 +41,11 @@ function SquareCardSection({
     let cancelled = false;
     let card: SquareCard | null = null;
 
-    const init = async (attempt = 1) => {
+    const init = async () => {
       try {
-        // Load SDK script if not already present
         if (!window.Square) {
-          const existing = document.querySelector('script[src*="squarecdn"]') as HTMLScriptElement | null;
-          if (existing) {
-            // Script tag exists but SDK not ready yet — wait for it
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error("Square SDK load timeout")), 10000);
-              const check = () => {
-                if (window.Square) { clearTimeout(timeout); resolve(); }
-                else { setTimeout(check, 100); }
-              };
-              check();
-            });
-          } else {
-            await new Promise<void>((resolve, reject) => {
-              const s = document.createElement("script");
-              s.src = "https://web.squarecdn.com/v1/square.js";
-              s.onload = () => {
-                // SDK script loaded but window.Square might need a moment
-                const check = () => {
-                  if (window.Square) resolve();
-                  else setTimeout(check, 50);
-                };
-                check();
-              };
-              s.onerror = () => reject(new Error("Square SDK failed to load"));
-              document.head.appendChild(s);
-            });
-          }
+          throw new Error("Square SDK not loaded");
         }
-        if (cancelled) return;
 
         const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID?.trim();
         const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID?.trim();
@@ -85,17 +57,6 @@ function SquareCardSection({
         });
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
-        // Wait a tick for the container div to be in the DOM
-        await new Promise(r => setTimeout(r, 50));
-        const container = document.getElementById("sq-card-container");
-        if (!container) {
-          if (attempt < 3 && !cancelled) {
-            await new Promise(r => setTimeout(r, 200));
-            return init(attempt + 1);
-          }
-          throw new Error("Card container not found in DOM");
-        }
-
         await card.attach("#sq-card-container");
         if (cancelled) { card.destroy().catch(() => {}); return; }
 
@@ -104,13 +65,6 @@ function SquareCardSection({
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
-        // Retry once on attach failure (race condition with DOM)
-        if (attempt < 3 && !cancelled) {
-          console.warn(`Square init attempt ${attempt} failed: ${msg}, retrying...`);
-          if (card) { card.destroy().catch(() => {}); card = null; }
-          await new Promise(r => setTimeout(r, 300 * attempt));
-          return init(attempt + 1);
-        }
         console.error("Square init error:", msg);
         setLoading(false);
         onError(msg);
@@ -209,6 +163,8 @@ interface InvoicePublicData {
 }
 
 export default function PaymentPage() {
+  // Square SDK ready state — set by next/script onReady callback
+  const [squareReady, setSquareReady] = useState(!!globalThis.window?.Square);
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
@@ -511,7 +467,11 @@ export default function PaymentPage() {
 
   return (
     <>
-      <Script src="https://web.squarecdn.com/v1/square.js" strategy="afterInteractive" />
+      <Script
+        src="https://web.squarecdn.com/v1/square.js"
+        strategy="afterInteractive"
+        onReady={() => setSquareReady(true)}
+      />
       {!brandResolved && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 9999,
@@ -1423,11 +1383,18 @@ export default function PaymentPage() {
                           </div>
                         </div>
 
-                        <SquareCardSection
-                          onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
-                          onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at ${brand.phone}.`)}
-                          squareStyle={brand.squareCardStyle}
-                        />
+                        {squareReady ? (
+                          <SquareCardSection
+                            onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
+                            onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at ${brand.phone}.`)}
+                            squareStyle={brand.squareCardStyle}
+                          />
+                        ) : (
+                          <div style={{ color: brand.colors.textMuted, fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+                            Loading payment SDK…
+                          </div>
+                        )}
 
                         {paymentError && (
                           <div style={{
