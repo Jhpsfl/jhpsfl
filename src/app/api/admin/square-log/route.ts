@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SquareClient, SquareEnvironment } from "square";
 import { createSupabaseAdmin } from "@/lib/supabase";
-
-const squareClient = new SquareClient({
-  token: process.env.SQUARE_ACCESS_TOKEN!,
-  environment: SquareEnvironment.Production,
-});
 
 export async function GET(req: NextRequest) {
   const clerkUserId = req.nextUrl.searchParams.get("clerk_user_id");
@@ -29,50 +23,51 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Square SDK v44 returns an async iterable from list()
-    const allPayments: Array<Record<string, unknown>> = [];
-    const iter = squareClient.payments.list({
-      sortOrder: "DESC",
+    // Use Square REST API directly to avoid SDK type issues
+    const res = await fetch("https://connect.squareup.com/v2/payments?sort_order=DESC&limit=50", {
+      headers: {
+        "Authorization": `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
     });
-    let count = 0;
-    for await (const p of iter) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allPayments.push(p as any);
-      count++;
-      if (count >= 50) break; // limit to 50 results
+
+    if (!res.ok) {
+      return NextResponse.json({ error: "Square API error" }, { status: 502 });
     }
 
+    const data = await res.json();
+    const allPayments = data.payments || [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payments = allPayments
-      .filter((p) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((p: any) => {
         if (!invoiceNumber) return true;
-        return (String(p.note || "")).includes(invoiceNumber);
+        return (p.note || "").includes(invoiceNumber);
       })
-      .map((p) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pay = p as any;
-        return {
-          id: pay.id,
-          createdAt: pay.createdAt,
-          amount: pay.amountMoney?.amount ? Number(pay.amountMoney.amount) / 100 : 0,
-          status: pay.status,
-          note: pay.note || "",
-          cardBrand: pay.cardDetails?.card?.cardBrand || null,
-          cardLast4: pay.cardDetails?.card?.last4 || null,
-          cardType: pay.cardDetails?.card?.cardType || null,
-          prepaidType: pay.cardDetails?.card?.prepaidType || null,
-          cvvStatus: pay.cardDetails?.cvvStatus || null,
-          avsStatus: pay.cardDetails?.avsStatus || null,
-          entryMethod: pay.cardDetails?.entryMethod || null,
-          errors: (pay.cardDetails?.errors || []).map((e: { code?: string; detail?: string; category?: string }) => ({
-            code: e.code,
-            detail: e.detail,
-            category: e.category,
-          })),
-          buyerEmail: pay.buyerEmailAddress || null,
-          orderId: pay.orderId || null,
-          receiptUrl: pay.receiptUrl || null,
-        };
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((p: any) => ({
+        id: p.id,
+        createdAt: p.created_at,
+        amount: p.amount_money?.amount ? Number(p.amount_money.amount) / 100 : 0,
+        status: p.status,
+        note: p.note || "",
+        cardBrand: p.card_details?.card?.card_brand || null,
+        cardLast4: p.card_details?.card?.last_4 || null,
+        cardType: p.card_details?.card?.card_type || null,
+        prepaidType: p.card_details?.card?.prepaid_type || null,
+        cvvStatus: p.card_details?.cvv_status || null,
+        avsStatus: p.card_details?.avs_status || null,
+        entryMethod: p.card_details?.entry_method || null,
+        errors: (p.card_details?.errors || []).map((e: { code?: string; detail?: string; category?: string }) => ({
+          code: e.code,
+          detail: e.detail,
+          category: e.category,
+        })),
+        buyerEmail: p.buyer_email_address || null,
+        orderId: p.order_id || null,
+        receiptUrl: p.receipt_url || null,
+      }));
 
     return NextResponse.json({ payments });
   } catch (err) {
