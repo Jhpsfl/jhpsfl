@@ -169,7 +169,7 @@ const nexa: BrandConfig = {
   key: 'nexa',
   name: 'NexaVision Group',
   shortName: 'Nexa',
-  phone: '(407) 686-9817',        // same phone for now — update when needed
+  phone: '(864) 301-1806',
   email: 'info@nexavisiongroup.com',
   website: 'www.nexavisiongroup.com',
   serviceArea: 'Central Florida & Beyond',
