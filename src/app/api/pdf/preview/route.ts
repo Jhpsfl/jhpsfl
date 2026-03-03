@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         paymentLink: data.payment_link || undefined,
         notes: data.notes || undefined,
         paymentTerms: data.payment_terms || undefined,
+        brandKey: data.brand || 'jhps',
       };
       pdfBuffer = await generateInvoicePDF(invoiceData);
     } else if (type === 'estimate') {
