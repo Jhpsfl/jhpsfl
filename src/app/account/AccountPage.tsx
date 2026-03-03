@@ -9,6 +9,7 @@ import {
   UserButton,
   useUser,
   useAuth,
+  useClerk,
 } from "@clerk/nextjs";
 import SquareCardForm, { type SquareCard } from "@/app/components/SquareCardForm";
 
@@ -192,6 +193,7 @@ function buildPayUrl(
 function DashboardView() {
   const { userId } = useAuth();
   const { user } = useUser();
+  const { signOut } = useClerk();
   const searchParams = useSearchParams();
   const isWelcome = searchParams.get("welcome") === "true";
   const [showWelcome, setShowWelcome] = useState(isWelcome);
@@ -1142,6 +1144,20 @@ function DashboardView() {
           💳 Make a Payment
         </Link>
       </div>
+
+      {/* Sign Out */}
+      <div style={{ textAlign: "center", marginTop: 32, paddingTop: 24, borderTop: "1px solid rgba(76,175,80,0.1)" }}>
+        <button onClick={() => signOut({ redirectUrl: '/account' })} style={{
+          background: "none", border: "1px solid rgba(239,83,80,0.2)", color: "#ef5350",
+          padding: "10px 28px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+          cursor: "pointer", transition: "all 0.2s",
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.background = "rgba(239,83,80,0.1)"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.4)"; }}
+        onMouseOut={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.borderColor = "rgba(239,83,80,0.2)"; }}
+        >
+          Sign Out
+        </button>
+      </div>
     </div>
   );
 }
@@ -1245,6 +1261,9 @@ export default function AccountPage() {
           <Link href="/" onClick={() => setMenuOpen(false)}>Home</Link>
           <Link href="/pay" onClick={() => setMenuOpen(false)}>Make Payment</Link>
           <a href="tel:4076869817">📞 407-686-9817</a>
+          <SignedIn>
+            <button onClick={() => signOut({ redirectUrl: '/account' })} style={{ background: "none", border: "1px solid rgba(239,83,80,0.3)", color: "#ef5350", padding: "10px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Sign Out</button>
+          </SignedIn>
         </div>
       )}
 
