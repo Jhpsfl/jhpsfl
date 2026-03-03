@@ -200,6 +200,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             notes: invoice.notes,
             payment_terms: invoice.payment_terms || null,
             brand: invoice.brand || 'jhps',
+          },
         }),
       });
       if (res.ok) {
@@ -242,6 +243,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
             notes: form.notes,
             payment_terms: form.payment_terms || null,
             brand: form.brand || 'jhps',
+          },
         }),
       });
       if (res.ok) {
