@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
 import { getBrand, type BrandConfig } from "@/lib/brand-config";
 
@@ -163,8 +162,24 @@ interface InvoicePublicData {
 }
 
 export default function PaymentPage() {
-  // Square SDK ready state — set by next/script onReady callback
-  const [squareReady, setSquareReady] = useState(!!globalThis.window?.Square);
+  // Square SDK ready state — poll for window.Square after injecting script
+  const [squareReady, setSquareReady] = useState(false);
+  useEffect(() => {
+    // If already loaded (e.g. page refresh), set immediately
+    if (window.Square) { setSquareReady(true); return; }
+    // Inject script if not present
+    if (!document.querySelector('script[src*="squarecdn"]')) {
+      const s = document.createElement("script");
+      s.src = "https://web.squarecdn.com/v1/square.js";
+      document.head.appendChild(s);
+    }
+    // Poll until window.Square is available
+    const interval = setInterval(() => {
+      if (window.Square) { setSquareReady(true); clearInterval(interval); }
+    }, 100);
+    const timeout = setTimeout(() => clearInterval(interval), 15000); // give up after 15s
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, []);
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
@@ -467,11 +482,6 @@ export default function PaymentPage() {
 
   return (
     <>
-      <Script
-        src="https://web.squarecdn.com/v1/square.js"
-        strategy="afterInteractive"
-        onReady={() => setSquareReady(true)}
-      />
       {!brandResolved && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 9999,
