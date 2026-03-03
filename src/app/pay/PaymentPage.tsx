@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
 import { getBrand, type BrandConfig } from "@/lib/brand-config";
 
@@ -208,15 +209,6 @@ interface InvoicePublicData {
 }
 
 export default function PaymentPage() {
-  // Preload Square SDK immediately so it's ready by the time user reaches step 2
-  useEffect(() => {
-    if (!window.Square && !document.querySelector('script[src*="squarecdn"]')) {
-      const s = document.createElement("script");
-      s.src = "https://web.squarecdn.com/v1/square.js";
-      s.async = true;
-      document.head.appendChild(s);
-    }
-  }, []);
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
@@ -519,6 +511,7 @@ export default function PaymentPage() {
 
   return (
     <>
+      <Script src="https://web.squarecdn.com/v1/square.js" strategy="afterInteractive" />
       {!brandResolved && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 9999,
