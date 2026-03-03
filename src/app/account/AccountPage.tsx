@@ -1164,6 +1164,7 @@ function DashboardView() {
 
 export default function AccountPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { signOut } = useClerk();
 
   return (
     <>
