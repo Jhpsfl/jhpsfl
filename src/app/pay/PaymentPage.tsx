@@ -734,8 +734,16 @@ export default function PaymentPage() {
       }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
           <Link href={brand.key === 'nexa' ? 'https://nexavisiongroup.com' : '/'} style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
+            {brand.key === 'nexa' ? (
+              <span style={{ fontFamily: brand.fonts.display, fontSize: 22, fontWeight: 700, letterSpacing: -0.5 }}>
+                <span style={{ color: "#F0F4F8" }}>Nexa</span>
+                <span style={{ color: "#00E5CC" }}>Vision</span>
+                <span style={{ color: "#8896A6", fontSize: 14, fontWeight: 400, letterSpacing: 1, marginLeft: 4 }}>Group</span>
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 200, height: "auto", maxHeight: 44 }} />
+            )}
           </Link>
 
           <div style={{ display: "flex", alignItems: "center", gap: 28 }} className="desktop-nav">
@@ -1548,8 +1556,16 @@ export default function PaymentPage() {
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <Link href={brand.key === 'nexa' ? 'https://nexavisiongroup.com' : '/'} style={{ textDecoration: "none" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 160, height: "auto", maxHeight: 36, opacity: 0.7 }} />
+              {brand.key === 'nexa' ? (
+                <span style={{ fontFamily: brand.fonts.display, fontSize: 16, fontWeight: 700, opacity: 0.7 }}>
+                  <span style={{ color: "#F0F4F8" }}>Nexa</span>
+                  <span style={{ color: "#00E5CC" }}>Vision</span>
+                  <span style={{ color: "#8896A6", fontSize: 11, fontWeight: 400, letterSpacing: 1, marginLeft: 3 }}>Group</span>
+                </span>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={brand.logo} alt={brand.shortName} style={{ maxWidth: 160, height: "auto", maxHeight: 36, opacity: 0.7 }} />
+              )}
             </Link>
           </div>
           <div style={{ display: "flex", gap: 24, alignItems: "center" }}>

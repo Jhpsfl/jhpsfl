@@ -271,7 +271,6 @@ const CompanyHeader: React.FC<{ logoUrl?: string }> = ({ logoUrl }) => (
 );
 
 /** Table column header row — used inline on page 1 and in the fixed continuation bar */
-const TableColumnHeaders: React.FC = () => (
 const TableColumnHeaders: React.FC<{ primaryColor?: string }> = ({ primaryColor }) => (
   <View style={[s.tHead, primaryColor ? { backgroundColor: primaryColor } : {}]}>
     <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
