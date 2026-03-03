@@ -1373,12 +1373,12 @@ export default function PaymentPage() {
                           <span style={{ fontSize: 20 }}>💳</span>
                           <span style={{ fontSize: 14, fontWeight: 600, color: brand.colors.textSecondary }}>Card Information</span>
                           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                            {["VISA", "MC", "AMEX"].map(brand => (
-                              <span key={brand} style={{
-                                padding: "2px 8px", background: "#0d1a0d", border: `1px solid ${brand.colors.border}`,
-                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: brand.colors.textMuted,
+                            {["VISA", "MC", "AMEX"].map(cardBrand => (
+                              <span key={cardBrand} style={{
+                                padding: "2px 8px", background: "#0d1a0d", border: "1px solid rgba(255,255,255,0.1)",
+                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)",
                                 fontFamily: "'JetBrains Mono', monospace",
-                              }}>{brand}</span>
+                              }}>{cardBrand}</span>
                             ))}
                           </div>
                         </div>
