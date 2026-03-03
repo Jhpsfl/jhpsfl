@@ -159,6 +159,7 @@ interface InvoicePublicData {
   total: number;
   status: string;
   brand?: string;
+  company_name?: string | null;
 }
 
 export default function PaymentPage() {
@@ -460,6 +461,7 @@ export default function PaymentPage() {
             .filter(Boolean).join(" — "),
           saveCard: saveCard && !!clerkUserId,
           clerkUserId: clerkUserId || undefined,
+          companyName: invoiceData?.company_name || undefined,
         }),
       });
 
@@ -845,6 +847,30 @@ export default function PaymentPage() {
                   Sign in for faster checkout
                 </Link></>)}
               </p>
+
+              {/* Company Name Welcome Banner */}
+              {invoiceData?.company_name && (
+                <div style={{
+                  marginTop: 28, padding: "20px 32px",
+                  background: `linear-gradient(135deg, ${brand.colors.bgElevated}, ${brand.colors.bgCard})`,
+                  border: `1px solid ${brand.colors.borderHover}`,
+                  borderRadius: 16, position: "relative", overflow: "hidden",
+                }}>
+                  <div style={{
+                    position: "absolute", top: 0, left: 0, right: 0, height: 3,
+                    background: `linear-gradient(90deg, transparent, ${brand.colors.primary}, transparent)`,
+                  }} />
+                  <div style={{ fontSize: 11, color: brand.colors.textMuted, letterSpacing: 1.5, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" as const }}>
+                    Prepared for
+                  </div>
+                  <div style={{
+                    fontFamily: brand.fonts.display, fontSize: 26, fontWeight: 800,
+                    color: brand.colors.textPrimary, letterSpacing: 0.5, lineHeight: 1.2,
+                  }}>
+                    {invoiceData.company_name}
+                  </div>
+                </div>
+              )}
             </div>
           </FadeIn>
 
@@ -888,6 +914,14 @@ export default function PaymentPage() {
                   <h2 style={{ fontFamily: brand.fonts.display, fontSize: 28, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 12 }}>
                     Payment Received!
                   </h2>
+                  {invoiceData?.company_name && (
+                    <div style={{
+                      fontFamily: brand.fonts.display, fontSize: 20, fontWeight: 700,
+                      color: brand.colors.primary, marginBottom: 12, letterSpacing: 0.3,
+                    }}>
+                      {invoiceData.company_name}
+                    </div>
+                  )}
                   <p style={{ color: brand.colors.textSecondary, fontSize: 16, lineHeight: 1.7, marginBottom: 8 }}>
                     Thank you, <strong style={{ color: brand.colors.textPrimary }}>{formData.name}</strong>. Your {isDeposit ? "deposit" : "payment"} of{" "}
                     <strong style={{ color: brand.colors.primary, fontFamily: brand.fonts.mono }}>${formData.amount}</strong>{" "}
@@ -1489,6 +1523,7 @@ export default function PaymentPage() {
                                     .filter(Boolean).join(" — "),
                                   saveCard: false,
                                   clerkUserId: clerkUserId || undefined,
+                                  companyName: invoiceData?.company_name || undefined,
                                   testMode: true,
                                 }),
                               });

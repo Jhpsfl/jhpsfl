@@ -51,6 +51,7 @@ interface BaseDocumentData {
   customerEmail: string;
   customerPhone?: string;
   customerAddress?: string;
+  companyName?: string;
   lineItems: DocumentLineItem[];
   subtotal: number;
   taxAmount: number;
@@ -434,6 +435,12 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
       <View style={s.metaRow}>
         <View style={s.metaBlock}>
           <Text style={s.metaLabel}>Bill To</Text>
+          {data.companyName && (
+            <>
+              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
+              <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
+            </>
+          )}
           <Text style={s.metaValBold}>{data.customerName}</Text>
           <Text style={s.metaVal}>{data.customerEmail}</Text>
           {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
@@ -632,6 +639,12 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         <View style={s.metaRow}>
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Bill To</Text>
+            {data.companyName && (
+              <>
+                <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
+                <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
+              </>
+            )}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             <Text style={s.metaVal}>{data.customerEmail}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
@@ -814,6 +827,12 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
         <View style={s.metaRow}>
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Prepared For</Text>
+            {data.companyName && (
+              <>
+                <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
+                <View style={{ width: 40, height: 1.5, backgroundColor: C.primary, marginBottom: 4, borderRadius: 1 }} />
+              </>
+            )}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             <Text style={s.metaVal}>{data.customerEmail}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}

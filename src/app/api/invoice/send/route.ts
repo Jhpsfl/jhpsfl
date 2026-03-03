@@ -149,6 +149,7 @@ export async function POST(req: NextRequest) {
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
     customerPhone: customer.phone || undefined,
+    companyName: customer.company_name || undefined,
     brandKey: invoice.brand || 'jhps',
     lineItems: (invoice.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
       name: item.description,

@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         customerName: data.customer_name || 'Customer',
         customerEmail: data.customer_email || '',
         customerPhone: data.customer_phone || undefined,
+        companyName: data.company_name || undefined,
         lineItems: (data.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
           name: item.description,
           quantity: item.quantity || 1,
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
         customerName: data.customer_name || 'Customer',
         customerEmail: data.customer_email || '',
         customerPhone: data.customer_phone || undefined,
+        companyName: data.company_name || undefined,
         lineItems: (data.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
           name: item.description,
           quantity: item.quantity || 1,

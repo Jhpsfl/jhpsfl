@@ -12,7 +12,7 @@ const getResend = () => new Resend(process.env.RESEND_API_KEY);
 export async function POST(request: Request) {
   try {
     const { token, amount, customerName, customerEmail, customerPhone, service, invoiceNumber, note, saveCard, clerkUserId,
-      customerAddress, customerCity, customerZip, billingAddress, billingCity, billingZip, testMode } =
+      customerAddress, customerCity, customerZip, billingAddress, billingCity, billingZip, testMode, companyName } =
       await request.json();
 
     if (!token || !amount) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     if (invoiceNumber) {
       const { data: inv } = await supabase.from('invoices')
-        .select('*, customers(name, email, phone)')
+        .select('*, customers(name, email, phone, company_name)')
         .eq('invoice_number', invoiceNumber)
         .limit(1)
         .single();
@@ -164,6 +164,9 @@ export async function POST(request: Request) {
           const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
           const brand = getBrand(brandKey);
 
+          // Resolve company name from request or from invoice's customer
+          const resolvedCompanyName = companyName || invoiceRecord?.customers?.company_name || null;
+
           const paymentAmountCents = amountInCents;
           const lineItemsCents: ReceiptData['lineItems'] = invoiceRecord?.line_items?.length
             ? invoiceRecord.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => {
@@ -183,6 +186,7 @@ export async function POST(request: Request) {
             paymentDate: new Date(),
             customerName: customerName || 'Valued Customer',
             customerEmail,
+            companyName: resolvedCompanyName || undefined,
             lineItems: lineItemsCents,
             subtotal: subtotalCents,
             taxAmount: taxCents,
@@ -208,6 +212,7 @@ export async function POST(request: Request) {
             lineItems: invoiceRecord?.line_items || null,
             taxRate: taxRate || 0,
             brandKey,
+            companyName: resolvedCompanyName,
           });
 
           await getResend().emails.send({
@@ -445,6 +450,9 @@ export async function POST(request: Request) {
             const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
             const brand = getBrand(brandKey);
 
+            // Resolve company name from request or from invoice's customer
+            const resolvedCompanyName = companyName || invoiceRecord?.customers?.company_name || null;
+
             const paymentAmountCents = Math.round(parseFloat(amount) * 100);
             const lineItemsCents: ReceiptData['lineItems'] = invoiceRecord?.line_items?.length
               ? invoiceRecord.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => {
@@ -469,6 +477,7 @@ export async function POST(request: Request) {
               paymentDate: new Date(),
               customerName: customerName || 'Valued Customer',
               customerEmail,
+              companyName: resolvedCompanyName || undefined,
               lineItems: lineItemsCents,
               subtotal: subtotalCents,
               taxAmount: taxCents,
@@ -495,6 +504,7 @@ export async function POST(request: Request) {
               lineItems: invoiceRecord?.line_items || null,
               taxRate: taxRate || 0,
               brandKey,
+              companyName: resolvedCompanyName,
             });
 
             await getResend().emails.send({
@@ -559,8 +569,9 @@ function buildReceiptHtml(params: {
   lineItems: Array<{ description: string; quantity: number; amount: number }> | null;
   taxRate: number;
   brandKey?: BrandKey;
+  companyName?: string | null;
 }): string {
-  const { customerName, amount, service, invoiceNumber, paymentId, receiptNumber, receiptUrl, date, lineItems, taxRate, brandKey } = params;
+  const { customerName, amount, service, invoiceNumber, paymentId, receiptNumber, receiptUrl, date, lineItems, taxRate, brandKey, companyName: co } = params;
   const brand = getBrand(brandKey || 'jhps');
 
   // Brand-specific colors
@@ -606,7 +617,11 @@ function buildReceiptHtml(params: {
           <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Payment Confirmation</p>
         </td></tr>
         <tr><td style="background:#fff;padding:32px;">
-          <p style="margin:0 0 20px;color:#333;font-size:15px;">Hi ${customerName},</p>
+          ${co ? `<div style="margin:0 0 20px;padding:16px 20px;background:linear-gradient(135deg,${bgTint},#fff);border-left:4px solid ${accentColor};border-radius:0 8px 8px 0;">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">Prepared for</div>
+            <div style="font-size:20px;font-weight:800;color:${accentColor};letter-spacing:0.3px;">${co}</div>
+            <div style="font-size:13px;color:#666;margin-top:2px;">${customerName}</div>
+          </div>` : `<p style="margin:0 0 20px;color:#333;font-size:15px;">Hi ${customerName},</p>`}
           <p style="margin:0 0 24px;color:#333;font-size:15px;line-height:1.6;">Thank you for your payment! Here are the details:</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:${bgTint};border-radius:12px;border:1px solid ${borderTint};margin-bottom:20px;">
             <tr><td style="padding:20px 24px;border-bottom:1px solid ${borderTint};">

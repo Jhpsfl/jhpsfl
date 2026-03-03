@@ -15,7 +15,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("invoices")
-    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, total, status, brand")
+    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, total, status, brand, customer_id, customers(company_name, name)")
     .eq("invoice_number", invoiceNumber)
     .single();
 
@@ -27,5 +27,18 @@ export async function GET(
     return NextResponse.json({ error: "Invoice is no longer payable", status: data.status }, { status: 410 });
   }
 
-  return NextResponse.json({ invoice: data });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const customer = (data as any).customers;
+  return NextResponse.json({ invoice: {
+    invoice_number: data.invoice_number,
+    due_date: data.due_date,
+    line_items: data.line_items,
+    subtotal: data.subtotal,
+    tax_rate: data.tax_rate,
+    tax_amount: data.tax_amount,
+    total: data.total,
+    status: data.status,
+    brand: data.brand,
+    company_name: customer?.company_name || null,
+  }});
 }
