@@ -424,10 +424,12 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
             <Text style={s.companyLine}>{docBrand.website}</Text>
           </View>
         </View>
-        <View style={s.headerRight}>
-          <Text style={[s.docTitle, { color: docColors.primary }]}>RECEIPT</Text>
-          <View style={s.badgePaid}><Text style={s.badgePaidText}>✓ PAID</Text></View>
-        </View>
+          <View style={[s.headerRight, { alignItems: 'flex-end' }]}>
+            <Text style={[s.docTitle, { color: docColors.primary }]}>RECEIPT</Text>
+            <View style={[s.badgePaid, { borderColor: docColors.primary, backgroundColor: docColors.primaryLight + '18' }]}>
+              <Text style={[s.badgePaidText, { color: docColors.primary }]}>✓ PAID</Text>
+            </View>
+          </View>
       </View>
       <View style={s.metaRow}>
         <View style={s.metaBlock}>
@@ -444,13 +446,13 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
           {data.orderId && <Text style={s.metaVal}>Order: {data.orderId}</Text>}
         </View>
       </View>
-      <ItemsTable items={data.lineItems} />
-      <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} tipAmount={data.tipAmount} totalAmount={data.totalAmount} totalLabel="Total Paid" />
+      <ItemsTable items={data.lineItems} primaryColor={docColors.primary} />
+      <TotalsBlock subtotal={data.subtotal} taxAmount={data.taxAmount} discountAmount={data.discountAmount} tipAmount={data.tipAmount} totalAmount={data.totalAmount} totalLabel="Total Paid" primaryColor={docColors.primary} />
       <View style={s.infoBox}>
         <Text style={s.infoTitle}>Payment Information</Text>
         <View style={s.infoRow}>
           <Text style={s.infoLabel}>Status</Text>
-          <Text style={[s.infoVal, { color: C.paidGreen, fontFamily: 'Helvetica-Bold' }]}>{data.paymentStatus}</Text>
+          <Text style={[s.infoVal, { color: docColors.primary, fontFamily: 'Helvetica-Bold' }]}>{data.paymentStatus}</Text>
         </View>
         {data.paymentMethod && <View style={s.infoRow}><Text style={s.infoLabel}>Method</Text><Text style={s.infoVal}>{data.paymentMethod}</Text></View>}
         <View style={s.infoRow}><Text style={s.infoLabel}>Receipt #</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>{refNum}</Text></View>
