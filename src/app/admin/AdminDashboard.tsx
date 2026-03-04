@@ -1295,7 +1295,14 @@ export default function AdminDashboard() {
                     {/* ─── CUSTOMER DETAIL ─── */}
                     {activeTab === "customer_detail" && customerDetail && (() => {
                       const cd = customerDetail;
-                      const totalRevenue = cd.payments.reduce((s, p) => s + (p.amount || 0), 0) + cd.invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.amount || 0), 0);
+                      // Avoid double-counting: exclude paid invoices that have a matching payment record
+                      const cdInvWithPayment = new Set(
+                        cd.payments.map(p => {
+                          const m = (p.notes || '').match(/INV#(INV-\d{4}-\d+)/);
+                          return m ? m[1] : null;
+                        }).filter(Boolean)
+                      );
+                      const totalRevenue = cd.payments.reduce((s, p) => s + (p.amount || 0), 0) + cd.invoices.filter(i => i.status === "paid" && !cdInvWithPayment.has(i.invoice_number)).reduce((s, i) => s + (i.amount || 0), 0);
                       const openInvoices = cd.invoices.filter(i => i.status !== "paid" && i.status !== "voided");
                       const pendingEstimates = cd.quotes.filter(q => q.status === "sent" || q.status === "draft");
                       return (
@@ -1721,9 +1728,16 @@ export default function AdminDashboard() {
                     {/* ─── PAYMENTS TAB ─── */}
                     {activeTab === "payments" && (() => {
                       type PayEntry = { key: string; customer: string; amount: number; type: string; date: string; paymentId?: string; invoiceId?: string; invoiceNumber?: string; receiptUrl?: string; };
+                      // Build a set of invoice numbers that already have a payment record (to avoid double-counting)
+                      const invoiceNumbersWithPayment = new Set(
+                        payments.map(p => {
+                          const match = (p.notes || '').match(/INV#(INV-\d{4}-\d+)/);
+                          return match ? match[1] : null;
+                        }).filter(Boolean)
+                      );
                       const entries: PayEntry[] = [
                         ...payments.map(p => ({ key: `pay-${p.id}`, customer: p.customers?.name || "—", amount: p.amount, type: p.payment_method === "cash" ? "💵 Cash" : p.payment_method === "card" ? "💳 Card" : p.payment_method || "—", date: p.paid_at || p.created_at, paymentId: p.id, receiptUrl: p.square_receipt_url || undefined })),
-                        ...paidInvoices.map(inv => ({ key: `inv-${inv.id}`, customer: (inv as Invoice & { customers?: { name: string | null } }).customers?.name || "—", amount: inv.amount, type: "🧾 Invoice", date: inv.paid_date || inv.created_at, invoiceId: inv.id, invoiceNumber: inv.invoice_number || undefined })),
+                        ...paidInvoices.filter(inv => !invoiceNumbersWithPayment.has(inv.invoice_number)).map(inv => ({ key: `inv-${inv.id}`, customer: (inv as Invoice & { customers?: { name: string | null } }).customers?.name || "—", amount: inv.amount, type: "🧾 Invoice", date: inv.paid_date || inv.created_at, invoiceId: inv.id, invoiceNumber: inv.invoice_number || undefined })),
                       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                       return (
                         <>

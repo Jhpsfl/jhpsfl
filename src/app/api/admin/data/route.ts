@@ -122,13 +122,23 @@ export async function GET(request: NextRequest) {
           supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
           supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "completed"),
           supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("payments").select("amount").eq("status", "completed"),
+          supabase.from("payments").select("amount, notes").eq("status", "completed"),
           supabase.from("payments").select("*").order("created_at", { ascending: false }).limit(5),
-          supabase.from("invoices").select("amount_paid").eq("status", "paid"),
+          supabase.from("invoices").select("invoice_number, amount_paid").eq("status", "paid"),
         ]);
 
-        const revenueFromPayments = (paymentsRes.data || []).reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
-        const revenueFromInvoices = (paidInvoicesRes.data || []).reduce((sum: number, i: { amount_paid: number }) => sum + (i.amount_paid || 0), 0);
+        const paymentsList = paymentsRes.data || [];
+        const revenueFromPayments = paymentsList.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
+        // Avoid double-counting: exclude paid invoices that already have a matching payment record
+        const invoiceNumsWithPayment = new Set(
+          paymentsList.map((p: { notes?: string }) => {
+            const m = (p.notes || '').match(/INV#(INV-\d{4}-\d+)/);
+            return m ? m[1] : null;
+          }).filter(Boolean)
+        );
+        const revenueFromInvoices = (paidInvoicesRes.data || [])
+          .filter((i: { invoice_number: string }) => !invoiceNumsWithPayment.has(i.invoice_number))
+          .reduce((sum: number, i: { amount_paid: number }) => sum + (i.amount_paid || 0), 0);
         const recentRevenue = revenueFromPayments + revenueFromInvoices;
 
         return NextResponse.json({
