@@ -6,6 +6,7 @@ import { Resend } from 'resend';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 import { getBrand, type BrandKey } from '@/lib/brand-config';
+import { logEmail } from '@/lib/email';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -215,13 +216,26 @@ export async function POST(request: Request) {
             companyName: resolvedCompanyName,
           });
 
+          const emailSubject = `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`;
           await getResend().emails.send({
             from: `${brand.name} <info@jhpsfl.com>`,
             replyTo: brand.email,
             to: [customerEmail],
-            subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
+            subject: emailSubject,
             html: receiptHtml,
             attachments: [{ filename: pdfFilename, content: pdfBuffer.toString('base64') }],
+          });
+
+          // Log to email_messages so it shows in admin Messages tab
+          await logEmail({
+            direction: 'outbound',
+            from_email: brand.email,
+            to_email: customerEmail,
+            subject: emailSubject,
+            body_html: receiptHtml,
+            body_text: `Payment receipt for $${parseFloat(amount).toFixed(2)} — ${receiptNum}`,
+            folder: 'sent',
+            has_attachments: true,
           });
         } catch (emailErr) {
           console.error('TEST_RECEIPT_EMAIL_ERROR:', emailErr);
@@ -507,11 +521,12 @@ export async function POST(request: Request) {
               companyName: resolvedCompanyName,
             });
 
+            const realEmailSubject = `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`;
             await getResend().emails.send({
               from: `${brand.name} <info@jhpsfl.com>`,
               replyTo: brand.email,
               to: [customerEmail],
-              subject: `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`,
+              subject: realEmailSubject,
               html: receiptHtml,
               attachments: [
                 {
@@ -519,6 +534,18 @@ export async function POST(request: Request) {
                   content: pdfBuffer.toString('base64'),
                 },
               ],
+            });
+
+            // Log to email_messages so it shows in admin Messages tab
+            await logEmail({
+              direction: 'outbound',
+              from_email: brand.email,
+              to_email: customerEmail,
+              subject: realEmailSubject,
+              body_html: receiptHtml,
+              body_text: `Payment receipt for $${parseFloat(amount).toFixed(2)} — ${receiptNum}`,
+              folder: 'sent',
+              has_attachments: true,
             });
           } catch (emailErr) {
             console.error('RECEIPT_EMAIL_ERROR:', emailErr);
