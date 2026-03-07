@@ -181,19 +181,26 @@ export async function POST(req: NextRequest) {
       // Extract service from body: "new SERVICETYPE request" or "requested a quote...for a SERVICETYPE"
       const serviceMatch = text.match(/new (.+?) request\./i) || text.match(/for a (.+?)\./i);
 
-      const isNewLead = subjectStr.includes('new lead on Yelp');
-      const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
+      // Skip non-actionable Yelp emails
+      const isNearbyJob = subjectStr.includes('New job near you');
+      const isAccountEmail = subjectStr.includes('Confirm Your Email') || subjectStr.includes('Invitation from') || subjectStr.includes('Password');
+      if (isNearbyJob || isAccountEmail) {
+        console.log(`Yelp non-actionable email — skipping trigger: ${subjectStr}`);
+      } else {
+        const isNewLead = subjectStr.includes('new lead on Yelp');
+        const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
 
-      await supabase.from('yelp_triggers').insert({
-        trigger_type: triggerType,
-        lead_id: leadMatch?.[1] || null,
-        thread_id: threadMatch?.[1] || null,
-        customer_name: customerName,
-        service: serviceMatch?.[1] || null,
-        email_subject: subjectStr,
-        email_body_text: text.substring(0, 2000),
-      });
-      console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+        await supabase.from('yelp_triggers').insert({
+          trigger_type: triggerType,
+          lead_id: leadMatch?.[1] || null,
+          thread_id: threadMatch?.[1] || null,
+          customer_name: customerName,
+          service: serviceMatch?.[1] || null,
+          email_subject: subjectStr,
+          email_body_text: text.substring(0, 2000),
+        });
+        console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+      }
     } catch (err) {
       console.error('Yelp trigger insert failed (non-fatal):', err);
     }
