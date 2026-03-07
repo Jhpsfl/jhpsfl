@@ -172,18 +172,24 @@ export async function POST(req: NextRequest) {
       // Extract thread ID from URL: /thread/THREAD_ID
       const threadMatch = combined.match(/\/thread\/([A-Za-z0-9_-]{10,})/);
 
-      // Extract customer name from subject: "Message from NAME for Jenkins..."
-      const nameFromSubject = subjectStr.match(/Message from (.+?) for/i)?.[1];
+      // Extract customer name from various Yelp subject formats:
+      // "RE: Message from NAME for Jenkins..." | "New Reply Message from NAME" | "Message from NAME"
+      const nameFromSubject = subjectStr.match(/Message from (.+?) for/i)?.[1]
+        || subjectStr.match(/Message from (.+?)$/i)?.[1];
       // Or from new lead body: "NAME requested a quote"
       const nameFromBody = text.match(/^(\w[\w\s.]+?) requested a quote/)?.[1];
-      const customerName = nameFromSubject || nameFromBody || null;
+      const customerName = (nameFromSubject || nameFromBody || '').trim() || null;
 
       // Extract service from body: "new SERVICETYPE request" or "requested a quote...for a SERVICETYPE"
       const serviceMatch = text.match(/new (.+?) request\./i) || text.match(/for a (.+?)\./i);
 
-      // Skip non-actionable Yelp emails
+      // Skip non-actionable Yelp emails (logins, account changes, ads, confirmations)
       const isNearbyJob = subjectStr.includes('New job near you');
-      const isAccountEmail = subjectStr.includes('Confirm Your Email') || subjectStr.includes('Invitation from') || subjectStr.includes('Password');
+      const isAccountEmail = subjectStr.includes('Confirm Your Email')
+        || subjectStr.includes('Invitation from')
+        || subjectStr.includes('Password')
+        || subjectStr.includes('New login')
+        || subjectStr.includes('access has changed');
       if (isNearbyJob || isAccountEmail) {
         console.log(`Yelp non-actionable email — skipping trigger: ${subjectStr}`);
       } else {
