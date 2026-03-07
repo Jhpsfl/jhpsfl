@@ -94,14 +94,31 @@ export async function POST(req: NextRequest) {
   let leadId: string | null = null;
 
   if (in_reply_to) {
+    // Resend stores a bare UUID (e.g. "550e8400-...") as resend_message_id,
+    // but inbound In-Reply-To headers use SMTP format: "<uuid@resend.dev>"
+    // After stripping angle brackets we get "uuid@resend.dev", so extract the UUID part
+    const resendUuid = in_reply_to.includes('@') ? in_reply_to.split('@')[0] : in_reply_to;
+
+    // Try matching the UUID portion first, then fall back to the full value
     const { data: original } = await supabase
       .from('email_messages')
       .select('thread_id, lead_id')
-      .eq('resend_message_id', in_reply_to)
+      .eq('resend_message_id', resendUuid)
       .single();
     if (original) {
       threadId = original.thread_id;
       leadId = original.lead_id;
+    } else {
+      // Fallback: try matching the full In-Reply-To value as-is
+      const { data: fallback } = await supabase
+        .from('email_messages')
+        .select('thread_id, lead_id')
+        .eq('resend_message_id', in_reply_to)
+        .single();
+      if (fallback) {
+        threadId = fallback.thread_id;
+        leadId = fallback.lead_id;
+      }
     }
   }
 
@@ -140,6 +157,48 @@ export async function POST(req: NextRequest) {
     body: `From: ${from_email}`,
     url: '/admin?tab=messages',
   });
+
+  // ─── YELP AI AGENT TRIGGER ───────────────────────────────────────────────
+  // Detect Yelp lead/message emails and write a trigger for the local agent
+  const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
+  if (isYelp) {
+    try {
+      const text = body_text || '';
+      const html = body_html || '';
+      const combined = text + html;
+
+      // Extract lead ID from URL: /leads/LEAD_ID or /leads_center/.../leads/LEAD_ID
+      const leadMatch = combined.match(/\/leads\/([A-Za-z0-9_-]{10,})/);
+      // Extract thread ID from URL: /thread/THREAD_ID
+      const threadMatch = combined.match(/\/thread\/([A-Za-z0-9_-]{10,})/);
+
+      // Extract customer name from subject: "Message from NAME for Jenkins..."
+      const nameFromSubject = subjectStr.match(/Message from (.+?) for/i)?.[1];
+      // Or from new lead body: "NAME requested a quote"
+      const nameFromBody = text.match(/^(\w[\w\s.]+?) requested a quote/)?.[1];
+      const customerName = nameFromSubject || nameFromBody || null;
+
+      // Extract service from body: "new SERVICETYPE request" or "requested a quote...for a SERVICETYPE"
+      const serviceMatch = text.match(/new (.+?) request\./i) || text.match(/for a (.+?)\./i);
+
+      const isNewLead = subjectStr.includes('new lead on Yelp');
+      const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
+
+      await supabase.from('yelp_triggers').insert({
+        trigger_type: triggerType,
+        lead_id: leadMatch?.[1] || null,
+        thread_id: threadMatch?.[1] || null,
+        customer_name: customerName,
+        service: serviceMatch?.[1] || null,
+        email_subject: subjectStr,
+        email_body_text: text.substring(0, 2000),
+      });
+      console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+    } catch (err) {
+      console.error('Yelp trigger insert failed (non-fatal):', err);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Forward a copy to Gmail so it's readable from any device
   const forwardTo = process.env.EMAIL_FORWARD_TO || 'FRLawnCareFL@gmail.com';
