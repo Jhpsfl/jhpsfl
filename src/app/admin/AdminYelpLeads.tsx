@@ -112,6 +112,12 @@ export default function AdminYelpLeads({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const prevMsgCountRef = useRef<number>(0);
+  const selectedRef = useRef<YelpConversation | null>(null);
+  const filterRef = useRef(filter);
+
+  // Keep refs in sync
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  useEffect(() => { filterRef.current = filter; }, [filter]);
 
   // Back navigation for mobile
   useEffect(() => {
@@ -124,29 +130,36 @@ export default function AdminYelpLeads({
     }
   }, [backRef, selected, showInfo]);
 
-  const fetchConversations = useCallback(async () => {
+  // Stable fetch function that reads filter from ref
+  const fetchConversations = useCallback(async (showLoading?: boolean) => {
+    if (showLoading) setLoading(true);
     try {
-      const res = await fetch(`/api/yelp-leads?status=${filter}`);
-      if (!res.ok) return;
+      const res = await fetch(`/api/yelp-leads?status=${filterRef.current}`);
+      if (!res.ok) {
+        console.error("Yelp leads fetch failed:", res.status);
+        return;
+      }
       const data = await res.json();
       setConversations(data);
-      // Refresh selected conversation if open
-      if (selected) {
-        const updated = data.find((c: YelpConversation) => c.id === selected.id);
+      const sel = selectedRef.current;
+      if (sel) {
+        const updated = data.find((c: YelpConversation) => c.id === sel.id);
         if (updated) setSelected(updated);
       }
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error("Yelp leads fetch error:", err);
+    }
     setLoading(false);
-  }, [filter, selected]);
+  }, []); // stable — never recreated
 
+  // Fetch on mount and when filter changes
   useEffect(() => {
-    setLoading(true);
-    fetchConversations();
+    fetchConversations(true);
   }, [filter, fetchConversations]);
 
-  // Poll every 15s
+  // Poll every 30s — stable interval, never restarts
   useEffect(() => {
-    pollRef.current = setInterval(fetchConversations, 60000);
+    pollRef.current = setInterval(() => fetchConversations(), 30000);
     return () => clearInterval(pollRef.current);
   }, [fetchConversations]);
 
@@ -161,6 +174,7 @@ export default function AdminYelpLeads({
 
   const doAction = async (action: string) => {
     if (!selected) return;
+    if (action === "complete" && !confirm("Mark this lead as done?")) return;
     setActionLoading(action);
     try {
       const res = await fetch("/api/yelp-leads", {
@@ -170,7 +184,12 @@ export default function AdminYelpLeads({
       });
       if (res.ok) {
         const data = await res.json();
-        setSelected(prev => prev ? { ...prev, status: data.status } : null);
+        if (action === "complete") {
+          // Go back to list so it's not stuck on a completed thread
+          setSelected(null);
+        } else {
+          setSelected(prev => prev ? { ...prev, status: data.status } : null);
+        }
         fetchConversations();
       }
     } catch { /* silent */ }
@@ -384,6 +403,13 @@ export default function AdminYelpLeads({
                 background: "#4CAF50", color: "#fff", cursor: "pointer", fontWeight: 600,
                 opacity: actionLoading ? 0.5 : 1,
               }}>Resume AI</button>
+            )}
+            {selected.status === "completed" && (
+              <button onClick={() => doAction("take_over")} disabled={!!actionLoading} style={{
+                fontSize: "12px", padding: "4px 12px", borderRadius: "6px", border: "none",
+                background: "#FF9800", color: "#fff", cursor: "pointer", fontWeight: 600,
+                opacity: actionLoading ? 0.5 : 1,
+              }}>Reopen</button>
             )}
             {selected.status !== "completed" && (
               <button onClick={() => doAction("complete")} disabled={!!actionLoading} style={{
