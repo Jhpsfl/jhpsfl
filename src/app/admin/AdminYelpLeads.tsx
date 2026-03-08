@@ -143,7 +143,7 @@ export default function AdminYelpLeads({
 
   // Poll every 15s
   useEffect(() => {
-    pollRef.current = setInterval(fetchConversations, 15000);
+    pollRef.current = setInterval(fetchConversations, 60000);
     return () => clearInterval(pollRef.current);
   }, [fetchConversations]);
 
