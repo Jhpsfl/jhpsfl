@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: "/studio/",
+      disallow: ["/studio/", "/admin/", "/account/", "/api/"],
     },
     sitemap: "https://jhpsfl.com/sitemap.xml",
   };

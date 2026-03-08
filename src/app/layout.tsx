@@ -87,6 +87,13 @@ export default function RootLayout({
               "url": "https://jhpsfl.com",
               "telephone": "+14076869817",
               "email": "Info@jhpsfl.com",
+              "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Deltona",
+                "addressRegion": "FL",
+                "postalCode": "32725",
+                "addressCountry": "US"
+              },
               "logo": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
               "image": "https://cdn.sanity.io/images/fiublsi2/production/d1b9d7c905b59b28febea0c27b032a9718ca58ac-1024x1024.png",
               "priceRange": "$$",
@@ -118,7 +125,7 @@ export default function RootLayout({
               },
               "sameAs": [
                 "https://www.facebook.com/profile.php?id=100063685565128",
-                // TODO: add Google Business Profile URL once verified
+                "https://www.yelp.com/biz/jenkins-home-and-property-solutions-deltona"
               ],
               "openingHoursSpecification": [
                 { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "07:00", "closes": "18:00" },
