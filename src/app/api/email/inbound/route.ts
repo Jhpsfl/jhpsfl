@@ -153,14 +153,17 @@ export async function POST(req: NextRequest) {
     body_html: body_html ?? undefined,
     body_text: body_text ?? undefined,
     folder: isYelp ? 'yelp' : undefined,
+    read: isYelp ? true : undefined,
   });
 
-  // Send push notification to all admins
-  await sendPushToAllAdmins({
-    title: '✉️ New Email',
-    body: `From: ${from_email}`,
-    url: '/admin?tab=messages',
-  });
+  // Send push notification to all admins (skip for Yelp — those notify via Leads tab)
+  if (!isYelp) {
+    await sendPushToAllAdmins({
+      title: '✉️ New Email',
+      body: `From: ${from_email}`,
+      url: '/admin?tab=messages',
+    });
+  }
 
   // ─── YELP AI AGENT TRIGGER ───────────────────────────────────────────────
   if (isYelp) {

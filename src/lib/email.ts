@@ -96,6 +96,7 @@ export async function logEmail(params: {
   has_attachments?: boolean;
   cc_emails?: string[];
   bcc_emails?: string[];
+  read?: boolean;
 }): Promise<EmailMessage | null> {
   const supabase = createSupabaseAdmin();
   const folder = params.folder || (params.is_draft ? 'drafts' : params.direction === 'outbound' ? 'sent' : 'inbox');
@@ -111,7 +112,7 @@ export async function logEmail(params: {
       body_html: params.body_html || null,
       body_text: params.body_text || null,
       resend_message_id: params.resend_message_id || null,
-      read: params.direction === 'outbound',
+      read: params.read ?? (params.direction === 'outbound'),
       folder,
       is_draft: params.is_draft || false,
       has_attachments: params.has_attachments || false,

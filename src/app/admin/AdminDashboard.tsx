@@ -994,7 +994,7 @@ export default function AdminDashboard() {
                   <NavItem icon="🔄" label="Subscriptions" active={activeTab === "subscriptions"} onClick={() => switchTab("subscriptions")} />
                   <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} badge={badgeCounts.newLeads} />
                   <NavItem icon="🟡" label="Yelp Leads" active={activeTab === "yelp_leads"} onClick={() => switchTab("yelp_leads")} />
-                  <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
+                  <NavItem icon="✉️" label="Email" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
                   <NavItem icon="📄" label="Invoices" active={activeTab === "invoices"} onClick={() => switchTab("invoices")} />
                   <NavItem icon="📋" label="Estimates" active={activeTab === "quotes"} onClick={() => switchTab("quotes")} />
 
@@ -1169,7 +1169,7 @@ export default function AdminDashboard() {
 
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
                           {[
-                            { icon: "✉️", label: "Messages", tab: "messages", badge: badgeCounts.unreadEmail },
+                            { icon: "✉️", label: "Email", tab: "messages", badge: badgeCounts.unreadEmail },
                             { icon: "📹", label: "Video", tab: "video_leads", badge: badgeCounts.newLeads },
                             { icon: "🟡", label: "Yelp", tab: "yelp_leads", badge: 0 },
                             { icon: "💰", label: "Payments", tab: "payments", badge: 0 },
