@@ -48,9 +48,11 @@ async function buildThreadQuery(
     query = query.eq('direction', 'outbound').eq('is_draft', false).neq('folder', 'trash');
   } else if (folder === 'spam') {
     query = query.eq('folder', 'spam');
+  } else if (folder === 'yelp') {
+    query = query.eq('folder', 'yelp');
   } else {
-    // Default: inbox — show all non-draft, non-trash/spam messages
-    query = query.eq('is_draft', false).not('folder', 'in', '("trash","spam")');
+    // Default: inbox — show all non-draft, non-trash/spam/yelp messages
+    query = query.eq('is_draft', false).not('folder', 'in', '("trash","spam","yelp")');
   }
 
   const isInbox = !folder || folder === 'inbox';
@@ -73,6 +75,7 @@ async function buildThreadQuery(
     drafts: 0,
     trash: 0,
     spam: 0,
+    yelp: 0,
   };
 
   if (allMessages) {
@@ -81,7 +84,8 @@ async function buildThreadQuery(
       if (msg.starred && msg.folder !== 'trash') folderCounts.starred++;
       if (msg.folder === 'trash') folderCounts.trash++;
       if (msg.folder === 'spam') folderCounts.spam++;
-      // Unread inbox count
+      if (msg.folder === 'yelp') folderCounts.yelp++;
+      // Unread inbox count — exclude yelp
       if (!msg.read && msg.folder === 'inbox' && !msg.is_draft) folderCounts.inbox++;
       if (msg.direction === 'outbound' && !msg.is_draft && msg.folder !== 'trash') folderCounts.sent++;
     }

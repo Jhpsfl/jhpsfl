@@ -139,6 +139,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Detect Yelp emails early so we can file them into the yelp folder
+  const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
+
   // Store in DB
   const logged = await logEmail({
     thread_id: threadId,
@@ -149,6 +152,7 @@ export async function POST(req: NextRequest) {
     subject: subjectStr,
     body_html: body_html ?? undefined,
     body_text: body_text ?? undefined,
+    folder: isYelp ? 'yelp' : undefined,
   });
 
   // Send push notification to all admins
@@ -159,8 +163,6 @@ export async function POST(req: NextRequest) {
   });
 
   // ─── YELP AI AGENT TRIGGER ───────────────────────────────────────────────
-  // Detect Yelp lead/message emails and write a trigger for the local agent
-  const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
   if (isYelp) {
     try {
       const text = body_text || '';

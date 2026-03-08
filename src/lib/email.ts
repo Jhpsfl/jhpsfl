@@ -1,7 +1,7 @@
 import { createSupabaseAdmin } from './supabase';
 
 // ── Types ──────────────────────────────────────────────────────
-export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam';
+export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'yelp';
 
 export interface EmailMessage {
   id: string;

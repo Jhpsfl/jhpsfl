@@ -10,7 +10,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 
 // ─── Types ───
-type EmailFolder = "inbox" | "sent" | "drafts" | "trash" | "spam" | "starred";
+type EmailFolder = "inbox" | "sent" | "drafts" | "trash" | "spam" | "starred" | "yelp";
 
 interface EmailThread {
   thread_id: string;
@@ -95,6 +95,7 @@ interface FolderCounts {
   drafts: number;
   trash: number;
   spam: number;
+  yelp: number;
 }
 
 // ─── Helpers ───
@@ -234,6 +235,7 @@ const folderIcons: Record<string, string> = {
   drafts: "\u{1F4DD}",
   spam: "\u26A0",
   trash: "\u{1F5D1}",
+  yelp: "\u{1F7E1}",
 };
 
 // ─── Tiptap Editor Toolbar ───
@@ -271,7 +273,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
   // ─── State ───
   const [activeFolder, setActiveFolder] = useState<EmailFolder>("inbox");
   const [threads, setThreads] = useState<EmailThread[]>([]);
-  const [folderCounts, setFolderCounts] = useState<FolderCounts>({ inbox: 0, sent: 0, starred: 0, drafts: 0, trash: 0, spam: 0 });
+  const [folderCounts, setFolderCounts] = useState<FolderCounts>({ inbox: 0, sent: 0, starred: 0, drafts: 0, trash: 0, spam: 0, yelp: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
@@ -757,7 +759,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
 
         {/* Folder list */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-          {(["inbox", "starred", "sent", "drafts", "spam", "trash"] as EmailFolder[]).map(folder => {
+          {(["inbox", "starred", "sent", "yelp", "drafts", "spam", "trash"] as EmailFolder[]).map(folder => {
             const isActive = activeFolder === folder;
             const count = folderCounts[folder] || 0;
             return (
