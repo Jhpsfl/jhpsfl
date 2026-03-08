@@ -36,25 +36,34 @@ export async function POST(req: NextRequest) {
   const service = (conv.services || []).join(", ") || "property maintenance";
   const location = conv.zip_code ? `zip code ${conv.zip_code}` : "Central Florida";
 
-  const systemPrompt = `You are helping the owner of Jenkins Home & Property Solutions (JHPS) draft a reply to a customer on Yelp.
+  const msgCount = messages.length;
+  const customerMsgs = messages.filter((m: { role: string }) => m.role === "customer").length;
+
+  const systemPrompt = `You are helping Joshua, the owner of Jenkins Home & Property Solutions (JHPS), draft a reply to close a deal with a customer on Yelp.
 
 CONTEXT:
 - Customer: ${conv.customer_name}
 - Service: ${service}
 - Location: ${location}
-- This is a Yelp lead conversation. The owner wants to sound warm, professional, and personal.
+- Conversation length: ${msgCount} messages (${customerMsgs} from customer)
+- This customer found JHPS on Yelp and is considering hiring them.
 
-YOUR JOB: Write a suggested reply FROM the business owner (Joshua) to the customer.
+YOUR GOAL: Move this conversation toward BOOKING THE JOB. Read the ENTIRE conversation history — not just the last message — and figure out where we are in the sales process.
 
-RULES:
-- Sound like a real person, not a bot. Warm and professional.
-- 2-4 sentences max.
-- Reference the conversation context — what the customer just said.
-- If the customer asked about scheduling, suggest working with their availability.
-- If the customer asked about pricing, mention you'd like to see the site first for an accurate quote.
-- NEVER commit to a specific time — say you'll check the schedule and confirm.
-- End with "- Joshua, JHPS" (NOT "The JHPS Team" — this is the owner replying personally).
-- Do NOT repeat what the AI bot already said. Be fresh and personal.`;
+STRATEGY based on conversation stage:
+- EARLY (1-3 messages): Build rapport, show you understand their specific need, ask what days work for them
+- MIDDLE (4-6 messages): They're interested but haven't committed. Push toward scheduling: "I'd love to come take a look this week — what day works best?"
+- LATE (7+ messages): Stop being passive. Be direct: "Let's get you on the schedule" or "I can have my crew out there [timeframe]"
+- If they asked about PRICING: "I'd love to come see the property so I can give you an accurate number — no surprises. What day works to meet up?"
+- If they asked about a service we DON'T do: Be honest but redirect to what we can help with
+- If they seem hesitant: Address the hesitation directly, offer to come look for free with no obligation
+
+TONE:
+- Sound like Joshua texting back — warm, confident, direct. NOT corporate or salesy.
+- 2-4 sentences max. Every sentence should move toward booking.
+- End with "- Joshua, JHPS"
+- Do NOT repeat things the AI bot already said. Be fresh.
+- Do NOT be wishy-washy. Be confident and action-oriented.`;
 
   const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: systemPrompt },
@@ -71,9 +80,14 @@ RULES:
   const lastCustomerMsg = [...messages].reverse().find((m: { role: string }) => m.role === "customer");
   chatMessages.push({
     role: "user",
-    content: `The customer's latest message is: "${lastCustomerMsg?.text || "(see above)"}"
+    content: `Customer's latest message: "${lastCustomerMsg?.text || "(see above)"}"
 
-Write a suggested reply for the business owner Joshua to send. Be warm, personal, and address what the customer said. Keep it 2-4 sentences.`,
+Read the FULL conversation above. Consider:
+1. What has the customer already been told? Don't repeat it.
+2. What's stopping them from booking? Address that.
+3. What's the next step to get this job on the schedule?
+
+Write Joshua's reply. Be direct and move toward closing. 2-4 sentences.`,
   });
 
   try {
