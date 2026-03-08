@@ -108,6 +108,7 @@ export default function AdminYelpLeads({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const prevMsgCountRef = useRef<number>(0);
 
   // Back navigation for mobile
   useEffect(() => {
@@ -146,10 +147,14 @@ export default function AdminYelpLeads({
     return () => clearInterval(pollRef.current);
   }, [fetchConversations]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom only when a new message arrives or conversation first opens
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selected?.messages]);
+    const count = selected?.messages?.length || 0;
+    if (count !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = count;
+      messagesEndRef.current?.scrollIntoView({ behavior: count === 0 ? "instant" : "smooth" });
+    }
+  }, [selected?.messages?.length]);
 
   const doAction = async (action: string) => {
     if (!selected) return;
@@ -191,6 +196,7 @@ export default function AdminYelpLeads({
   };
 
   const openConversation = (conv: YelpConversation) => {
+    prevMsgCountRef.current = 0; // reset so it scrolls to bottom on open
     setSelected(conv);
     setShowInfo(false);
     onNavigate?.();
