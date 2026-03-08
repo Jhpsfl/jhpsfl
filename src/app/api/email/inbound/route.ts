@@ -156,8 +156,15 @@ export async function POST(req: NextRequest) {
     read: isYelp ? true : undefined,
   });
 
-  // Send push notification to all admins (skip for Yelp — those notify via Leads tab)
-  if (!isYelp) {
+  // Send push notification to all admins
+  if (isYelp) {
+    const isNewLead = subjectStr.includes('new lead on Yelp');
+    await sendPushToAllAdmins({
+      title: isNewLead ? '🟡 New Yelp Lead' : '🟡 Yelp Message',
+      body: isNewLead ? `New lead from Yelp!` : `Reply on Yelp`,
+      url: '/admin?tab=yelp_leads',
+    });
+  } else {
     await sendPushToAllAdmins({
       title: '✉️ New Email',
       body: `From: ${from_email}`,
