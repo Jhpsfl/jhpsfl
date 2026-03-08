@@ -105,6 +105,9 @@ export default function AdminYelpLeads({
   const [sending, setSending] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
   const [showInfo, setShowInfo] = useState(false);
+  const [suggestion, setSuggestion] = useState("");
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
@@ -195,11 +198,37 @@ export default function AdminYelpLeads({
     setSending(false);
   };
 
+  const fetchSuggestion = useCallback(async (convId: string) => {
+    setSuggestLoading(true);
+    setSuggestion("");
+    setSuggestDismissed(false);
+    try {
+      const res = await fetch("/api/yelp-leads/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: convId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.suggestion) setSuggestion(data.suggestion);
+      }
+    } catch { /* silent */ }
+    setSuggestLoading(false);
+  }, []);
+
   const openConversation = (conv: YelpConversation) => {
     prevMsgCountRef.current = 0; // reset so it scrolls to bottom on open
     setSelected(conv);
     setShowInfo(false);
+    setSuggestion("");
+    setSuggestDismissed(false);
     onNavigate?.();
+    // Auto-fetch suggestion if last message is from customer
+    const msgs = conv.messages || [];
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg?.role === "customer" && conv.status !== "completed") {
+      fetchSuggestion(conv.id);
+    }
   };
 
   // ─── THREAD LIST VIEW ───
@@ -455,6 +484,63 @@ export default function AdminYelpLeads({
           })}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* AI Suggestion */}
+        {selected.status !== "completed" && !suggestDismissed && (suggestion || suggestLoading) && (
+          <div style={{
+            padding: "10px 12px", borderTop: "1px solid #1a3a1a",
+            background: "rgba(25,45,60,0.4)", flexShrink: 0,
+          }}>
+            {suggestLoading ? (
+              <div style={{ fontSize: "13px", color: "#6ba3c7", textAlign: "center", padding: "8px 0" }}>
+                Thinking...
+              </div>
+            ) : (
+              <>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  marginBottom: "6px",
+                }}>
+                  <span style={{ fontSize: "11px", color: "#6ba3c7", fontWeight: 600 }}>
+                    AI Suggested Reply
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button onClick={() => fetchSuggestion(selected.id)} style={{
+                      fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+                      border: "1px solid #2a4a5a", background: "transparent",
+                      color: "#6ba3c7", cursor: "pointer",
+                    }}>Retry</button>
+                    <button onClick={() => setSuggestDismissed(true)} style={{
+                      fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+                      border: "1px solid #333", background: "transparent",
+                      color: "#666", cursor: "pointer",
+                    }}>Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setReplyText(suggestion);
+                    setSuggestDismissed(true);
+                    textareaRef.current?.focus();
+                  }}
+                  style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "10px 12px", borderRadius: "12px",
+                    background: "rgba(30,60,80,0.4)",
+                    border: "1px solid rgba(70,130,180,0.3)",
+                    color: "#b0d4e8", fontSize: "14px", lineHeight: "1.45",
+                    cursor: "pointer", whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  }}
+                >
+                  {suggestion}
+                </button>
+                <div style={{ fontSize: "10px", color: "#4a7a9a", marginTop: "4px", textAlign: "center" }}>
+                  Tap to use this reply — you can edit before sending
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Reply input */}
         {selected.status !== "completed" && (
