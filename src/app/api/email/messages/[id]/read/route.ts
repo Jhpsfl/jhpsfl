@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@clerk/nextjs/server';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
-
-  if (!clerkUserId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -19,7 +18,7 @@ export async function PATCH(
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerkUserId)
+    .eq('clerk_user_id', userId)
     .single();
 
   if (!admin) {

@@ -5,6 +5,7 @@ import { logEmail } from '@/lib/email';
 import { generateEstimatePDF, getEstimateFilename } from '@/lib/receipt-generator';
 import type { EstimateData } from '@/lib/receipt-generator';
 import { randomUUID } from 'crypto';
+import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -12,10 +13,15 @@ const FINANCING_MESSAGE =
   'This project is eligible for flexible payment options including deposits and installment plans. Contact us to discuss a payment schedule that works for you.';
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, quote, customer } = body;
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!clerk_user_id || !quote || !customer?.email) {
+  const body = await req.json();
+  const { quote, customer } = body;
+
+  if (!quote || !customer?.email) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -23,7 +29,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 

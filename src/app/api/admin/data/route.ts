@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { chargeStoredCard, advanceBillingDate } from "@/lib/square";
+import { auth } from '@clerk/nextjs/server';
 import { Resend } from "resend";
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from "@/lib/receipt-generator";
 import type { ReceiptData } from "@/lib/receipt-generator";
@@ -62,18 +63,22 @@ async function verifyAdmin(clerkUserId: string) {
 // ─── GET: Fetch data ───
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
-    const clerkUserId = url.searchParams.get("clerk_user_id");
     const resource = url.searchParams.get("resource");
     const customerId = url.searchParams.get("customer_id");
     const status = url.searchParams.get("status");
     const limit = parseInt(url.searchParams.get("limit") || "100");
 
-    if (!clerkUserId || !resource) {
-      return NextResponse.json({ error: "Missing clerk_user_id or resource" }, { status: 400 });
+    if (!resource) {
+      return NextResponse.json({ error: "Missing resource" }, { status: 400 });
     }
 
-    const admin = await verifyAdmin(clerkUserId);
+    const admin = await verifyAdmin(userId);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -98,9 +103,9 @@ export async function GET(request: NextRequest) {
         ] = await Promise.all([
           supabase.from("payments").select("amount, status, payment_method, created_at, paid_at").eq("status", "completed").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
           supabase.from("invoices").select("amount_due, amount_paid, status, created_at, paid_at").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
-          supabase.from("quotes").select("id, status, total, created_at, is_commercial").order("created_at", { ascending: true }),
-          supabase.from("jobs").select("id, status, service_type, amount, created_at, completed_date").order("created_at", { ascending: true }),
-          supabase.from("customers").select("id, customer_type, created_at").order("created_at", { ascending: true }),
+          supabase.from("quotes").select("id, status, total, created_at, is_commercial").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("jobs").select("id, status, service_type, amount, created_at, completed_date").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("customers").select("id, customer_type, created_at").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
           supabase.from("feedback_requests").select("id, type, status, sent_at, responded_at, created_at"),
           supabase.from("feedback_responses").select("id, rating, lost_estimate_reason, google_review_clicked, resolution_requested, created_at"),
         ]);
@@ -117,28 +122,31 @@ export async function GET(request: NextRequest) {
       }
 
       case "overview": {
+        // Only sum revenue from the last 30 days to avoid loading thousands of rows
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
         const [customersRes, activeJobsRes, completedJobsRes, subsRes, paymentsRes, recentPaymentsRes, paidInvoicesRes] = await Promise.all([
           supabase.from("customers").select("id", { count: "exact", head: true }),
           supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
           supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "completed"),
           supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("payments").select("amount, notes").eq("status", "completed"),
+          supabase.from("payments").select("amount, notes").eq("status", "completed").gte("paid_at", thirtyDaysAgo),
           supabase.from("payments").select("*").order("created_at", { ascending: false }).limit(5),
-          supabase.from("invoices").select("invoice_number, amount_paid").eq("status", "paid"),
+          supabase.from("invoices").select("invoice_number, amount_paid").eq("status", "paid").gte("paid_at", thirtyDaysAgo),
         ]);
 
         const paymentsList = paymentsRes.data || [];
         const revenueFromPayments = paymentsList.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
         // Avoid double-counting: exclude paid invoices that already have a matching payment record
         const invoiceNumsWithPayment = new Set(
-          paymentsList.map((p: { notes?: string }) => {
+          paymentsList.map((p: { amount: number; notes?: string }) => {
             const m = (p.notes || '').match(/INV#(INV-\d{4}-\d+)/);
             return m ? m[1] : null;
           }).filter(Boolean)
         );
         const revenueFromInvoices = (paidInvoicesRes.data || [])
-          .filter((i: { invoice_number: string }) => !invoiceNumsWithPayment.has(i.invoice_number))
-          .reduce((sum: number, i: { amount_paid: number }) => sum + (i.amount_paid || 0), 0);
+          .filter((i: { invoice_number: string; amount_paid: number }) => !invoiceNumsWithPayment.has(i.invoice_number))
+          .reduce((sum: number, i: { invoice_number: string; amount_paid: number }) => sum + (i.amount_paid || 0), 0);
         const recentRevenue = revenueFromPayments + revenueFromInvoices;
 
         return NextResponse.json({
@@ -271,14 +279,19 @@ export async function GET(request: NextRequest) {
 // ─── POST: Create/Update/Delete ───
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { clerk_user_id, resource, action, payload } = body;
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!clerk_user_id || !resource || !action) {
+    const body = await request.json();
+    const { resource, action, payload } = body;
+
+    if (!resource || !action) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const admin = await verifyAdmin(clerk_user_id);
+    const admin = await verifyAdmin(userId);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

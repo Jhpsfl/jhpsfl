@@ -32,7 +32,7 @@ export default function MobileNav({ activeTab, onSwitchTab }: {
           { icon: "👥", label: "Customers", tab: "customers" as Tab },
           { icon: "🔧", label: "Jobs", tab: "jobs" as Tab },
           { icon: "💰", label: "Payments", tab: "payments" as Tab },
-          { icon: "📹", label: "Leads", tab: "video_leads" as Tab }
+          { icon: "🟡", label: "Leads", tab: "yelp_leads" as Tab }
         ].map((item) => {
           const isActive = activeTab === item.tab;
           return (

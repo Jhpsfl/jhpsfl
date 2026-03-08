@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@clerk/nextjs/server';
 
 /**
  * POST /api/push/subscribe
@@ -11,14 +12,19 @@ import { createSupabaseAdmin } from '@/lib/supabase';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { clerk_user_id, subscription } = await request.json();
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    console.log('📤 Push subscribe request:', { clerk_user_id, endpoint: subscription?.endpoint?.substring(0, 80) });
+    const { subscription } = await request.json();
 
-    if (!clerk_user_id || !subscription) {
-      console.error('❌ Missing clerk_user_id or subscription');
+    console.log('📤 Push subscribe request:', { userId, endpoint: subscription?.endpoint?.substring(0, 80) });
+
+    if (!subscription) {
+      console.error('❌ Missing subscription');
       return NextResponse.json(
-        { error: 'Missing clerk_user_id or subscription' },
+        { error: 'Missing subscription' },
         { status: 400 }
       );
     }
@@ -40,7 +46,7 @@ export async function POST(request: NextRequest) {
       .from('push_subscriptions')
       .upsert(
         {
-          clerk_user_id,
+          clerk_user_id: userId,
           endpoint: subscription.endpoint,
           subscription,
         },
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('✅ Push subscription saved successfully:', { clerk_user_id, data });
+    console.log('✅ Push subscription saved successfully:', { userId, data });
     return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error('❌ Push subscribe error:', err);

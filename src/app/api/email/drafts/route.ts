@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { randomUUID } from 'crypto';
 
 // POST: Save or update a draft
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, draft_id, to_email, subject, body_html, body_text, cc_emails, bcc_emails } = body;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!clerk_user_id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const body = await req.json();
+  const { draft_id, to_email, subject, body_html, body_text, cc_emails, bcc_emails } = body;
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerk_user_id).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   if (draft_id) {
@@ -61,15 +63,16 @@ export async function POST(req: NextRequest) {
 
 // DELETE: Delete a draft
 export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
   const draftId = searchParams.get('draft_id');
 
-  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!draftId) return NextResponse.json({ error: 'Missing draft_id' }, { status: 400 });
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { error } = await supabase.from('email_messages').delete().eq('id', draftId).eq('is_draft', true);

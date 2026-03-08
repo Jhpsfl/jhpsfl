@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
+import { auth } from '@clerk/nextjs/server';
 
 // PATCH /api/customer/dashboard — customer self-service profile updates
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { clerk_user_id, action, payload } = body;
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!clerk_user_id || !action) {
-      return NextResponse.json({ error: "clerk_user_id and action required" }, { status: 400 });
+    const body = await req.json();
+    const { action, payload } = body;
+
+    if (!action) {
+      return NextResponse.json({ error: "action required" }, { status: 400 });
     }
 
     const supabase = createSupabaseAdmin();
@@ -17,7 +23,7 @@ export async function PATCH(req: NextRequest) {
     const { data: customer, error: lookupErr } = await supabase
       .from("customers")
       .select("id")
-      .eq("clerk_user_id", clerk_user_id)
+      .eq("clerk_user_id", userId)
       .single();
 
     if (lookupErr || !customer) {
@@ -102,14 +108,9 @@ export async function PATCH(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const clerkUserId = searchParams.get("clerk_user_id");
-
-    if (!clerkUserId) {
-      return NextResponse.json(
-        { error: "clerk_user_id is required" },
-        { status: 400 }
-      );
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createSupabaseAdmin();
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
     const { data: customer, error: customerError } = await supabase
       .from("customers")
       .select("*")
-      .eq("clerk_user_id", clerkUserId)
+      .eq("clerk_user_id", userId)
       .single();
 
     if (customerError || !customer) {

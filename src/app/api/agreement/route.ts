@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { generateAgreementText, type QuoteSnapshot, type PaymentScheduleSnapshot } from "@/lib/agreement";
 import crypto from "crypto";
+import { auth } from '@clerk/nextjs/server';
 
 // ─── POST: Create a new agreement (admin-initiated) ───
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { clerk_user_id, quote_id, invoice_id } = body;
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!clerk_user_id || (!quote_id && !invoice_id)) {
-      return NextResponse.json({ error: "Missing clerk_user_id or quote_id/invoice_id" }, { status: 400 });
+    const body = await request.json();
+    const { quote_id, invoice_id } = body;
+
+    if (!quote_id && !invoice_id) {
+      return NextResponse.json({ error: "Missing quote_id or invoice_id" }, { status: 400 });
     }
 
     const supabase = createSupabaseAdmin();
@@ -19,7 +25,7 @@ export async function POST(request: NextRequest) {
     const { data: admin } = await supabase
       .from("admin_users")
       .select("id")
-      .eq("clerk_user_id", clerk_user_id)
+      .eq("clerk_user_id", userId)
       .single();
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -212,18 +218,20 @@ export async function GET(request: NextRequest) {
     const token = url.searchParams.get("token");
 
     // Admin fetch by quote_id (authenticated)
-    const clerkUserId = url.searchParams.get("clerk_user_id");
     const quoteId = url.searchParams.get("quote_id");
     const invoiceId = url.searchParams.get("invoice_id");
 
     const supabase = createSupabaseAdmin();
 
-    if (clerkUserId && (quoteId || invoiceId)) {
+    if (quoteId || invoiceId) {
+      const { userId } = await auth();
+      if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
       // Admin fetching agreement data for a specific quote or invoice
       const { data: admin } = await supabase
         .from("admin_users")
         .select("id")
-        .eq("clerk_user_id", clerkUserId)
+        .eq("clerk_user_id", userId)
         .single();
       if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

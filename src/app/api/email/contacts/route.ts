@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 
 // GET: List all contacts, or search by query
 export async function GET(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
   const search = searchParams.get('q');
 
-  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let query = supabase
@@ -30,9 +31,11 @@ export async function GET(req: NextRequest) {
 
 // POST: Create or update a contact
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const body = await req.json();
-  const { clerk_user_id, action, contact } = body as {
-    clerk_user_id: string;
+  const { action, contact } = body as {
     action: 'create' | 'update' | 'delete';
     contact: {
       id?: string;
@@ -46,10 +49,8 @@ export async function POST(req: NextRequest) {
     };
   };
 
-  if (!clerk_user_id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerk_user_id).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   if (action === 'create') {

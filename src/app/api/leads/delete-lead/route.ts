@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { deleteFromB2 } from "@/lib/b2Storage";
+import { auth } from '@clerk/nextjs/server';
 
 async function verifyAdmin(clerkUserId: string) {
   const supabase = createSupabaseAdmin();
@@ -16,18 +17,23 @@ async function verifyAdmin(clerkUserId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { clerk_user_id, lead_id } = body;
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!clerk_user_id || !lead_id) {
+    const body = await request.json();
+    const { lead_id } = body;
+
+    if (!lead_id) {
       return NextResponse.json(
-        { error: "Missing required fields: clerk_user_id, lead_id" },
+        { error: "Missing required fields: lead_id" },
         { status: 400 }
       );
     }
 
     // Verify admin
-    const admin = await verifyAdmin(clerk_user_id);
+    const admin = await verifyAdmin(userId);
     if (!admin) {
       return NextResponse.json(
         { error: "Unauthorized: Admin access required" },

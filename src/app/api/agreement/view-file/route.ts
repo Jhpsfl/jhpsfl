@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { getSignedViewUrl } from "@/lib/b2Storage";
+import { auth } from '@clerk/nextjs/server';
 
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
-    const clerkUserId = url.searchParams.get("clerk_user_id");
     const key = url.searchParams.get("key");
 
-    if (!clerkUserId || !key) {
+    if (!key) {
       return NextResponse.json({ error: "Missing params" }, { status: 400 });
     }
 
@@ -17,7 +22,7 @@ export async function GET(request: NextRequest) {
     const { data: admin } = await supabase
       .from("admin_users")
       .select("id")
-      .eq("clerk_user_id", clerkUserId)
+      .eq("clerk_user_id", userId)
       .single();
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

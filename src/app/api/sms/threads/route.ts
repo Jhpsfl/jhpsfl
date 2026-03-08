@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@clerk/nextjs/server';
 
 /**
  * SMS API — Placeholder Routes
@@ -13,10 +14,8 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 
 // GET /api/sms/threads — list SMS threads
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
-
-  if (!clerkUserId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -26,7 +25,7 @@ export async function GET(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerkUserId)
+    .eq('clerk_user_id', userId)
     .single();
 
   if (!admin) {
@@ -100,18 +99,19 @@ export async function GET(req: NextRequest) {
 
 // POST /api/sms/threads — send SMS reply
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, thread_id, to_phone, message_body, lead_id } = body;
-
-  if (!clerk_user_id) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const body = await req.json();
+  const { thread_id, to_phone, message_body, lead_id } = body;
 
   const supabase = createSupabaseAdmin();
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
 
   if (!admin) {

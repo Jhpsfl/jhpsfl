@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateInvoicePDF, generateEstimatePDF } from '@/lib/receipt-generator';
 import type { InvoiceData, EstimateData } from '@/lib/receipt-generator';
+import { auth } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, type, data } = body;
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!clerk_user_id || !type || !data) {
+  const body = await req.json();
+  const { type, data } = body;
+
+  if (!type || !data) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -16,7 +22,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 

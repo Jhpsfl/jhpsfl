@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail, buildReplyHtml } from '@/lib/email';
+import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
   const {
-    clerk_user_id,
     thread_id,
     to_email,
     to_name,
@@ -19,7 +24,7 @@ export async function POST(req: NextRequest) {
     attachments,
   } = body;
 
-  if (!clerk_user_id || !thread_id || !to_email || (!reply_body && !reply_html)) {
+  if (!thread_id || !to_email || (!reply_body && !reply_html)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -27,7 +32,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
 
   if (!admin) {
@@ -51,6 +56,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Look up the most recent message in this thread to set threading headers
+  let inReplyToHeader: string | undefined;
+  {
+    const { data: lastMsg } = await supabase
+      .from('email_messages')
+      .select('resend_message_id')
+      .eq('thread_id', thread_id)
+      .not('resend_message_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (lastMsg?.resend_message_id) {
+      // Format as SMTP Message-ID: <uuid@resend.dev>
+      inReplyToHeader = `<${lastMsg.resend_message_id}@resend.dev>`;
+    }
+  }
+
   let resendMessageId: string | undefined;
   try {
     const r = getResend();
@@ -60,6 +82,12 @@ export async function POST(req: NextRequest) {
       subject: replySubject,
       html,
     };
+    if (inReplyToHeader) {
+      sendParams.headers = {
+        'In-Reply-To': inReplyToHeader,
+        'References': inReplyToHeader,
+      };
+    }
     if (resendAttachments.length) sendParams.attachments = resendAttachments;
 
     const { data, error } = await r.emails.send(sendParams);

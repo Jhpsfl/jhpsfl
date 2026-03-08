@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { ensureSquareCustomer, storeCardOnFile, deleteStoredCard } from '@/lib/square';
+import { auth } from '@clerk/nextjs/server';
 
 // ─── Auth: get customer from clerk_user_id ───
 async function getCustomerFromClerk(clerkUserId: string) {
@@ -16,13 +17,12 @@ async function getCustomerFromClerk(clerkUserId: string) {
 // ─── GET: List stored cards ───
 export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url);
-    const clerkUserId = url.searchParams.get('clerk_user_id');
-    if (!clerkUserId) {
-      return NextResponse.json({ error: 'Missing clerk_user_id' }, { status: 400 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await getCustomerFromClerk(clerkUserId);
+    const customer = await getCustomerFromClerk(userId);
     if (!customer) {
       return NextResponse.json({ cards: [] });
     }
@@ -44,12 +44,17 @@ export async function GET(request: NextRequest) {
 // ─── POST: Add a new card ───
 export async function POST(request: NextRequest) {
   try {
-    const { clerk_user_id, cardToken } = await request.json();
-    if (!clerk_user_id || !cardToken) {
-      return NextResponse.json({ error: 'Missing clerk_user_id or cardToken' }, { status: 400 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await getCustomerFromClerk(clerk_user_id);
+    const { cardToken } = await request.json();
+    if (!cardToken) {
+      return NextResponse.json({ error: 'Missing cardToken' }, { status: 400 });
+    }
+
+    const customer = await getCustomerFromClerk(userId);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
@@ -100,12 +105,17 @@ export async function POST(request: NextRequest) {
 // ─── DELETE: Remove a card ───
 export async function DELETE(request: NextRequest) {
   try {
-    const { clerk_user_id, cardId } = await request.json();
-    if (!clerk_user_id || !cardId) {
-      return NextResponse.json({ error: 'Missing clerk_user_id or cardId' }, { status: 400 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await getCustomerFromClerk(clerk_user_id);
+    const { cardId } = await request.json();
+    if (!cardId) {
+      return NextResponse.json({ error: 'Missing cardId' }, { status: 400 });
+    }
+
+    const customer = await getCustomerFromClerk(userId);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
@@ -159,12 +169,17 @@ export async function DELETE(request: NextRequest) {
 // ─── PATCH: Set default card ───
 export async function PATCH(request: NextRequest) {
   try {
-    const { clerk_user_id, cardId } = await request.json();
-    if (!clerk_user_id || !cardId) {
-      return NextResponse.json({ error: 'Missing clerk_user_id or cardId' }, { status: 400 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await getCustomerFromClerk(clerk_user_id);
+    const { cardId } = await request.json();
+    if (!cardId) {
+      return NextResponse.json({ error: 'Missing cardId' }, { status: 400 });
+    }
+
+    const customer = await getCustomerFromClerk(userId);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }

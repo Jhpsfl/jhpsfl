@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@clerk/nextjs/server';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
-  const folder = searchParams.get('folder'); // inbox, sent, starred, drafts, trash, spam
-
-  if (!clerkUserId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const { searchParams } = new URL(req.url);
+  const folder = searchParams.get('folder'); // inbox, sent, starred, drafts, trash, spam
 
   const supabase = createSupabaseAdmin();
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerkUserId)
+    .eq('clerk_user_id', userId)
     .single();
 
   if (!admin) {
@@ -201,12 +202,11 @@ async function buildThreadQuery(
 
 // PATCH: Update thread properties (star, folder, read)
 export async function PATCH(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
-  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
@@ -261,12 +261,11 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE: Permanent delete (only from trash)
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const clerkUserId = searchParams.get('clerk_user_id');
-  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();

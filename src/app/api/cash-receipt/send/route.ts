@@ -3,14 +3,20 @@ import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
+import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, customer_id, amount, service, notes } = body;
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!clerk_user_id || !customer_id || !amount) {
+  const body = await req.json();
+  const { customer_id, amount, service, notes } = body;
+
+  if (!customer_id || !amount) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -20,7 +26,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 

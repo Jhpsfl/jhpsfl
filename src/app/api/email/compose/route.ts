@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail, buildReplyHtml } from '@/lib/email';
@@ -7,9 +8,13 @@ import { randomUUID } from 'crypto';
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
   const {
-    clerk_user_id,
     to_email,
     to_name,
     subject,
@@ -22,12 +27,12 @@ export async function POST(req: NextRequest) {
     attachments,
   } = body;
 
-  if (!clerk_user_id || !to_email || !subject || (!emailBody && !richHtml)) {
+  if (!to_email || !subject || (!emailBody && !richHtml)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerk_user_id).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const thread_id = randomUUID();
@@ -156,9 +161,9 @@ function buildRichHtml(toName: string, richBody: string, originalSubject: string
           <tr>
             <td style="background:#fafafa;padding:20px 32px;border-radius:0 0 12px 12px;border-top:1px solid #eee;">
               <p style="margin:0 0 4px;color:#888;font-size:12px;">
-                &#128222; <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
+                📞 <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
                 &nbsp;&middot;&nbsp;
-                &#9993; <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
+                ✉️ <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
               </p>
               <p style="margin:0;color:#aaa;font-size:11px;">
                 Serving Deltona, Orlando, Sanford, DeLand, Daytona Beach &amp; all of Central Florida

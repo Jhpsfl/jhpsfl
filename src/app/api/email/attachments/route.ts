@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
@@ -15,15 +16,16 @@ const BUCKET = process.env.AWS_S3_BUCKET || 'jhpsfl-uploads';
 
 // POST: Upload attachment to S3
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const formData = await req.formData();
-  const clerkUserId = formData.get('clerk_user_id') as string;
   const file = formData.get('file') as File | null;
 
-  if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
   const supabase = createSupabaseAdmin();
-  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', clerkUserId).single();
+  const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // Max 10MB per file

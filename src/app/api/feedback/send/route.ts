@@ -3,16 +3,22 @@ import { Resend } from "resend";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { logEmail } from "@/lib/email";
 import { randomUUID } from "crypto";
+import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM = "JHPS Florida <info@jhpsfl.com>";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://jhpsfl.com";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, customer_id, type } = body;
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!clerk_user_id || !customer_id) {
+  const body = await req.json();
+  const { customer_id, type } = body;
+
+  if (!customer_id) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -22,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from("admin_users")
     .select("id")
-    .eq("clerk_user_id", clerk_user_id)
+    .eq("clerk_user_id", userId)
     .single();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -179,9 +185,9 @@ function buildPostServiceEmail(firstName: string, feedbackUrl: string): string {
         <tr>
           <td style="background:#fafafa;padding:20px 32px;border-radius:0 0 12px 12px;border-top:1px solid #eee;">
             <p style="margin:0 0 4px;color:#888;font-size:12px;text-align:center;">
-              &#128222; <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
+              📞 <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
               &nbsp;&middot;&nbsp;
-              &#9993; <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
+              ✉️ <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
             </p>
             <p style="margin:0;color:#aaa;font-size:11px;text-align:center;">
               Serving Deltona, Orlando, Sanford, DeLand, Daytona Beach &amp; all of Central Florida
@@ -248,9 +254,9 @@ function buildLostEstimateEmail(firstName: string, feedbackUrl: string): string 
         <tr>
           <td style="background:#fafafa;padding:20px 32px;border-radius:0 0 12px 12px;border-top:1px solid #eee;">
             <p style="margin:0 0 4px;color:#888;font-size:12px;text-align:center;">
-              &#128222; <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
+              📞 <a href="tel:4076869817" style="color:#2E7D32;text-decoration:none;">(407) 686-9817</a>
               &nbsp;&middot;&nbsp;
-              &#9993; <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
+              ✉️ <a href="mailto:info@jhpsfl.com" style="color:#2E7D32;text-decoration:none;">info@jhpsfl.com</a>
             </p>
             <p style="margin:0;color:#aaa;font-size:11px;text-align:center;">
               Serving Deltona, Orlando, Sanford, DeLand, Daytona Beach &amp; all of Central Florida

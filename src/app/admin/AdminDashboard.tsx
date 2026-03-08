@@ -15,6 +15,7 @@ import AdminInbox from "./AdminInbox";
 import AdminInvoices from "./AdminInvoices";
 import AdminQuotes from "./AdminQuotes";
 import AdminAnalytics from "./AdminAnalytics";
+import AdminYelpLeads from "./AdminYelpLeads";
 import FeedbackModal from "./components/FeedbackModal";
 
 // ─── Sub-components ───
@@ -176,7 +177,7 @@ interface CustomerDetail {
   feedbackRequests: FeedbackRequest[];
 }
 
-export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "messages" | "invoices" | "quotes" | "analytics";
+export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "yelp_leads" | "messages" | "invoices" | "quotes" | "analytics";
 
 // ─── Main Admin Dashboard ───
 export default function AdminDashboard() {
@@ -224,6 +225,7 @@ export default function AdminDashboard() {
   // Back-button refs for child components
   const inboxBackRef = useRef<(() => boolean) | null>(null);
   const videoLeadsBackRef = useRef<(() => boolean) | null>(null);
+  const yelpLeadsBackRef = useRef<(() => boolean) | null>(null);
   const invoicesBackRef = useRef<(() => boolean) | null>(null);
   const invoiceCreateRef = useRef<((preselectedCustomerId?: string) => void) | null>(null);
   const quotesBackRef = useRef<(() => boolean) | null>(null);
@@ -678,6 +680,7 @@ export default function AdminDashboard() {
     if (showCashModal) { setShowCashModal(false); return; }
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
+    if (activeTab === "yelp_leads" && yelpLeadsBackRef.current?.()) return;
     if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
     if (activeTab === "quotes" && quotesBackRef.current?.()) return;
     if (tabHistoryRef.current.length > 1) {
@@ -697,6 +700,7 @@ export default function AdminDashboard() {
     if (showCashModal) { setShowCashModal(false); return; }
     if (activeTab === "messages" && inboxBackRef.current?.()) return;
     if (activeTab === "video_leads" && videoLeadsBackRef.current?.()) return;
+    if (activeTab === "yelp_leads" && yelpLeadsBackRef.current?.()) return;
     if (activeTab === "invoices" && invoicesBackRef.current?.()) return;
     if (activeTab === "quotes" && quotesBackRef.current?.()) return;
     if (tabHistoryRef.current.length > 1) {
@@ -989,6 +993,7 @@ export default function AdminDashboard() {
                   <NavItem icon="💰" label="Payments" active={activeTab === "payments"} onClick={() => switchTab("payments")} />
                   <NavItem icon="🔄" label="Subscriptions" active={activeTab === "subscriptions"} onClick={() => switchTab("subscriptions")} />
                   <NavItem icon="📹" label="Video Quotes" active={activeTab === "video_leads"} onClick={() => switchTab("video_leads")} badge={badgeCounts.newLeads} />
+                  <NavItem icon="🟡" label="Yelp Leads" active={activeTab === "yelp_leads"} onClick={() => switchTab("yelp_leads")} />
                   <NavItem icon="✉️" label="Messages" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
                   <NavItem icon="📄" label="Invoices" active={activeTab === "invoices"} onClick={() => switchTab("invoices")} />
                   <NavItem icon="📋" label="Estimates" active={activeTab === "quotes"} onClick={() => switchTab("quotes")} />
@@ -1166,8 +1171,8 @@ export default function AdminDashboard() {
                           {[
                             { icon: "✉️", label: "Messages", tab: "messages", badge: badgeCounts.unreadEmail },
                             { icon: "📹", label: "Video", tab: "video_leads", badge: badgeCounts.newLeads },
+                            { icon: "🟡", label: "Yelp", tab: "yelp_leads", badge: 0 },
                             { icon: "💰", label: "Payments", tab: "payments", badge: 0 },
-                            { icon: "🔄", label: "Subs", tab: "subscriptions", badge: 0 },
                             { icon: "🔧", label: "Jobs", tab: "jobs", badge: 0 },
                             { icon: "👥", label: "Customers", tab: "customers", badge: 0 },
                           ].map((item) => (
@@ -1802,6 +1807,11 @@ export default function AdminDashboard() {
                     {/* ─── VIDEO LEADS TAB ─── */}
                     {activeTab === "video_leads" && userId && (
                       <AdminVideoLeads userId={userId} backRef={videoLeadsBackRef} onNavigate={pushSentinel} />
+                    )}
+
+                    {/* ─── YELP LEADS TAB ─── */}
+                    {activeTab === "yelp_leads" && userId && (
+                      <AdminYelpLeads userId={userId} backRef={yelpLeadsBackRef} onNavigate={pushSentinel} />
                     )}
 
                     {/* ─── MESSAGES TAB ─── */}

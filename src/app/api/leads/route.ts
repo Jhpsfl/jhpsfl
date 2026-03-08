@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 import { getSignedViewUrl } from "@/lib/b2Storage";
 import { Resend } from "resend";
+import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -45,17 +46,15 @@ async function verifyAdmin(clerkUserId: string) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const url = new URL(request.url);
-    const clerkUserId = url.searchParams.get("clerk_user_id");
     const statusFilter = url.searchParams.get("status");
     const leadId = url.searchParams.get("lead_id");
     const mediaKey = url.searchParams.get("media_key");
 
-    if (!clerkUserId) {
-      return NextResponse.json({ error: "Missing clerk_user_id" }, { status: 400 });
-    }
-
-    const admin = await verifyAdmin(clerkUserId);
+    const admin = await verifyAdmin(userId);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -138,14 +137,17 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { clerk_user_id, action, payload } = body;
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!clerk_user_id || !action) {
-      return NextResponse.json({ error: "Missing clerk_user_id or action" }, { status: 400 });
+    const body = await request.json();
+    const { action, payload } = body;
+
+    if (!action) {
+      return NextResponse.json({ error: "Missing action" }, { status: 400 });
     }
 
-    const admin = await verifyAdmin(clerk_user_id);
+    const admin = await verifyAdmin(userId);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -162,7 +164,7 @@ export async function POST(request: NextRequest) {
 
         const updates: Record<string, unknown> = { status };
         if (admin_notes !== undefined) updates.admin_notes = admin_notes;
-        if (status === "reviewing") updates.assigned_to = clerk_user_id;
+        if (status === "reviewing") updates.assigned_to = userId;
 
         const { data, error } = await supabase
           .from("video_leads")
@@ -189,7 +191,7 @@ export async function POST(request: NextRequest) {
           .from("lead_quotes")
           .insert({
             lead_id,
-            quoted_by: clerk_user_id,
+            quoted_by: userId,
             line_items,
             subtotal,
             total_low,

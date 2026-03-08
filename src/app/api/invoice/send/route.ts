@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail } from '@/lib/email';
@@ -34,10 +35,13 @@ async function shortenUrl(url: string, label: string, supabase: ReturnType<typeo
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { clerk_user_id, invoice, customer, payment_link } = body;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!clerk_user_id || !invoice || !customer?.email) {
+  const body = await req.json();
+  const { invoice, customer, payment_link } = body;
+
+  if (!invoice || !customer?.email) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admin_users')
     .select('id')
-    .eq('clerk_user_id', clerk_user_id)
+    .eq('clerk_user_id', userId)
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
