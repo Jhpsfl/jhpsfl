@@ -280,7 +280,9 @@ export default function AdminYelpLeads({
           <div style={{ padding: "40px", textAlign: "center", color: "#5a8a5a" }}>Loading...</div>
         ) : conversations.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#5a8a5a" }}>No leads found</div>
-        ) : conversations.map(conv => {
+        ) : [...conversations].sort((a, b) =>
+          new Date(lastMessageTime(b)).getTime() - new Date(lastMessageTime(a)).getTime()
+        ).map(conv => {
           const hasUnread = conv.status === "needs_attention";
           return (
             <button key={conv.id} onClick={() => openConversation(conv)} style={{
