@@ -1,17 +1,128 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { Resend } from 'resend';
+import Groq from 'groq-sdk';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
+const getGroq = () => new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Extract plain email address from "Display Name <email@x.com>" format
 function parseEmail(raw: string): string {
   const match = raw.match(/<([^>]+)>/);
   return match ? match[1].toLowerCase() : raw.toLowerCase().trim();
 }
+
+// ─── PARSE YELP NEW LEAD EMAIL ─────────────────────────────────────────────
+function parseYelpLeadEmail(text: string, html: string) {
+  const combined = text + html;
+
+  // Extract lead ID from URL: /leads/LEAD_ID
+  const leadIdMatch = combined.match(/\/leads\/([A-Za-z0-9_-]{10,})/);
+  // Extract thread ID from URL: /thread/THREAD_ID
+  const threadIdMatch = combined.match(/\/thread\/([A-Za-z0-9_-]{10,})/);
+
+  // Customer name: "NAME requested a quote" or "NAME J." at end
+  const nameMatch = text.match(/^(\w[\w\s.]+?) requested a quote/m);
+  // Full name with last initial from body (e.g., "Carolyn J.")
+  const fullNameMatch = text.match(/\n([A-Z][a-z]+ [A-Z]\.)\n/);
+
+  // Service: "new SERVICETYPE request" or "for a SERVICETYPE"
+  const serviceMatch = text.match(/new (.+?) request\./i) || text.match(/for a (.+?)\./i);
+
+  // Zip code from "In what location do you need the service?\n\nZIPCODE"
+  const zipMatch = text.match(/location do you need.*?\n+(\d{5})/i);
+
+  // Parse Q&A pairs from the structured lead form
+  const projectDetails: { q: string; a: string }[] = [];
+  const qaPatterns = [
+    /What (?:type|kind) of (?:property|lawn|service).*?\?\n+([\s\S]*?)(?=\n(?:How |When |Are |In what)|$)/i,
+    /How large.*?\?\n+([\s\S]*?)(?=\n(?:What |When |Are |In what)|$)/i,
+    /When do you.*?\?\n+([\s\S]*?)(?=\n(?:What |How |Are |In what)|$)/i,
+    /Are there any other details.*?\?\n+([\s\S]*?)(?=\n(?:What |How |When |In what)|$)/i,
+  ];
+  for (const pat of qaPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      const question = text.match(new RegExp('(' + pat.source.split('\\?')[0] + '\\?)'))?.[1] || '';
+      const answer = m[1].trim().split('\n').filter(Boolean).join(', ');
+      if (answer) projectDetails.push({ q: question.trim(), a: answer });
+    }
+  }
+
+  return {
+    leadId: leadIdMatch?.[1] || null,
+    threadId: threadIdMatch?.[1] || null,
+    customerName: (fullNameMatch?.[1] || nameMatch?.[1] || '').trim(),
+    service: serviceMatch?.[1] || '',
+    zipCode: zipMatch?.[1] || '',
+    projectDetails,
+  };
+}
+
+// ─── GENERATE AI FIRST REPLY ───────────────────────────────────────────────
+async function generateFirstReply(parsed: ReturnType<typeof parseYelpLeadEmail>) {
+  const service = parsed.service || 'property maintenance';
+  const location = parsed.zipCode ? `zip code ${parsed.zipCode}` : 'Central Florida';
+
+  const systemPrompt = `You are a friendly scheduling assistant for Jenkins Home & Property Solutions (JHPS), a Central Florida property maintenance company.
+
+THIS SPECIFIC CONVERSATION:
+- Customer: ${parsed.customerName}
+- Service requested: ${service}
+- Location: ${location}
+- Your ONLY job: help schedule this ${service} job and keep the customer engaged until the owner confirms timing.
+
+PERSONALITY: Warm, local, conversational. NOT robotic or corporate. Like a friendly contractor texting back.
+
+STRICT RULES:
+1. STAY ON TOPIC. Focus on the ${service} job and getting it scheduled.
+2. NEVER commit to a specific time or date. The owner must confirm.
+3. Pricing questions → "We like to see the job site first for an accurate quote — no surprises."
+4. Keep replies to 2-3 sentences MAX. Short and warm.
+5. Always end with: - The JHPS Team
+6. NEVER mention competitors, pricing numbers, specific employee names, or make promises you can't keep.`;
+
+  const contextLines = [
+    `Customer name: ${parsed.customerName}`,
+    `Service: ${service}`,
+    `Location: ${location}`,
+  ];
+  if (parsed.projectDetails.length > 0) {
+    contextLines.push('\nProject details from their Yelp request:');
+    for (const d of parsed.projectDetails) {
+      contextLines.push(`  Q: ${d.q} → A: ${d.a}`);
+    }
+  }
+
+  const prompt = `${contextLines.join('\n')}
+
+Write a warm first reply that:
+1. Greets them by first name
+2. ACKNOWLEDGES their specific project details (mention what they need)
+3. Asks a clarifying question about the job (access, areas of concern, preferred scheduling)
+4. Keep it 3-4 sentences, conversational, like a friendly contractor texting back
+
+CRITICAL: You MUST reference at least one specific detail from their request. Do NOT write a generic reply.
+
+End with "- The JHPS Team".`;
+
+  const groq = getGroq();
+  const response = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.7,
+    max_tokens: 500,
+  });
+
+  return response.choices[0].message.content?.trim() || '';
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -206,18 +317,85 @@ export async function POST(req: NextRequest) {
         console.log(`Yelp non-actionable email — skipping trigger: ${subjectStr}`);
       } else {
         const isNewLead = subjectStr.includes('new lead on Yelp');
-        const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
 
-        await supabase.from('yelp_triggers').insert({
-          trigger_type: triggerType,
-          lead_id: leadMatch?.[1] || null,
-          thread_id: threadMatch?.[1] || null,
-          customer_name: customerName,
-          service: serviceMatch?.[1] || null,
-          email_subject: subjectStr,
-          email_body_text: text.substring(0, 2000),
-        });
-        console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+        if (isNewLead && from_email.includes('@messaging.yelp.com') && process.env.GROQ_API_KEY) {
+          // ─── INSTANT FIRST REPLY (serverless, no Puppeteer) ─────────────
+          try {
+            const parsed = parseYelpLeadEmail(text, html);
+            const replyText = await generateFirstReply(parsed);
+
+            if (replyText) {
+              // Send reply email to Yelp's masked address
+              const resend = new Resend(process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY);
+              await resend.emails.send({
+                from: 'Jenkins Home & Property Solutions <info@jhpsfl.com>',
+                to: [from_email],
+                subject: `Re: ${subjectStr}`,
+                text: replyText,
+              });
+
+              // Create conversation in Supabase
+              const yelpLeadId = parsed.leadId || leadMatch?.[1] || null;
+              await supabase.from('yelp_conversations').insert({
+                yelp_thread_id: yelpLeadId,
+                customer_name: parsed.customerName || customerName || 'Unknown',
+                services: [parsed.service || serviceMatch?.[1]].filter(Boolean),
+                zip_code: parsed.zipCode || '',
+                urgency: parsed.projectDetails.find(d => d.q?.toLowerCase().includes('when'))?.a || '',
+                first_message: parsed.projectDetails.find(d => d.q?.toLowerCase().includes('other detail'))?.a || '',
+                thread_href: yelpLeadId ? `https://biz.yelp.com/leads_center/Nf0H0JSPqnptTgu6KLy_Lg/leads/${yelpLeadId}` : '',
+                yelp_masked_email: from_email,
+                messages: [{ role: 'ai', text: replyText, ts: new Date().toISOString() }],
+                project_details: parsed.projectDetails,
+                status: 'ai_active',
+                last_ai_reply_at: new Date().toISOString(),
+                ai_exchange_count: 1,
+              });
+
+              console.log(`INSTANT REPLY sent to ${parsed.customerName} via email (${from_email})`);
+
+              // Also create a completed trigger for audit trail
+              await supabase.from('yelp_triggers').insert({
+                trigger_type: 'new_lead',
+                lead_id: yelpLeadId,
+                thread_id: parsed.threadId || threadMatch?.[1] || null,
+                customer_name: customerName,
+                service: serviceMatch?.[1] || null,
+                email_subject: subjectStr,
+                email_body_text: text.substring(0, 2000),
+                status: 'completed',
+              });
+            } else {
+              throw new Error('Empty AI reply — falling back to trigger');
+            }
+          } catch (instantErr) {
+            console.error('Instant reply failed, falling back to trigger:', instantErr);
+            // Fall back to local agent trigger
+            await supabase.from('yelp_triggers').insert({
+              trigger_type: 'new_lead',
+              lead_id: leadMatch?.[1] || null,
+              thread_id: threadMatch?.[1] || null,
+              customer_name: customerName,
+              service: serviceMatch?.[1] || null,
+              email_subject: subjectStr,
+              email_body_text: text.substring(0, 2000),
+            });
+          }
+          // ────────────────────────────────────────────────────────────────
+        } else {
+          // Customer reply or non-messaging Yelp email — use local agent
+          const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
+          await supabase.from('yelp_triggers').insert({
+            trigger_type: triggerType,
+            lead_id: leadMatch?.[1] || null,
+            thread_id: threadMatch?.[1] || null,
+            customer_name: customerName,
+            service: serviceMatch?.[1] || null,
+            email_subject: subjectStr,
+            email_body_text: text.substring(0, 2000),
+          });
+          console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+        }
       }
     } catch (err) {
       console.error('Yelp trigger insert failed (non-fatal):', err);
