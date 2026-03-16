@@ -44,3 +44,7 @@ next-env.d.ts
 .aider*
 JHPS_PROJECT_MAP.json
 CLAUDE.md
+JHPS-Infrastructure-Credentials-Manual.docx
+build-yelp-agent.js
+test-inbox.js
+write-debug.js
