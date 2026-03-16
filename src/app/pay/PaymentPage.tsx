@@ -5,13 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
 import { getBrand, type BrandConfig } from "@/lib/brand-config";
-import { PAYMENT_PROCESSOR, isStripe, isSquare, processorDisplayName } from "@/lib/payment-config";
+import { isStripe, isSquare, processorDisplayName } from "@/lib/payment-config";
 import { loadStripe, type Stripe as StripeType, type StripeElements } from "@stripe/stripe-js";
-
-// ─── Stripe Setup ───
-const stripePromise = isStripe()
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
-  : null;
 
 // ─── Stripe Payment Element Section ───
 // Isolated component for Stripe — mounts/unmounts cleanly
@@ -52,8 +47,16 @@ function StripePaymentSection({
 
     const init = async () => {
       try {
-        const stripeInstance = await stripePromise;
-        if (!stripeInstance || !mountedRef.current) return;
+        // Load Stripe at runtime — not module scope — so the env var is guaranteed available
+        const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+        if (!stripeKey) {
+          throw new Error('Stripe publishable key not configured');
+        }
+        const stripeInstance = await loadStripe(stripeKey);
+        if (!mountedRef.current) return;
+        if (!stripeInstance) {
+          throw new Error('Stripe failed to load');
+        }
 
         // Create PaymentIntent on the server
         const res = await fetch('/api/stripe/create-payment-intent', {
