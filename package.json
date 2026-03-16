@@ -16,6 +16,8 @@
     "@sanity/color-input": "^3.1.2",
     "@sanity/image-url": "^1.2.0",
     "@sanity/vision": "^4.22.0",
+    "@stripe/react-stripe-js": "^5.6.1",
+    "@stripe/stripe-js": "^8.9.0",
     "@supabase/supabase-js": "^2.97.0",
     "@tiptap/extension-color": "^3.20.0",
     "@tiptap/extension-link": "^3.20.0",
@@ -35,6 +37,7 @@
     "resend": "^6.9.2",
     "sanity": "^4.22.0",
     "square": "^44.0.0",
+    "stripe": "^20.4.1",
     "styled-components": "^6.3.11",
     "svix": "^1.85.0",
     "web-push": "^3.6.7"

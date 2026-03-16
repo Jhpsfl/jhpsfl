@@ -5,6 +5,186 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth, useSignIn, useSignUp, useClerk } from "@clerk/nextjs";
 import { getBrand, type BrandConfig } from "@/lib/brand-config";
+import { PAYMENT_PROCESSOR, isStripe, isSquare, processorDisplayName } from "@/lib/payment-config";
+import { loadStripe, type Stripe as StripeType, type StripeElements } from "@stripe/stripe-js";
+
+// ─── Stripe Setup ───
+const stripePromise = isStripe()
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
+  : null;
+
+// ─── Stripe Payment Element Section ───
+// Isolated component for Stripe — mounts/unmounts cleanly
+function StripePaymentSection({
+  amount,
+  customerName,
+  customerEmail,
+  customerPhone,
+  service,
+  invoiceNumber,
+  note,
+  saveCard,
+  clerkUserId,
+  brand,
+  onReady,
+  onError,
+}: {
+  amount: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  service: string;
+  invoiceNumber: string;
+  note: string;
+  saveCard: boolean;
+  clerkUserId: string | null | undefined;
+  brand: BrandConfig;
+  onReady: (elements: StripeElements, stripe: StripeType, paymentIntentId: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let elements: StripeElements | null = null;
+
+    const init = async () => {
+      try {
+        const stripeInstance = await stripePromise;
+        if (!stripeInstance || !mountedRef.current) return;
+
+        // Create PaymentIntent on the server
+        const res = await fetch('/api/stripe/create-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount,
+            customerName,
+            customerEmail,
+            customerPhone,
+            service,
+            invoiceNumber,
+            note,
+            saveCard,
+            clerkUserId,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.clientSecret) {
+          throw new Error(data.error || 'Failed to initialize payment');
+        }
+
+        if (!mountedRef.current) return;
+
+        // Create Stripe Elements with the client secret
+        const isNexa = brand.key === 'nexa';
+        elements = stripeInstance.elements({
+          clientSecret: data.clientSecret,
+          appearance: {
+            theme: 'night',
+            variables: {
+              colorPrimary: brand.colors.primary,
+              colorBackground: brand.colors.bgElevated,
+              colorText: brand.colors.textPrimary,
+              colorDanger: '#ef5350',
+              fontFamily: brand.fonts.body,
+              spacingUnit: '4px',
+              borderRadius: '12px',
+              colorTextPlaceholder: brand.colors.textMuted,
+            },
+            rules: {
+              '.Input': {
+                backgroundColor: brand.colors.bgElevated,
+                border: `1px solid ${brand.colors.border}`,
+                color: brand.colors.textPrimary,
+                boxShadow: 'none',
+              },
+              '.Input:focus': {
+                borderColor: brand.colors.primary,
+                boxShadow: `0 0 0 3px ${brand.colors.glow}`,
+              },
+              '.Label': {
+                color: brand.colors.textSecondary,
+                fontSize: '13px',
+                fontWeight: '500',
+              },
+              '.Tab': {
+                backgroundColor: brand.colors.bgCard,
+                border: `1px solid ${brand.colors.border}`,
+                color: brand.colors.textSecondary,
+              },
+              '.Tab:hover': {
+                backgroundColor: brand.colors.bgElevated,
+                color: brand.colors.textPrimary,
+              },
+              '.Tab--selected': {
+                backgroundColor: isNexa ? 'rgba(0,229,204,0.08)' : 'rgba(76,175,80,0.08)',
+                borderColor: brand.colors.primary,
+                color: brand.colors.primary,
+              },
+              '.TabIcon--selected': {
+                fill: brand.colors.primary,
+              },
+            },
+          },
+        });
+
+        // Mount Payment Element
+        const paymentElement = elements.create('payment', {
+          layout: {
+            type: 'tabs',
+            defaultCollapsed: false,
+          },
+        });
+
+        if (!mountedRef.current || !containerRef.current) return;
+        paymentElement.mount(containerRef.current);
+
+        paymentElement.on('ready', () => {
+          if (mountedRef.current) {
+            setLoading(false);
+            onReady(elements!, stripeInstance, data.paymentIntentId);
+          }
+        });
+
+        paymentElement.on('loaderror', (event) => {
+          if (mountedRef.current) {
+            setLoading(false);
+            onError(event.error?.message || 'Failed to load payment form');
+          }
+        });
+      } catch (err) {
+        if (!mountedRef.current) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('Stripe init error:', msg);
+        setLoading(false);
+        onError(msg);
+      }
+    };
+
+    init();
+
+    return () => {
+      mountedRef.current = false;
+      // Elements auto-destroy when their container is removed from DOM
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {loading && (
+        <div style={{ color: brand.colors.textMuted, fontSize: 13, padding: '20px 0', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <span style={{ display: 'inline-block', width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'pulse 0.8s linear infinite' }} />
+          Loading secure payment form…
+        </div>
+      )}
+      <div ref={containerRef} style={{ minHeight: loading ? 0 : 100 }} />
+    </>
+  );
+}
 
 // Square Web Payments SDK type shim
 declare global {
@@ -163,24 +343,28 @@ interface InvoicePublicData {
 }
 
 export default function PaymentPage() {
-  // Square SDK ready state — poll for window.Square after injecting script
+  // Square SDK ready state — only load if Square is active processor
   const [squareReady, setSquareReady] = useState(false);
   useEffect(() => {
-    // If already loaded (e.g. page refresh), set immediately
+    if (!isSquare()) return; // Skip Square SDK loading when using Stripe
     if (window.Square) { setSquareReady(true); return; }
-    // Inject script if not present
     if (!document.querySelector('script[src*="squarecdn"]')) {
       const s = document.createElement("script");
       s.src = "https://web.squarecdn.com/v1/square.js";
       document.head.appendChild(s);
     }
-    // Poll until window.Square is available
     const interval = setInterval(() => {
       if (window.Square) { setSquareReady(true); clearInterval(interval); }
     }, 100);
-    const timeout = setTimeout(() => clearInterval(interval), 15000); // give up after 15s
+    const timeout = setTimeout(() => clearInterval(interval), 15000);
     return () => { clearInterval(interval); clearTimeout(timeout); };
   }, []);
+
+  // ─── Stripe state ───
+  const [stripeElements, setStripeElements] = useState<StripeElements | null>(null);
+  const [stripeInstance, setStripeInstance] = useState<StripeType | null>(null);
+  const [stripePaymentIntentId, setStripePaymentIntentId] = useState<string | null>(null);
+
   const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [step, setStep] = useState<"form" | "payment" | "confirm">("form");
@@ -342,6 +526,9 @@ export default function PaymentPage() {
     setShowErrors(false);
     setPaymentError(null);
     setSquareCard(null);
+    setStripeElements(null);
+    setStripeInstance(null);
+    setStripePaymentIntentId(null);
     setStep("payment");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -419,6 +606,104 @@ export default function PaymentPage() {
   };
 
   const handlePayment = async () => {
+    // ─── STRIPE flow ───
+    if (isStripe()) {
+      if (!stripeElements || !stripeInstance || isProcessing) return;
+      setIsProcessing(true);
+      setPaymentError(null);
+      setAccountError(null);
+
+      try {
+        // For deposit payments: create account + sign in FIRST
+        if (isDeposit && !isSignedIn && !accountCreated && password) {
+          const ok = await createAndSignIn();
+          if (!ok) { setIsProcessing(false); return; }
+        }
+
+        // Confirm payment with Stripe
+        const { error: submitError } = await stripeElements.submit();
+        if (submitError) {
+          setPaymentError(submitError.message || 'Payment form incomplete');
+          setIsProcessing(false);
+          return;
+        }
+
+        const { error, paymentIntent } = await stripeInstance.confirmPayment({
+          elements: stripeElements,
+          confirmParams: {
+            return_url: window.location.href, // fallback — won't actually redirect
+            payment_method_data: {
+              billing_details: {
+                name: formData.name || undefined,
+                email: formData.email || undefined,
+                phone: formData.phone || undefined,
+                address: {
+                  line1: (sameBilling ? formData.address : formData.billingAddress) || undefined,
+                  city: (sameBilling ? formData.city : formData.billingCity) || undefined,
+                  postal_code: (sameBilling ? formData.zip : formData.billingZip) || undefined,
+                  country: 'US',
+                },
+              },
+            },
+          },
+          redirect: 'if_required',
+        });
+
+        if (error) {
+          setPaymentError(error.message || 'Payment failed. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (paymentIntent?.status === 'succeeded') {
+          // Payment succeeded — now record everything server-side
+          const confirmRes = await fetch('/api/stripe/confirm-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentIntentId: paymentIntent.id,
+              customerName: formData.name,
+              customerEmail: formData.email,
+              customerPhone: formData.phone,
+              customerAddress: formData.address,
+              customerCity: formData.city,
+              customerZip: formData.zip,
+              billingAddress: sameBilling ? formData.address : formData.billingAddress,
+              billingCity: sameBilling ? formData.city : formData.billingCity,
+              billingZip: sameBilling ? formData.zip : formData.billingZip,
+              service: formData.service,
+              invoiceNumber: formData.invoiceNumber,
+              note: [formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
+                .filter(Boolean).join(" — "),
+              clerkUserId: clerkUserId || undefined,
+              companyName: invoiceData?.company_name || undefined,
+            }),
+          });
+
+          const confirmData = await confirmRes.json();
+          if (confirmData.success) {
+            setPaymentId(confirmData.paymentId || paymentIntent.id);
+            setStep("confirm");
+          } else {
+            // Payment went through but post-processing had issues
+            setPaymentId(paymentIntent.id);
+            setStep("confirm");
+          }
+        } else if (paymentIntent?.status === 'requires_action') {
+          setPaymentError('Additional authentication required. Please follow the prompts.');
+        } else {
+          setPaymentError(`Payment status: ${paymentIntent?.status || 'unknown'}. Please try again.`);
+        }
+      } catch (err) {
+        console.error('Stripe payment error:', err);
+        setPaymentError("An unexpected error occurred. Please try again or call us directly.");
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // ─── SQUARE flow (legacy) ───
     if (!squareCard || isProcessing) return;
     setIsProcessing(true);
     setPaymentError(null);
@@ -1411,36 +1696,69 @@ export default function PaymentPage() {
                         }}>← Edit Info</button>
                       </div>
 
-                      {/* Square card — SquareCardSection mounts fresh on each visit */}
+                      {/* Payment form — Stripe or Square depending on active processor */}
                       <div style={{
                         border: `1px solid ${brand.colors.border}`, borderRadius: 16, padding: "24px",
                         background: brand.colors.bgCard, marginBottom: 24,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
                           <span style={{ fontSize: 20 }}>💳</span>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: brand.colors.textSecondary }}>Card Information</span>
-                          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                            {["VISA", "MC", "AMEX"].map(cardBrand => (
-                              <span key={cardBrand} style={{
-                                padding: "2px 8px", background: "#0d1a0d", border: "1px solid rgba(255,255,255,0.1)",
-                                borderRadius: 4, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)",
-                                fontFamily: "'JetBrains Mono', monospace",
-                              }}>{cardBrand}</span>
-                            ))}
-                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: brand.colors.textSecondary }}>
+                            {isStripe() ? 'Payment Method' : 'Card Information'}
+                          </span>
+                          {isSquare() && (
+                            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                              {["VISA", "MC", "AMEX"].map(cardBrand => (
+                                <span key={cardBrand} style={{
+                                  padding: "2px 8px", background: "#0d1a0d", border: "1px solid rgba(255,255,255,0.1)",
+                                  borderRadius: 4, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)",
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                }}>{cardBrand}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
-                        {squareReady ? (
-                          <SquareCardSection
-                            onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
-                            onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at ${brand.phone}.`)}
-                            squareStyle={brand.squareCardStyle}
+                        {/* ── STRIPE Payment Element ── */}
+                        {isStripe() && (
+                          <StripePaymentSection
+                            amount={formData.amount}
+                            customerName={formData.name}
+                            customerEmail={formData.email}
+                            customerPhone={formData.phone}
+                            service={formData.service}
+                            invoiceNumber={formData.invoiceNumber}
+                            note={[formData.service, formData.jobDescription, formData.invoiceNumber ? `INV#${formData.invoiceNumber}` : ""]
+                              .filter(Boolean).join(" — ")}
+                            saveCard={saveCard && !!clerkUserId}
+                            clerkUserId={clerkUserId}
+                            brand={brand}
+                            onReady={(elements, stripe, piId) => {
+                              setStripeElements(elements);
+                              setStripeInstance(stripe);
+                              setStripePaymentIntentId(piId);
+                              setPaymentError(null);
+                            }}
+                            onError={(msg) => setPaymentError(`Payment form error: ${msg}. Please call us at ${brand.phone}.`)}
                           />
-                        ) : (
-                          <div style={{ color: brand.colors.textMuted, fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                            <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
-                            Loading payment SDK…
-                          </div>
+                        )}
+
+                        {/* ── SQUARE Card Element ── */}
+                        {isSquare() && (
+                          <>
+                            {squareReady ? (
+                              <SquareCardSection
+                                onReady={(card) => { setSquareCard(card); setPaymentError(null); }}
+                                onError={(msg) => setPaymentError(`Card form error: ${msg}. Please call us at ${brand.phone}.`)}
+                                squareStyle={brand.squareCardStyle}
+                              />
+                            ) : (
+                              <div style={{ color: brand.colors.textMuted, fontSize: 13, padding: "20px 0", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                                <span style={{ display: "inline-block", width: 14, height: 14, border: `2px solid ${brand.colors.primary}`, borderTopColor: "transparent", borderRadius: "50%", animation: "pulse 0.8s linear infinite" }} />
+                                Loading payment SDK…
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {paymentError && (
@@ -1458,7 +1776,7 @@ export default function PaymentPage() {
                           borderRadius: 8, border: `1px solid ${brand.colors.border}`,
                           fontSize: 11, color: brand.colors.textMuted, lineHeight: 1.6,
                         }}>
-                          🔒 Secured by Square. Your card details are encrypted and never stored on our servers.
+                          🔒 Secured by {processorDisplayName()}. Your payment details are encrypted and never stored on our servers.
                         </div>
                       </div>
 
@@ -1476,12 +1794,14 @@ export default function PaymentPage() {
                             style={{ width: 18, height: 18, accentColor: brand.colors.primary, cursor: "pointer" }}
                           />
                           <span style={{ fontSize: 14, color: brand.colors.textSecondary, fontWeight: 500 }}>
-                            Save this card for future payments
+                            Save this payment method for future payments
                           </span>
                         </label>
                       )}
 
-                      <button className="cta-pay" onClick={handlePayment} disabled={!squareCard || isProcessing}>
+                      <button className="cta-pay" onClick={handlePayment} disabled={
+                        isStripe() ? (!stripeElements || isProcessing) : (!squareCard || isProcessing)
+                      }>
                         {isProcessing ? (
                           <><span style={{ fontSize: 16, animation: "pulse 1s infinite" }}>⏳</span> Processing…</>
                         ) : (
