@@ -191,6 +191,9 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [customersCollapsed, setCustomersCollapsed] = useState(false);
   const [paymentsCollapsed, setPaymentsCollapsed] = useState(false);
+  const [paymentProcessor, setPaymentProcessor] = useState<string>("stripe");
+  const [processorSwitching, setProcessorSwitching] = useState(false);
+  const [processorMessage, setProcessorMessage] = useState<string | null>(null);
 
   // Data
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -314,6 +317,11 @@ export default function AdminDashboard() {
           ]);
           if (ovRes) setOverview(ovRes);
           if (custRes?.data) setCustomers(custRes.data);
+          // Fetch current payment processor setting
+          fetch(`/api/admin/payment-processor?clerk_user_id=${userId}`)
+            .then(r => r.json())
+            .then(d => { if (d.processor) setPaymentProcessor(d.processor); })
+            .catch(() => {});
           break;
         }
         case "customers": {
@@ -1194,6 +1202,106 @@ export default function AdminDashboard() {
                               <span style={{ fontSize: 9 }}>{item.label}</span>
                             </button>
                           ))}
+                        </div>
+
+                        {/* ─── Payment Processor Toggle ─── */}
+                        <div style={{
+                          background: "#0a160a", border: "1px solid #1a3a1a", borderRadius: 10,
+                          padding: "12px 14px", marginBottom: 12,
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 14 }}>{paymentProcessor === "stripe" ? "💳" : "⬛"}</span>
+                              <div>
+                                <div style={{ fontSize: 11, color: "#e8f5e8", fontWeight: 700 }}>
+                                  Payment Processor
+                                </div>
+                                <div style={{ fontSize: 10, color: "#5a8a5a", marginTop: 1 }}>
+                                  {paymentProcessor === "stripe"
+                                    ? "Stripe — Cards, Bank, Cash App, Amazon Pay"
+                                    : "Square — Cards only"
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{
+                                display: "flex", borderRadius: 6, overflow: "hidden",
+                                border: "1px solid #1a3a1a",
+                              }}>
+                                <button
+                                  onClick={() => {
+                                    if (paymentProcessor === "stripe" || processorSwitching) return;
+                                    if (!confirm("Switch to Stripe? This will trigger a redeploy (~2 min).")) return;
+                                    setProcessorSwitching(true);
+                                    setProcessorMessage(null);
+                                    fetch(`/api/admin/payment-processor?clerk_user_id=${userId}`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ processor: "stripe" }),
+                                    })
+                                      .then(r => r.json())
+                                      .then(d => {
+                                        if (d.success) { setPaymentProcessor("stripe"); setProcessorMessage(d.message); }
+                                        else setProcessorMessage(d.error || "Failed");
+                                      })
+                                      .catch(() => setProcessorMessage("Request failed"))
+                                      .finally(() => setProcessorSwitching(false));
+                                  }}
+                                  style={{
+                                    padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                                    border: "none", fontFamily: "'DM Sans', sans-serif",
+                                    background: paymentProcessor === "stripe" ? "rgba(76,175,80,0.15)" : "transparent",
+                                    color: paymentProcessor === "stripe" ? "#4CAF50" : "#5a8a5a",
+                                  }}
+                                >
+                                  Stripe
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (paymentProcessor === "square" || processorSwitching) return;
+                                    if (!confirm("Switch to Square? This will trigger a redeploy (~2 min). Square only supports cards.")) return;
+                                    setProcessorSwitching(true);
+                                    setProcessorMessage(null);
+                                    fetch(`/api/admin/payment-processor?clerk_user_id=${userId}`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ processor: "square" }),
+                                    })
+                                      .then(r => r.json())
+                                      .then(d => {
+                                        if (d.success) { setPaymentProcessor("square"); setProcessorMessage(d.message); }
+                                        else setProcessorMessage(d.error || "Failed");
+                                      })
+                                      .catch(() => setProcessorMessage("Request failed"))
+                                      .finally(() => setProcessorSwitching(false));
+                                  }}
+                                  style={{
+                                    padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                                    border: "none", borderLeft: "1px solid #1a3a1a",
+                                    fontFamily: "'DM Sans', sans-serif",
+                                    background: paymentProcessor === "square" ? "rgba(76,175,80,0.15)" : "transparent",
+                                    color: paymentProcessor === "square" ? "#4CAF50" : "#5a8a5a",
+                                  }}
+                                >
+                                  Square
+                                </button>
+                              </div>
+                              {processorSwitching && (
+                                <span style={{ width: 12, height: 12, border: "2px solid #4CAF50", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+                              )}
+                            </div>
+                          </div>
+                          {processorMessage && (
+                            <div style={{
+                              marginTop: 8, padding: "6px 10px", borderRadius: 6,
+                              background: processorMessage.includes("Failed") || processorMessage.includes("failed") ? "rgba(239,83,80,0.08)" : "rgba(76,175,80,0.08)",
+                              border: `1px solid ${processorMessage.includes("Failed") || processorMessage.includes("failed") ? "rgba(239,83,80,0.2)" : "rgba(76,175,80,0.2)"}`,
+                              fontSize: 10, color: processorMessage.includes("Failed") || processorMessage.includes("failed") ? "#ef9a9a" : "#81C784",
+                            }}>
+                              {processorMessage}
+                            </div>
+                          )}
                         </div>
 
                         <div style={{ marginBottom: 16 }}>
