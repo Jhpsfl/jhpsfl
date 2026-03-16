@@ -103,6 +103,10 @@ Available actions:
 ### Create Invoice
 \`\`\`action{"type":"create_invoice","data":{"customer_name":"John Smith","line_items":[{"description":"Weekly Lawn Mowing - March","quantity":4,"unit_price":45}],"tax_rate":0,"due_days":15,"notes":"March service invoice"}}\`\`\`
 
+### Query Data (read from database)
+\`\`\`action{"type":"query","data":{"table":"customers|quotes|invoices|jobs","limit":10}}\`\`\`
+Use this when the user asks to "show me", "list", "read", "how many", "what customers do we have", etc.
+
 ### Navigate
 \`\`\`action{"type":"navigate","data":{"tab":"customers|jobs|invoices|quotes|yelp_leads|analytics|messages"}}\`\`\`
 
@@ -220,11 +224,43 @@ export async function POST(req: NextRequest) {
     // Pre-detect if web search is needed — run it BEFORE the AI call
     const lastUserMsg = messages[messages.length - 1]?.content || "";
     const searchQuery = needsWebSearch(lastUserMsg);
-    let searchResults = "";
     if (searchQuery) {
-      searchResults = await webSearch(searchQuery);
+      const searchResults = await webSearch(searchQuery);
       if (searchResults && searchResults !== "No results found." && searchResults !== "Search failed.") {
         contextNote += '\n\n## WEB SEARCH RESULTS for "' + searchQuery + '":\n' + searchResults + '\n\nUse these results to answer. Include source URLs.';
+      }
+    }
+
+    // Pre-detect data queries — "show me customers", "list quotes", "how many invoices"
+    const lm = lastUserMsg.toLowerCase();
+    const dataQueryPatterns = [
+      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?customer/i, table: "customers" },
+      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?quote/i, table: "quotes" },
+      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?invoice/i, table: "invoices" },
+      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?job/i, table: "jobs" },
+    ];
+
+    for (const dq of dataQueryPatterns) {
+      if (dq.pattern.test(lastUserMsg)) {
+        const { data: rows } = await supabase
+          .from(dq.table)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(15);
+
+        if (rows?.length) {
+          const summary = rows.map((r: any, i: number) => {
+            if (dq.table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " — " + (r.phone || "no phone") + " — " + (r.email || "no email") + (r.customer_type ? " (" + r.customer_type + ")" : "");
+            if (dq.table === "quotes") return (i+1) + ". " + (r.quote_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "") + (r.notes ? " — " + r.notes : "");
+            if (dq.table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "") + " — paid: $" + (r.amount_paid || 0);
+            if (dq.table === "jobs") return (i+1) + ". " + (r.service_type || "") + " — " + (r.status || "") + " — $" + (r.amount || 0);
+            return JSON.stringify(r);
+          }).join("\n");
+          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + " (most recent " + rows.length + "):\n" + summary + "\n\nSummarize this data for the user. Include counts and key details.";
+        } else {
+          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + ": No records found.";
+        }
+        break;
       }
     }
 
@@ -278,17 +314,58 @@ export async function POST(req: NextRequest) {
       try {
         action = JSON.parse(actionMatch[1]);
 
+        if (action.type === "query" && action.data) {
+          const table = action.data.table || "customers";
+          const limit = Math.min(action.data.limit || 10, 25);
+          const allowed = ["customers", "quotes", "invoices", "jobs"];
+          if (allowed.includes(table)) {
+            const { data: rows, error } = await supabase
+              .from(table)
+              .select("*")
+              .order("created_at", { ascending: false })
+              .limit(limit);
+            if (error) {
+              action.result = "Query failed: " + error.message;
+            } else {
+              action.queryResults = rows;
+              action.result = rows?.length + " " + table + " found";
+              // Inject results into content so AI can summarize
+              const summary = (rows || []).map((r: any, i: number) => {
+                if (table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " — " + (r.phone || "no phone") + " — " + (r.email || "no email");
+                if (table === "quotes") return (i+1) + ". " + (r.quote_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "");
+                if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "");
+                if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " — " + (r.status || "") + " — $" + (r.amount || 0);
+                return JSON.stringify(r);
+              }).join("\n");
+              content += "\n\nHere are the results:\n" + summary;
+            }
+          } else {
+            action.result = "Cannot query table: " + table;
+          }
+        }
+
         if (action.type === "create_customer" && action.data) {
-          const { data: newCust, error } = await supabase.from("customers").insert({
+          const insertData: any = {
             name: action.data.name || (action.data.first_name + " " + (action.data.last_name || "")).trim(),
-            email: action.data.email || null,
-            phone: action.data.phone || null,
-            address: action.data.address || null,
             customer_type: action.data.customer_type || "residential",
-          }).select().single();
-          if (error) action.result = "Failed: " + error.message;
-          else action.result = "Customer created: " + (newCust?.name || "");
-          action.created_id = newCust?.id;
+          };
+          if (action.data.email) insertData.email = action.data.email;
+          if (action.data.phone) insertData.phone = action.data.phone;
+          if (action.data.address) insertData.address = action.data.address;
+
+          const { data: newCust, error } = await supabase
+            .from("customers")
+            .insert(insertData)
+            .select()
+            .single();
+
+          if (error) {
+            console.error("[ai-chat] create_customer error:", error);
+            action.result = "Failed to create customer: " + error.message;
+          } else {
+            action.result = "Customer created: " + (newCust?.name || "");
+            action.created_id = newCust?.id;
+          }
         }
 
         if (action.type === "create_quote" && action.data) {

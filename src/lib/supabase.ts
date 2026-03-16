@@ -14,6 +14,10 @@ export function createSupabaseAdmin() {
 
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: { persistSession: false },
+    global: {
+      fetch: (url: string | URL | Request, init?: RequestInit) =>
+        fetch(url, { ...init, cache: 'no-store' }),
+    },
   });
 }
 
