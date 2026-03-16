@@ -93,11 +93,40 @@ You can execute actions in the app. When the user asks you to DO something (not 
 \`\`\`action{"type":"...","data":{...}}\`\`\`
 
 Available actions:
-- \`\`\`action{"type":"create_customer","data":{"first_name":"...","last_name":"...","email":"...","phone":"...","address":"..."}}\`\`\`
-- \`\`\`action{"type":"create_job","data":{"customer_id":"...","service_type":"...","description":"...","price":"..."}}\`\`\`
-- \`\`\`action{"type":"navigate","data":{"tab":"customers|jobs|invoices|quotes|yelp_leads|analytics|messages"}}\`\`\`
 
-Always confirm what you're about to do before executing. After executing, confirm it was done.
+### Create Customer
+\`\`\`action{"type":"create_customer","data":{"name":"John Smith","email":"john@email.com","phone":"407-555-1234","address":"123 Main St","customer_type":"residential"}}\`\`\`
+
+### Create Quote/Estimate
+\`\`\`action{"type":"create_quote","data":{"customer_name":"John Smith","line_items":[{"description":"Weekly Lawn Mowing","quantity":4,"unit_price":45},{"description":"Hedge Trimming","quantity":1,"unit_price":50}],"tax_rate":0,"notes":"Monthly service quote","expiration_days":30}}\`\`\`
+
+### Create Invoice
+\`\`\`action{"type":"create_invoice","data":{"customer_name":"John Smith","line_items":[{"description":"Weekly Lawn Mowing - March","quantity":4,"unit_price":45}],"tax_rate":0,"due_days":15,"notes":"March service invoice"}}\`\`\`
+
+### Navigate
+\`\`\`action{"type":"navigate","data":{"tab":"customers|jobs|invoices|quotes|yelp_leads|analytics|messages"}}\`\`\`
+
+### Service Presets (use these default prices)
+- Weekly mowing (standard): $45
+- Weekly mowing (large): $75
+- Weekly mowing (XL): $120
+- Edging: $25
+- Hedge trimming: $50
+- Full lawn package: $95
+- Driveway pressure wash: $150
+- House soft wash: $250
+- Patio pressure wash: $125
+- Junk removal (small): $150
+- Junk removal (half load): $275
+- Junk removal (full load): $450
+- Brush clearing (1/4 acre): $500
+- General cleanup: $200
+
+Rules:
+- When creating quotes/invoices, ALWAYS calculate amounts (qty × unit_price) for each item
+- If customer name is given but no email/phone, create the quote anyway with just the name
+- Use service presets when the user describes common services
+- After creating, confirm with the quote/invoice number and total
 `;
 
 async function webSearch(query: string): Promise<string> {
@@ -249,22 +278,158 @@ export async function POST(req: NextRequest) {
       try {
         action = JSON.parse(actionMatch[1]);
 
-        // Execute the action
         if (action.type === "create_customer" && action.data) {
-          const { error } = await supabase.from("customers").insert({
-            first_name: action.data.first_name || "",
-            last_name: action.data.last_name || "",
+          const { data: newCust, error } = await supabase.from("customers").insert({
+            name: action.data.name || (action.data.first_name + " " + (action.data.last_name || "")).trim(),
             email: action.data.email || null,
             phone: action.data.phone || null,
             address: action.data.address || null,
-            status: "active",
-          });
+            customer_type: action.data.customer_type || "residential",
+          }).select().single();
           if (error) action.result = "Failed: " + error.message;
-          else action.result = "Customer created successfully";
+          else action.result = "Customer created: " + (newCust?.name || "");
+          action.created_id = newCust?.id;
+        }
+
+        if (action.type === "create_quote" && action.data) {
+          // Find or skip customer
+          let customerId = null;
+          if (action.data.customer_name) {
+            const { data: customers } = await supabase
+              .from("customers")
+              .select("id, name")
+              .ilike("name", "%" + action.data.customer_name + "%")
+              .limit(1);
+            if (customers?.length) {
+              customerId = customers[0].id;
+            } else {
+              // Auto-create customer
+              const { data: newCust } = await supabase
+                .from("customers")
+                .insert({ name: action.data.customer_name, customer_type: "residential" })
+                .select().single();
+              customerId = newCust?.id;
+            }
+          }
+
+          // Generate quote number
+          const now = new Date();
+          const prefix = "QTE-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-";
+          const { data: existing } = await supabase
+            .from("quotes")
+            .select("quote_number")
+            .like("quote_number", prefix + "%")
+            .order("quote_number", { ascending: false })
+            .limit(1);
+          let nextNum = 1;
+          if (existing?.length) {
+            const last = parseInt(existing[0].quote_number.replace(prefix, ""), 10);
+            if (!isNaN(last)) nextNum = last + 1;
+          }
+          const quoteNumber = prefix + String(nextNum).padStart(4, "0");
+
+          // Calculate totals
+          const lineItems = (action.data.line_items || []).map((li: any) => ({
+            description: li.description || "",
+            quantity: li.quantity || 1,
+            unit_price: li.unit_price || 0,
+            amount: (li.quantity || 1) * (li.unit_price || 0),
+          }));
+          const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
+          const taxRate = action.data.tax_rate || 0;
+          const taxAmount = subtotal * (taxRate / 100);
+          const total = subtotal + taxAmount;
+          const expDays = action.data.expiration_days || 30;
+          const expDate = new Date(now.getTime() + expDays * 86400000).toISOString().split("T")[0];
+
+          const { data: newQuote, error } = await supabase.from("quotes").insert({
+            quote_number: quoteNumber,
+            customer_id: customerId,
+            status: "draft",
+            line_items: lineItems,
+            subtotal,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
+            notes: action.data.notes || null,
+            expiration_date: expDate,
+          }).select().single();
+
+          if (error) action.result = "Failed: " + error.message;
+          else action.result = "Quote " + quoteNumber + " created — $" + total.toFixed(2) + " total";
+          action.created_id = newQuote?.id;
+        }
+
+        if (action.type === "create_invoice" && action.data) {
+          let customerId = null;
+          if (action.data.customer_name) {
+            const { data: customers } = await supabase
+              .from("customers")
+              .select("id, name")
+              .ilike("name", "%" + action.data.customer_name + "%")
+              .limit(1);
+            if (customers?.length) customerId = customers[0].id;
+            else {
+              const { data: newCust } = await supabase
+                .from("customers")
+                .insert({ name: action.data.customer_name, customer_type: "residential" })
+                .select().single();
+              customerId = newCust?.id;
+            }
+          }
+
+          const now = new Date();
+          const prefix = "INV-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-";
+          const { data: existing } = await supabase
+            .from("invoices")
+            .select("invoice_number")
+            .like("invoice_number", prefix + "%")
+            .order("invoice_number", { ascending: false })
+            .limit(1);
+          let nextNum = 1;
+          if (existing?.length) {
+            const last = parseInt(existing[0].invoice_number.replace(prefix, ""), 10);
+            if (!isNaN(last)) nextNum = last + 1;
+          }
+          const invoiceNumber = prefix + String(nextNum).padStart(4, "0");
+
+          const lineItems = (action.data.line_items || []).map((li: any) => ({
+            description: li.description || "",
+            quantity: li.quantity || 1,
+            unit_price: li.unit_price || 0,
+            amount: (li.quantity || 1) * (li.unit_price || 0),
+          }));
+          const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
+          const taxRate = action.data.tax_rate || 0;
+          const taxAmount = subtotal * (taxRate / 100);
+          const total = subtotal + taxAmount;
+          const dueDays = action.data.due_days || 15;
+          const dueDate = new Date(now.getTime() + dueDays * 86400000).toISOString().split("T")[0];
+
+          const { data: newInv, error } = await supabase.from("invoices").insert({
+            invoice_number: invoiceNumber,
+            customer_id: customerId,
+            status: "draft",
+            line_items: lineItems,
+            subtotal,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
+            amount_paid: 0,
+            due_date: dueDate,
+            notes: action.data.notes || null,
+          }).select().single();
+
+          if (error) action.result = "Failed: " + error.message;
+          else action.result = "Invoice " + invoiceNumber + " created — $" + total.toFixed(2) + " total, due " + dueDate;
+          action.created_id = newInv?.id;
         }
 
         content = content.replace(/```action[\s\S]*?```/g, "").trim();
-      } catch {}
+        if (action.result) content += "\n\n**" + action.result + "**";
+      } catch (err) {
+        console.error("[ai-chat] action error:", err);
+      }
     }
 
     // Handle memory save

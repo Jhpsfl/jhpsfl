@@ -293,6 +293,23 @@ export default function AdminDashboard() {
     window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
   }, []);
 
+  // AI Assistant navigation & refresh events
+  useEffect(() => {
+    const handleAiNav = (e: Event) => {
+      const tab = (e as CustomEvent).detail;
+      if (tab) switchTab(tab as Tab);
+    };
+    const handleAiRefresh = () => {
+      loadTab(activeTab);
+    };
+    window.addEventListener('ai-navigate', handleAiNav);
+    window.addEventListener('ai-refresh', handleAiRefresh);
+    return () => {
+      window.removeEventListener('ai-navigate', handleAiNav);
+      window.removeEventListener('ai-refresh', handleAiRefresh);
+    };
+  }, [activeTab]);
+
   const firstInteractionDone = useRef(false);
   useEffect(() => {
     const handler = () => {

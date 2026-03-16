@@ -91,10 +91,24 @@ export default function AiChatBubble() {
       setMessages(prev => [...prev, reply]);
       if (minimized || !open) setUnread(prev => prev + 1);
 
-      // Handle actions (e.g., navigate to a tab)
-      if (data.action?.type === 'navigate' && data.action.data?.tab) {
-        // Dispatch custom event that AdminDashboard can listen for
-        window.dispatchEvent(new CustomEvent('ai-navigate', { detail: data.action.data.tab }));
+      // Handle actions
+      if (data.action) {
+        if (data.action.type === 'navigate' && data.action.data?.tab) {
+          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: data.action.data.tab }));
+        }
+        if (data.action.type === 'create_quote' && data.action.created_id) {
+          // Navigate to quotes tab and refresh
+          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'quotes' }));
+          window.dispatchEvent(new CustomEvent('ai-refresh'));
+        }
+        if (data.action.type === 'create_invoice' && data.action.created_id) {
+          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'invoices' }));
+          window.dispatchEvent(new CustomEvent('ai-refresh'));
+        }
+        if (data.action.type === 'create_customer' && data.action.created_id) {
+          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'customers' }));
+          window.dispatchEvent(new CustomEvent('ai-refresh'));
+        }
       }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }]);
