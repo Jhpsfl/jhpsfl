@@ -28,6 +28,7 @@ import CustomerModal from "./components/CustomerModal";
 import SubscriptionModal from "./components/SubscriptionModal";
 import CashPaymentModal from "./components/CashPaymentModal";
 import MobileNav from "./components/MobileNav";
+import AiChatBubble from "./components/AiChatBubble";
 
 // ─── Exported Types ───
 export interface Customer {
@@ -2046,6 +2047,7 @@ export default function AdminDashboard() {
           Press back again to exit
         </div>
       )}
+      <AiChatBubble />
     </>
   );
 }

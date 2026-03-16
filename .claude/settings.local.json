@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx eslint --version)",
+      "Bash(npx eslint src/lib/shortLink.ts)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000 \\\\|:3001 \\\\|:3100 \")",
+      "Bash(tasklist /FI \"PID eq 27232\")",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \":31\")",
+      "Bash(powershell -Command \"Get-Process -Id 27232,74012 | Select-Object Id,ProcessName,MainWindowTitle,CommandLine 2>$null; \\(Get-NetTCPConnection -LocalPort 27232 -ErrorAction SilentlyContinue\\)\")"
+    ]
+  }
+}
