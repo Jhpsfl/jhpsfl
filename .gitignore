@@ -48,3 +48,6 @@ JHPS-Infrastructure-Credentials-Manual.docx
 build-yelp-agent.js
 test-inbox.js
 write-debug.js
+*.credential*
+*.secret*
+JHPS-Infrastructure*
