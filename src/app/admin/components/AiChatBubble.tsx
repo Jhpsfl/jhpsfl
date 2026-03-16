@@ -90,6 +90,12 @@ export default function AiChatBubble() {
       };
       setMessages(prev => [...prev, reply]);
       if (minimized || !open) setUnread(prev => prev + 1);
+
+      // Handle actions (e.g., navigate to a tab)
+      if (data.action?.type === 'navigate' && data.action.data?.tab) {
+        // Dispatch custom event that AdminDashboard can listen for
+        window.dispatchEvent(new CustomEvent('ai-navigate', { detail: data.action.data.tab }));
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }]);
     }

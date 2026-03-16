@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const SYSTEM_PROMPT = `You are the JHPS AI Assistant — a smart, helpful assistant for Jenkins Home & Property Solutions, a lawn care and property maintenance company in Florida.
 
@@ -23,97 +24,80 @@ const SYSTEM_PROMPT = `You are the JHPS AI Assistant — a smart, helpful assist
 
 ### Overview Tab (default)
 - Dashboard with key metrics: monthly revenue, active customers, pending jobs
-- Quick action buttons
-- Recent activity feed
+- Quick action buttons, recent activity feed
 
 ### Customers Tab
 - Full customer list with search
 - Click customer → detail view with service history, invoices, notes
 - Create new customer modal
-- Customer status management
 
 ### Jobs Tab
 - Service jobs list with status filters
 - Create/edit jobs with service details, scheduling, pricing
-- Job status workflow: scheduled → in-progress → completed
+- Status: scheduled → in-progress → completed
 
 ### Payments Tab
-- Payment history and tracking
-- Record cash payments modal
-- Payment status filters
+- Payment history and tracking, record cash payments
 
 ### Subscriptions Tab
-- Recurring service subscriptions
-- Subscription management (pause, cancel, modify)
+- Recurring service subscriptions management
 
 ### Invoices Tab
 - Create invoices with line items and service presets
-- Send invoices via email (Resend)
-- Invoice status: draft → sent → viewed → paid → overdue
-- Payment schedules and terms configuration
-- Record payments against invoices
-- PDF preview and download
+- Send via email (Resend), PDF preview/download
+- Status: draft → sent → viewed → paid → overdue
+- Record payments, payment schedules
 
 ### Quotes Tab
-- Service quotes and agreements
-- Quote detail with approval workflow
-- Convert quote to job/invoice
+- Service quotes and agreements, convert to job/invoice
 
 ### Yelp Leads Tab
-- Yelp conversation tracking from customer inquiries
-- AI-suggested replies (powered by Groq/Llama)
-- Lead status management
+- Yelp conversation tracking, AI-suggested replies
 - Convert leads to customers
 
 ### Video Leads Tab
 - Video submission leads from website
-- Review and manage video inquiries
 
 ### Messages/Email Tab
-- Email inbox and compose
-- Reply/forward threads
+- Email inbox, compose, reply/forward
 
 ### Analytics Tab
-- Business metrics and charts
-- Revenue tracking and customer growth
+- Business metrics, revenue tracking, customer growth
 
 ## BUSINESS KNOWLEDGE
 
 ### Florida Lawn Care
-- Growing season: year-round (subtropical climate)
+- Growing season: year-round (subtropical)
 - Grass types: St. Augustine, Bermuda, Zoysia, Bahia
-- Mowing frequency: weekly (growing season), bi-weekly (winter)
-- Fertilization: 4-6 applications per year
-- Irrigation: critical in FL, check for water restrictions by county
+- Mowing: weekly (growing season), bi-weekly (winter)
 - Common pests: chinch bugs, grubs, fire ants, mole crickets
+- Fertilizer blackout: some counties June-Sept
 
-### Common Services & Pricing
-- Weekly mowing: $30-75/visit depending on lot size
+### Services & Pricing
+- Weekly mowing: $30-75/visit
 - Landscaping: $50-150/hour
 - Pressure washing: $0.15-0.30/sqft
-- Mulch installation: $50-75/cuyd installed
+- Mulch: $50-75/cuyd installed
 - Tree trimming: $150-500/tree
 - Irrigation repair: $75-150/hour
-- Sod installation: $1.50-3.00/sqft
-- Hedge trimming: $40-80/hour
-- Leaf removal: $150-400 per service
-- Pest control (lawn): $50-100/treatment
-
-### Florida Regulations
-- Pesticide applicator license required for chemical treatments
-- Water restrictions vary by county
-- HOA requirements common — check before service
-- Hurricane prep services (tree trimming, debris removal)
-- Fertilizer blackout periods in some counties (June-Sept)
+- Sod: $1.50-3.00/sqft
+- Pest control: $50-100/treatment
 
 ## MEMORY SYSTEM
-You have persistent memory. When the user says "remember this", "save this", or "note this":
-- Include: \`\`\`memory{"content":"...","category":"..."}\`\`\` (categories: general, pricing, preferences, customers, services)
+When the user says "remember this", "save this", or "note this":
+- Include: \`\`\`memory{"content":"...","category":"..."}\`\`\`
 - When told to forget: \`\`\`forget{"content":"keyword"}\`\`\`
 
-## WEB SEARCH
-When you need current information, include: \`\`\`search{"query":"your search"}\`\`\`
-The system will search and feed results back to you.
+## ACTIONS
+You can execute actions in the app. When the user asks you to DO something (not just explain how), include an action block:
+\`\`\`action{"type":"...","data":{...}}\`\`\`
+
+Available actions:
+- \`\`\`action{"type":"create_customer","data":{"first_name":"...","last_name":"...","email":"...","phone":"...","address":"..."}}\`\`\`
+- \`\`\`action{"type":"create_job","data":{"customer_id":"...","service_type":"...","description":"...","price":"..."}}\`\`\`
+- \`\`\`action{"type":"navigate","data":{"tab":"customers|jobs|invoices|quotes|yelp_leads|analytics|messages"}}\`\`\`
+
+Always confirm what you're about to do before executing. After executing, confirm it was done.
 `;
 
 async function webSearch(query: string): Promise<string> {
@@ -125,11 +109,10 @@ async function webSearch(query: string): Promise<string> {
     });
     if (!res.ok) return "Search failed.";
     const html = await res.text();
-    const results: string[] = [];
-    const titleRegex = /<a class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
-    const snippetRegex = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
     const titles: { url: string; title: string }[] = [];
     const snippets: string[] = [];
+    const titleRegex = /<a class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+    const snippetRegex = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
     let match;
     while ((match = titleRegex.exec(html)) !== null && titles.length < 5) {
       const url = match[1].replace(/.*uddg=/, "").split("&")[0];
@@ -139,11 +122,35 @@ async function webSearch(query: string): Promise<string> {
     while ((match = snippetRegex.exec(html)) !== null && snippets.length < 5) {
       snippets.push(match[1].replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").trim());
     }
+    const results: string[] = [];
     for (let i = 0; i < Math.min(titles.length, snippets.length); i++) {
-      results.push("[" + (i+1) + "] " + titles[i].title + "\n" + snippets[i] + "\nSource: " + titles[i].url + "\n");
+      results.push("[" + (i+1) + "] " + titles[i].title + "\n" + snippets[i] + "\nSource: " + titles[i].url);
     }
-    return results.length ? results.join("\n") : "No results found.";
+    return results.length ? results.join("\n\n") : "No results found.";
   } catch { return "Search failed."; }
+}
+
+// Detect if a query likely needs web search
+function needsWebSearch(lastMessage: string): string | null {
+  const msg = lastMessage.toLowerCase();
+  const searchTriggers = [
+    /what(?:'s| is) the (?:latest|current|new|2024|2025|2026)/,
+    /search (?:for|the web|online|google)/,
+    /look up/,
+    /find (?:me |out )/,
+    /current (?:price|cost|rate|code|regulation|law|requirement)/,
+    /(?:price|cost) of .+ (?:in|near|around)/,
+    /(?:florida|fl) (?:code|law|regulation|permit|license|requirement)/,
+    /how much (?:does|do|is|are) .+ cost/,
+    /latest .+ (?:code|regulation|update|news|price)/,
+  ];
+  for (const trigger of searchTriggers) {
+    if (trigger.test(msg)) return lastMessage;
+  }
+  if (msg.includes('search') || msg.includes('look up') || msg.includes('google')) {
+    return lastMessage;
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -179,8 +186,20 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    const contextNote = currentTab ? "\nUser is on tab: " + currentTab : "";
+    let contextNote = currentTab ? "\nUser is on tab: " + currentTab : "";
 
+    // Pre-detect if web search is needed — run it BEFORE the AI call
+    const lastUserMsg = messages[messages.length - 1]?.content || "";
+    const searchQuery = needsWebSearch(lastUserMsg);
+    let searchResults = "";
+    if (searchQuery) {
+      searchResults = await webSearch(searchQuery);
+      if (searchResults && searchResults !== "No results found." && searchResults !== "Search failed.") {
+        contextNote += '\n\n## WEB SEARCH RESULTS for "' + searchQuery + '":\n' + searchResults + '\n\nUse these results to answer. Include source URLs.';
+      }
+    }
+
+    // Single AI call with all context pre-loaded
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
@@ -197,20 +216,20 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
     let content = data.choices?.[0]?.message?.content || "";
 
-    // Handle search
+    // If AI still requested a search (for queries we didn't pre-detect), handle it
     const searchMatch = content.match(/```search\s*(\{[\s\S]*?\})\s*```/);
     if (searchMatch) {
       try {
         const sq = JSON.parse(searchMatch[1]);
         if (sq.query) {
-          const searchResults = await webSearch(sq.query);
+          const results = await webSearch(sq.query);
           content = content.replace(/```search[\s\S]*?```/g, "").trim();
           const res2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
             body: JSON.stringify({
               model: "llama-3.3-70b-versatile",
-              messages: [{ role: "system", content: SYSTEM_PROMPT + '\n\n## SEARCH RESULTS for "' + sq.query + '":\n' + searchResults }, ...messages],
+              messages: [{ role: "system", content: SYSTEM_PROMPT + '\n\n## SEARCH RESULTS for "' + sq.query + '":\n' + results }, ...messages],
               temperature: 0.7, max_tokens: 2000,
             }),
           });
@@ -220,6 +239,31 @@ export async function POST(req: NextRequest) {
           }
           content = content.replace(/```search[\s\S]*?```/g, "").trim();
         }
+      } catch {}
+    }
+
+    // Handle action execution
+    let action = null;
+    const actionMatch = content.match(/```action\s*(\{[\s\S]*?\})\s*```/);
+    if (actionMatch) {
+      try {
+        action = JSON.parse(actionMatch[1]);
+
+        // Execute the action
+        if (action.type === "create_customer" && action.data) {
+          const { error } = await supabase.from("customers").insert({
+            first_name: action.data.first_name || "",
+            last_name: action.data.last_name || "",
+            email: action.data.email || null,
+            phone: action.data.phone || null,
+            address: action.data.address || null,
+            status: "active",
+          });
+          if (error) action.result = "Failed: " + error.message;
+          else action.result = "Customer created successfully";
+        }
+
+        content = content.replace(/```action[\s\S]*?```/g, "").trim();
       } catch {}
     }
 
@@ -243,7 +287,7 @@ export async function POST(req: NextRequest) {
       content = content.replace(/```forget[\s\S]*?```/g, "").trim();
     }
 
-    return NextResponse.json({ role: "assistant", content });
+    return NextResponse.json({ role: "assistant", content, action });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
