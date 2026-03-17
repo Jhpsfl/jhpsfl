@@ -347,14 +347,16 @@ export async function POST(req: NextRequest) {
     const isLookup = /show|list|see|check|find|pull|get|view|look|open|status|how much|what.*quote|what.*customer|what.*invoice/i.test(lm);
 
     if (mentionsData && isLookup) {
-      // Extract name — look for capitalized words that aren't common verbs
-      const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "for", "about", "from"]);
+      // Extract name — find any word that isn't a common verb/preposition
+      // Works with lowercase, uppercase, or mixed case
+      const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "estimates", "for", "about", "from", "by", "at", "on", "in", "is", "it", "a", "an", "to", "do", "of", "that", "this", "with", "and", "or", "real", "quick", "please", "yo", "hey", "ok", "yeah", "whats", "what's", "got", "we", "us", "our", "their", "his", "her", "its", "have", "has", "had", "been", "are", "was", "were", "will", "would", "could", "should", "let", "lets", "status", "total", "price", "cost", "many", "any", "some", "go", "going", "need", "want", "like", "just", "also", "too", "still", "now", "right", "see", "did", "does"]);
       const words = lastUserMsg.split(/\s+/);
       let searchName: string | null = null;
       for (const w of words) {
-        const clean = w.replace(/[^a-zA-Z']/g, "");
-        if (clean.length > 1 && clean[0] === clean[0].toUpperCase() && clean[0] !== clean[0].toLowerCase() && !skipWords.has(clean.toLowerCase())) {
-          searchName = clean.replace(/'s$/, "");
+        const clean = w.replace(/[^a-zA-Z']/g, "").replace(/'s$/, "");
+        if (clean.length > 2 && !skipWords.has(clean.toLowerCase())) {
+          // This word isn't a common word — likely a name
+          searchName = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
           break;
         }
       }
