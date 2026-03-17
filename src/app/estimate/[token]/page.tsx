@@ -314,8 +314,14 @@ export default function EstimatePage() {
               <h3 style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 }}>
                 ABOUT YOUR PROJECT
               </h3>
-              {quote.ai_project_notes.split('\n\n').map((p, i) => (
-                <p key={i} style={{ color: "#c8e0c8", fontSize: 14, lineHeight: 1.7, marginBottom: 10 }}>{p}</p>
+              {quote.ai_project_notes.split('\n\n').filter(Boolean).map((p, i) => (
+                <div key={i} style={{
+                  color: "#c8e0c8", fontSize: 14, lineHeight: 1.8,
+                  marginBottom: 14, paddingBottom: 14,
+                  borderBottom: i < quote.ai_project_notes!.split('\n\n').filter(Boolean).length - 1 ? "1px solid rgba(76,175,80,0.15)" : "none"
+                }}>
+                  {p.trim()}
+                </div>
               ))}
             </div>
           )}

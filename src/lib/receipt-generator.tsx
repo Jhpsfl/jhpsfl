@@ -197,7 +197,7 @@ const C = {
 // ═══════════════════════════════════════════════════════════════
 
 const s = StyleSheet.create({
-  page: { backgroundColor: C.white, paddingTop: 75, paddingBottom: 60, paddingHorizontal: 50, fontFamily: 'Helvetica', fontSize: 10, color: C.dark },
+  page: { backgroundColor: C.white, paddingTop: 75, paddingBottom: 80, paddingHorizontal: 50, fontFamily: 'Helvetica', fontSize: 10, color: C.dark },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 18, borderBottomWidth: 2.5, borderBottomColor: C.primary },
   headerLeft: { flexDirection: 'column', maxWidth: '60%' },
   logo: { width: 160, height: 50, marginBottom: 6, objectFit: 'contain' },
