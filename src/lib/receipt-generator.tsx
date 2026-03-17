@@ -870,6 +870,20 @@ function sanitizeTermText(text: string): string {
   return text.replace(/%%/g, '%');
 }
 
+/** Strip phone numbers from closing statement text (footer already shows it) */
+function sanitizeClosingStatement(text: string): string {
+  return text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/** Get smart date text for payment schedule rows */
+function getPaymentDateText(item: { label: string; due_date: string | null }, index: number): string {
+  if (item.due_date) return formatDateShort(new Date(item.due_date));
+  const lbl = item.label.toLowerCase();
+  if (index === 0 || lbl.includes('deposit')) return 'To be confirmed upon scheduling';
+  if (lbl.includes('balance') || lbl.includes('completion') || lbl.includes('final')) return 'Due upon job completion';
+  return 'To be confirmed';
+}
+
 const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data, logoUrl }) => {
   const isAccepted = data.quoteStatus === 'ACCEPTED';
   const badge = isAccepted ? s.badgePaid : s.badgeDue;
@@ -911,9 +925,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
               </>
             )}
             <Text style={s.metaValBold}>{data.customerName}</Text>
-            <Text style={s.metaVal}>{data.customerEmail}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
-            {data.customerAddress && <Text style={s.metaVal}>{data.customerAddress}</Text>}
             {data.serviceAddress && (
               <View style={{ marginTop: 6, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: '#E2E8F0' }}>
                 <Text style={{ fontSize: 8, color: '#718096', fontFamily: 'Helvetica-Bold', letterSpacing: 0.5, marginBottom: 2 }}>SERVICE LOCATION</Text>
@@ -1036,7 +1048,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                 {data.paymentTerms.schedule.map((item, i) => (
                   <View key={i} style={{ flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
                     <Text style={{ flex: 2, fontSize: 9, color: '#2D3748' }}>{item.label}</Text>
-                    <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{item.due_date ? formatDateShort(new Date(item.due_date)) : 'To be confirmed upon deposit receipt'}</Text>
+                    <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{getPaymentDateText(item, i)}</Text>
                     <Text style={{ flex: 1, fontSize: 9, color: '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{fmt(Math.round(item.amount * 100))}</Text>
                   </View>
                 ))}
@@ -1052,10 +1064,10 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           </View>
         )}
 
-        {/* ─── Closing Statement (no redundant header — paragraph stands alone) ─── */}
+        {/* ─── Closing Statement (phone stripped — footer has it) ─── */}
         {data.closingStatement && (
           <View style={{ marginTop: 20, padding: 16, backgroundColor: '#F0FFF4', borderRadius: 6, borderWidth: 1, borderColor: '#C6F6D5' }} wrap={false}>
-            {data.closingStatement.split('\n\n').map((para, i) => (
+            {sanitizeClosingStatement(data.closingStatement).split('\n\n').map((para, i) => (
               <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.7, marginBottom: 6 }}>{para.trim()}</Text>
             ))}
           </View>
