@@ -21,7 +21,7 @@ export interface QuoteLineItem {
   id: string;
   description: string;
   quantity: number;
-  unit: string;
+  unit?: string;
   unit_price: number;
   amount: number;
   section?: string;

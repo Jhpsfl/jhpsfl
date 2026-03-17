@@ -227,9 +227,9 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const handleJobAutoFill = (job: CustomerJob) => {
     const lines: QuoteLineItem[] = [];
     if (job.amount && job.amount > 0) {
-      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit_price: job.amount, amount: job.amount });
+      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit: "flat", unit_price: job.amount, amount: job.amount });
     } else {
-      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit_price: 0, amount: 0 });
+      lines.push({ id: createLineItemId(), description: job.service_type, quantity: 1, unit: "flat", unit_price: 0, amount: 0 });
     }
     const notes = [job.description, job.crew_notes, job.admin_notes].filter(Boolean).join(" — ");
     setForm(prev => ({ ...prev, line_items: lines, notes: notes || prev.notes }));
@@ -266,7 +266,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       ...prev,
       line_items: [
         ...prev.line_items.filter(item => item.description || item.unit_price > 0),
-        { id: createLineItemId(), description, quantity: 1, unit_price, amount: unit_price },
+        { id: createLineItemId(), description, quantity: 1, unit: "flat", unit_price, amount: unit_price },
       ],
     }));
     setShowPresetPicker(false);
@@ -728,10 +728,19 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       notes: quote.notes || "",
       line_items: quote.line_items?.length
         ? quote.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
-        : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
+        : [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }],
       show_financing: quote.show_financing,
       is_commercial: quote.is_commercial || false,
       payment_terms: quote.payment_terms || null,
+      service_address: (quote as any).service_address || "",
+      scope_summary: (quote as any).scope_summary || "",
+      start_date: (quote as any).start_date || "",
+      completion_date: (quote as any).completion_date || "",
+      exclusions: (quote as any).exclusions || "",
+      warranty: (quote as any).warranty || "",
+      terms_conditions: (quote as any).terms_conditions || availableTerms.filter(t => t.is_default).map(t => t.id),
+      ai_project_notes: (quote as any).ai_project_notes || "",
+      closing_statement: (quote as any).closing_statement || "",
     });
     setView("edit");
   };

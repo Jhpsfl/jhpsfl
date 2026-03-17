@@ -14,7 +14,7 @@ export default function QuoteForm({
   subtotal, taxAmount, total,
   onBack, onSave, onCreateNewCustomer, onJobAutoFill,
   updateLineItem, addLineItem, removeLineItem, onShowPresetPicker,
-  onNavigate, onPreviewPdf,
+  onNavigate, onPreviewPdf, availableTerms,
 }: {
   view: "create" | "edit";
   isMobile: boolean;
