@@ -8,11 +8,11 @@ export const maxDuration = 60;
 const CORE_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions, a lawn/landscaping company in Central Florida. Be concise, use **bold** and bullets.
 
 ABSOLUTE RULES — NEVER BREAK THESE:
-1. NEVER make up data. No fake prices, line items, customers, amounts. EVER. Say "I don't know" instead.
-2. When the lookup_data tool returns results marked [DATABASE], present that data EXACTLY as formatted. Do not add items, change prices, or invent details.
-3. You CAN freely discuss opinions, give advice, suggest pricing, explain materials, and have normal conversations. That's fine.
-4. The line between OK and NOT OK: opinions and advice = fine. Stating specific data about a real quote/customer/invoice as fact = MUST come from the tool.
-5. If you're unsure whether something is in the database, call the tool. Don't guess.
+1. NEVER make up data. No fake prices, no fake line items, no fake customers, no fake quote numbers, no fake amounts. EVER.
+2. If someone asks about ANY specific data (prices, line items, totals, customer info, quote details) — call lookup_data FIRST. Every single time. No exceptions.
+3. If you cannot verify something from a tool call result, say "I don't have that information" or "Let me look that up." NEVER fill in gaps with guesses.
+4. If the user asks you to list items, prices, or details — call the tool even if you think you remember from earlier. Your memory is unreliable. The tool is the truth.
+5. Only state facts that came directly from a tool result in the current response. Everything else gets "I'm not sure — let me check."
 
 Tabs: Overview, Customers, Jobs, Payments, Subscriptions, Invoices, Quotes, Yelp Leads, Video Leads, Messages, Analytics.`;
 
@@ -109,10 +109,11 @@ Granular operations (add/remove without replacing everything):
 - "add_terms": ["term_id_1"] — turns ON specific terms
 - "remove_terms": ["term_id_2"] — turns OFF specific terms
 
-For terms, use these IDs from the quote_terms table:
-- Payment Terms, Scope of Work, Cancellation Policy, Property Access, Liability Limitation, Weather Delays, Change Orders (these are ON by default)
-- Material Price Fluctuation, Independent Contractor, Warranty, FL Lien Rights, Dispute Resolution (these are OFF by default)
-When the user says "add warranty term" or "turn on lien rights", fetch the term IDs first with a query action if needed.
+For terms, you can use term NAMES directly (the system resolves them to IDs automatically):
+- Default ON: Payment Terms, Scope of Work, Cancellation Policy, Property Access, Liability Limitation, Weather Delays, Change Orders
+- Default OFF: Material Price Fluctuation, Independent Contractor, Warranty, FL Lien Rights, Dispute Resolution
+Example: "add_terms": ["Warranty", "FL Lien Rights"] or "remove_terms": ["Cancellation Policy"]
+To see all available terms with their IDs, use lookup_data with table "quote_terms".
 
 #### Create Invoice
 \`\`\`action{"type":"create_invoice","data":{"customer_name":"...","line_items":[...],"tax_rate":0,"due_days":15}}\`\`\`
@@ -292,7 +293,7 @@ export async function POST(req: NextRequest) {
           parameters: {
             type: "object",
             properties: {
-              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs"], description: "Which table to query" },
+              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"], description: "Which table to query. Use quote_terms to get available terms & conditions with their IDs." },
               search_name: { type: "string", description: "Customer name to filter by (optional)" },
             },
             required: ["table"],
@@ -301,8 +302,17 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    // Execute lookup and return PRE-FORMATTED response the AI must present verbatim
+    // Helper to execute the lookup
     async function executeLookup(table: string, searchName?: string): Promise<string> {
+      // Special case: quote_terms returns all available terms with IDs
+      if (table === "quote_terms") {
+        const { data: terms } = await supabase.from("quote_terms").select("*").order("sort_order");
+        if (!terms?.length) return "No terms found.";
+        return terms.map((t: any, i: number) =>
+          (i+1) + ". ID: " + t.id + " | " + t.title + " | Default: " + (t.is_default ? "ON" : "OFF") + "\n   " + (t.body || "").slice(0, 120)
+        ).join("\n");
+      }
+
       let rows: any[] = [];
       if (table === "quotes" || table === "invoices") {
         let query = supabase.from(table).select("*, customers(name, email, phone, address)").order("created_at", { ascending: false }).limit(15);
@@ -318,71 +328,21 @@ export async function POST(req: NextRequest) {
         const { data } = await query;
         rows = data || [];
       }
-      if (!rows.length) return "[NO DATA] No " + table + " found" + (searchName ? " for " + searchName : "") + ".";
-
-      // Build pre-formatted output — AI must present this EXACTLY
-      let output = "[DATABASE — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + "]\n\n";
-
-      for (const r of rows) {
-        const cn = r.customers?.name || "No customer";
-
-        if (table === "customers") {
-          output += "**" + (r.name || "Unknown") + "**\n";
-          if (r.phone) output += "Phone: " + r.phone + "\n";
-          if (r.email) output += "Email: " + r.email + "\n";
-          if (r.address) output += "Address: " + r.address + "\n";
-          output += "Type: " + (r.customer_type || "residential") + "\n\n";
-        }
-
+      if (!rows.length) return "No records found" + (searchName ? " for " + searchName : "") + ".";
+      return rows.map((r: any, i: number) => {
+        const cn = r.customers?.name || "";
+        if (table === "customers") return (i+1) + ". " + (r.name || "?") + " | " + (r.phone || "") + " | " + (r.email || "") + " | " + (r.address || "");
         if (table === "quotes") {
-          output += "**" + r.quote_number + "** — " + cn + "\n";
-          output += "Status: " + (r.status || "draft") + " | Total: $" + (r.total || 0).toFixed(2) + "\n";
-          if (r.service_address) output += "Service Address: " + r.service_address + "\n";
-          if (r.scope_summary) output += "Scope: " + r.scope_summary + "\n";
-
-          // Line items — exact from database
-          const items = r.line_items || [];
-          if (items.length > 0) {
-            output += "\nLine Items:\n";
-            let currentSection = "";
-            for (const li of items) {
-              if (li.section && li.section !== currentSection) {
-                currentSection = li.section;
-                output += "\n  [" + currentSection + "]\n";
-              }
-              const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
-              output += "  • " + li.description + " — " + li.quantity + unit + " × $" + (li.unit_price || 0).toFixed(2) + " = $" + (li.amount || 0).toFixed(2) + "\n";
-            }
-          }
-
-          output += "\nSubtotal: $" + (r.subtotal || 0).toFixed(2) + "\n";
-          if (r.tax_amount > 0) output += "Tax: $" + r.tax_amount.toFixed(2) + "\n";
-          output += "**Total: $" + (r.total || 0).toFixed(2) + "**\n";
-
-          if (r.payment_terms?.schedule?.length) {
-            output += "\nPayment Schedule:\n";
-            for (const p of r.payment_terms.schedule) {
-              output += "  • " + p.label + ": $" + (p.amount || 0).toFixed(2) + "\n";
-            }
-          }
-
-          if (r.exclusions) output += "\nExclusions: " + r.exclusions + "\n";
-          if (r.warranty) output += "Warranty: " + r.warranty + "\n";
-          output += "\n";
+          const items = (r.line_items || []).map((li: any) => {
+            const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
+            return li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")";
+          }).filter(Boolean).join("; ");
+          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
         }
-
-        if (table === "invoices") {
-          output += "**" + (r.invoice_number || "") + "** — " + cn + "\n";
-          output += "Status: " + (r.status || "") + " | Total: $" + (r.total || 0).toFixed(2) + " | Paid: $" + (r.amount_paid || 0).toFixed(2) + "\n\n";
-        }
-
-        if (table === "jobs") {
-          output += "**" + (r.service_type || "Job") + "** — " + (r.status || "") + " — $" + (r.amount || 0).toFixed(2) + "\n\n";
-        }
-      }
-
-      output += "[END DATABASE — Present this data exactly as shown. Do not add, remove, or modify any items or amounts.]";
-      return output;
+        if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
+        if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
+        return "";
+      }).join("\n");
     }
 
     // Pre-detect if this is an action request (create/update) with embedded data
@@ -516,7 +476,7 @@ export async function POST(req: NextRequest) {
           input_schema: {
             type: "object",
             properties: {
-              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs"] },
+              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"] },
               search_name: { type: "string", description: "Customer name to filter by" },
             },
             required: ["table"],
@@ -636,7 +596,7 @@ export async function POST(req: NextRequest) {
         if (action.type === "query" && action.data) {
           const table = action.data.table || "customers";
           const limit = Math.min(action.data.limit || 10, 25);
-          const allowed = ["customers", "quotes", "invoices", "jobs"];
+          const allowed = ["customers", "quotes", "invoices", "jobs", "quote_terms"];
           if (allowed.includes(table)) {
             const { data: rows, error } = await supabase
               .from(table)
@@ -838,14 +798,28 @@ export async function POST(req: NextRequest) {
                 updates.total = subtotal + updates.tax_amount;
               }
 
-              // Toggle terms on/off
+              // Toggle terms on/off — supports both UUIDs and title names
               if (u.add_terms && Array.isArray(u.add_terms)) {
+                // Resolve names to IDs if needed
+                const resolvedIds: string[] = [];
+                for (const t of u.add_terms) {
+                  if (t.match(/^[0-9a-f-]{36}$/i)) { resolvedIds.push(t); continue; }
+                  const { data: found } = await supabase.from("quote_terms").select("id").ilike("title", "%" + t + "%").limit(1);
+                  if (found?.length) resolvedIds.push(found[0].id);
+                }
                 const current = existing.terms_conditions || [];
-                updates.terms_conditions = [...new Set([...current, ...u.add_terms])];
+                updates.terms_conditions = [...new Set([...current, ...resolvedIds])];
               }
               if (u.remove_terms && Array.isArray(u.remove_terms)) {
+                // Resolve names to IDs if needed
+                const resolvedIds: string[] = [];
+                for (const t of u.remove_terms) {
+                  if (t.match(/^[0-9a-f-]{36}$/i)) { resolvedIds.push(t); continue; }
+                  const { data: found } = await supabase.from("quote_terms").select("id").ilike("title", "%" + t + "%").limit(1);
+                  if (found?.length) resolvedIds.push(found[0].id);
+                }
                 const current = updates.terms_conditions || existing.terms_conditions || [];
-                updates.terms_conditions = current.filter((id: string) => !u.remove_terms.includes(id));
+                updates.terms_conditions = current.filter((id: string) => !resolvedIds.includes(id));
               }
 
               // Line items (replace all)
