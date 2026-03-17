@@ -661,6 +661,15 @@ export async function POST(request: NextRequest) {
                 is_commercial: payload.is_commercial || false,
                 payment_terms: payload.payment_terms || null,
                 sent_at: payload.sent_at || null,
+                service_address: payload.service_address || null,
+                scope_summary: payload.scope_summary || null,
+                ai_project_notes: payload.ai_project_notes || null,
+                start_date: payload.start_date || null,
+                completion_date: payload.completion_date || null,
+                exclusions: payload.exclusions || null,
+                warranty: payload.warranty || null,
+                closing_statement: payload.closing_statement || null,
+                terms_conditions: payload.terms_conditions || null,
               })
               .select(`*, customers ( name, email, phone )`)
               .single();
@@ -673,7 +682,10 @@ export async function POST(request: NextRequest) {
               "customer_id", "quote_number", "status", "subtotal",
               "tax_rate", "tax_amount", "total", "expiration_date", "due_date",
               "notes", "line_items", "show_financing", "is_commercial", "payment_terms",
-              "sent_at", "accepted_at", "declined_at", "converted_invoice_id"
+              "sent_at", "accepted_at", "declined_at", "converted_invoice_id",
+              "service_address", "scope_summary", "ai_project_notes",
+              "start_date", "completion_date", "exclusions", "warranty",
+              "closing_statement", "terms_conditions", "decline_reason"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];
