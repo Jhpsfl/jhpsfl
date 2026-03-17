@@ -20,6 +20,9 @@ const SYSTEM_PROMPT = `You are the JHPS AI Assistant — a smart, helpful assist
 4. If you don't know: say so
 5. Use **bold** and bullet lists for clarity
 
+## IMPORTANT: DATA ACCESS
+You CAN see live data. When the user asks about customers, quotes, invoices, or jobs, the system automatically fetches the data and provides it to you in the context below. You DO NOT need to tell the user to navigate anywhere or ask them for quote numbers — just look at the LIVE DATA section provided and answer their question directly. If data is provided, use it. Never say "I can't access the database" or "I need you to navigate" — you already have the data.
+
 ## APP NAVIGATION (Single-page admin at /admin)
 
 ### Overview Tab (default)
@@ -289,15 +292,26 @@ export async function POST(req: NextRequest) {
     const lm = lastUserMsg.toLowerCase();
 
     // Extract a person's name from the query (e.g., "show me Sherry's quote")
-    const nameMatch = lastUserMsg.match(/(?:for |about |from |by )?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'?s?\s*(?:quote|invoice|job|estimate|customer|account)/i)
-      || lastUserMsg.match(/(?:quote|invoice|job|estimate|customer|account)\s+(?:for |about |from |by )?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
-    const searchName = nameMatch ? nameMatch[1] : null;
+    // Extract name from many phrasings: "Sherry's quote", "quote for Sherry", "see the quote for sherry", etc.
+    const namePatterns = [
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'?s?\s*(?:quote|invoice|job|estimate|customer|account)/i,
+      /(?:quote|invoice|job|estimate|customer|account)\s+(?:for|from|about|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /(?:for|from|about|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\??$/i,
+      /(?:see|view|check|find|show|get|pull|look)\s+.*?(?:for|from|about|by)\s+([A-Z][a-z]+)/i,
+    ];
+    let searchName: string | null = null;
+    for (const np of namePatterns) {
+      const m = lastUserMsg.match(np);
+      if (m && m[1]) { searchName = m[1]; break; }
+    }
 
     const dataQueryPatterns = [
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my )?customer/i, table: "customers" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?(?:quote|estimate)/i, table: "quotes" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?invoice/i, table: "invoices" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?job/i, table: "jobs" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load) (?:me |the |all |my )?customer/i, table: "customers" },
+      { pattern: /(?:quote|estimate)s?\s+(?:for|from|about|by)\s+/i, table: "quotes" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?(?:quote|estimate)/i, table: "quotes" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?invoice/i, table: "invoices" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?job/i, table: "jobs" },
+      { pattern: /[A-Z][a-z]+'s\s+(?:quote|estimate|invoice|job)/i, table: "quotes" },
     ];
 
     for (const dq of dataQueryPatterns) {
