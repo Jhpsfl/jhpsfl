@@ -285,34 +285,94 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Pre-detect data queries — "show me customers", "list quotes", "how many invoices"
+    // Pre-detect data queries with smart name/keyword extraction
     const lm = lastUserMsg.toLowerCase();
+
+    // Extract a person's name from the query (e.g., "show me Sherry's quote")
+    const nameMatch = lastUserMsg.match(/(?:for |about |from |by )?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'?s?\s*(?:quote|invoice|job|estimate|customer|account)/i)
+      || lastUserMsg.match(/(?:quote|invoice|job|estimate|customer|account)\s+(?:for |about |from |by )?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+    const searchName = nameMatch ? nameMatch[1] : null;
+
     const dataQueryPatterns = [
-      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?customer/i, table: "customers" },
-      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?quote/i, table: "quotes" },
-      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?invoice/i, table: "invoices" },
-      { pattern: /(?:show|list|read|get|display|how many|what) (?:me |the |all |my )?job/i, table: "jobs" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my )?customer/i, table: "customers" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?(?:quote|estimate)/i, table: "quotes" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?invoice/i, table: "invoices" },
+      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check) (?:me |the |all |my |.{0,30})?job/i, table: "jobs" },
     ];
 
     for (const dq of dataQueryPatterns) {
       if (dq.pattern.test(lastUserMsg)) {
-        const { data: rows } = await supabase
-          .from(dq.table)
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(15);
+        let rows: any[] = [];
 
-        if (rows?.length) {
+        if (dq.table === "quotes") {
+          // Join customer name for quotes
+          let query = supabase
+            .from("quotes")
+            .select("*, customers(name, email, phone, address)")
+            .order("created_at", { ascending: false })
+            .limit(15);
+
+          // Filter by customer name if mentioned
+          if (searchName) {
+            const { data: matchingCustomers } = await supabase
+              .from("customers")
+              .select("id")
+              .ilike("name", "%" + searchName + "%");
+            if (matchingCustomers?.length) {
+              const ids = matchingCustomers.map((c: any) => c.id);
+              query = query.in("customer_id", ids);
+            }
+          }
+          const { data } = await query;
+          rows = data || [];
+        } else if (dq.table === "invoices") {
+          let query = supabase
+            .from("invoices")
+            .select("*, customers(name, email, phone)")
+            .order("created_at", { ascending: false })
+            .limit(15);
+
+          if (searchName) {
+            const { data: matchingCustomers } = await supabase
+              .from("customers")
+              .select("id")
+              .ilike("name", "%" + searchName + "%");
+            if (matchingCustomers?.length) {
+              query = query.in("customer_id", matchingCustomers.map((c: any) => c.id));
+            }
+          }
+          const { data } = await query;
+          rows = data || [];
+        } else {
+          let query = supabase
+            .from(dq.table)
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(15);
+
+          if (searchName && dq.table === "customers") {
+            query = query.ilike("name", "%" + searchName + "%");
+          }
+          const { data } = await query;
+          rows = data || [];
+        }
+
+        if (rows.length) {
           const summary = rows.map((r: any, i: number) => {
-            if (dq.table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " — " + (r.phone || "no phone") + " — " + (r.email || "no email") + (r.customer_type ? " (" + r.customer_type + ")" : "");
-            if (dq.table === "quotes") return (i+1) + ". " + (r.quote_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "") + (r.notes ? " — " + r.notes : "");
-            if (dq.table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "") + " — paid: $" + (r.amount_paid || 0);
-            if (dq.table === "jobs") return (i+1) + ". " + (r.service_type || "") + " — " + (r.status || "") + " — $" + (r.amount || 0);
+            const custName = r.customers?.name || "No customer";
+            if (dq.table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " | " + (r.phone || "no phone") + " | " + (r.email || "no email") + " | " + (r.address || "no address") + " | " + (r.customer_type || "");
+            if (dq.table === "quotes") {
+              const items = (r.line_items || []).map((li: any) => li.description).filter(Boolean).join(", ");
+              return (i+1) + ". " + r.quote_number + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "draft") + " | Services: " + (items || "none") + (r.service_address ? " | Address: " + r.service_address : "") + (r.scope_summary ? " | Scope: " + r.scope_summary : "");
+            }
+            if (dq.table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "") + " | Paid: $" + (r.amount_paid || 0);
+            if (dq.table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
             return JSON.stringify(r);
           }).join("\n");
-          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + " (most recent " + rows.length + "):\n" + summary + "\n\nSummarize this data for the user. Include counts and key details.";
+          const label = searchName ? dq.table.toUpperCase() + " for " + searchName : dq.table.toUpperCase();
+          contextNote += "\n\n## LIVE DATA — " + label + " (" + rows.length + " results):\n" + summary + "\n\nPresent this data clearly to the user. Include customer names, amounts, statuses, and key details.";
         } else {
-          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + ": No records found.";
+          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
         }
         break;
       }
