@@ -277,39 +277,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Smart data detection — keyword-based (no extra API call)
-    const lm = lastUserMsg.toLowerCase();
-    // Check if data lookup is needed — scan all messages for context
-    const allText = messages.map((m: any) => m.content || "").join(" ");
-    const allLm = allText.toLowerCase();
-    const mentionsData = /quote|estimate|customer|invoice|job/i.test(allLm);
+    // Function calling tools — AI decides when to look up data
+    const dbTools = [
+      {
+        type: "function",
+        function: {
+          name: "lookup_data",
+          description: "Look up quotes, customers, invoices, or jobs from the JHPS database. Call this whenever you need real data to answer a question.",
+          parameters: {
+            type: "object",
+            properties: {
+              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs"], description: "Which table to query" },
+              search_name: { type: "string", description: "Customer name to filter by (optional)" },
+            },
+            required: ["table"],
+          },
+        },
+      },
+    ];
 
-    // Only fetch if we haven't already loaded data in this conversation
-    // (check if any assistant message already contains "QTE-" or "INV-" or database results)
-    const alreadyHasData = messages.some((m: any) => m.role === "assistant" && (/QTE-\d|INV-\d|\$\d/.test(m.content || "")));
-
-    if (mentionsData && !alreadyHasData) {
-      // Extract name — find any word that isn't a common verb/preposition
-      // Works with lowercase, uppercase, or mixed case
-      const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "estimates", "for", "about", "from", "by", "at", "on", "in", "is", "it", "a", "an", "to", "do", "of", "that", "this", "with", "and", "or", "real", "quick", "please", "yo", "hey", "ok", "yeah", "whats", "what's", "got", "we", "us", "our", "their", "his", "her", "its", "have", "has", "had", "been", "are", "was", "were", "will", "would", "could", "should", "let", "lets", "status", "total", "price", "cost", "many", "any", "some", "go", "going", "need", "want", "like", "just", "also", "too", "still", "now", "right", "see", "did", "does", "good", "answer", "original", "question", "using", "data", "found", "following", "system", "work", "tell", "edit", "update", "change", "modify", "bring", "load", "read", "info", "detail", "details"]);
-      // Search ALL messages for names, not just the last one
-      const words = allText.split(/\s+/);
-      let searchName: string | null = null;
-      for (const w of words) {
-        const clean = w.replace(/[^a-zA-Z']/g, "").replace(/'s$/, "");
-        if (clean.length > 2 && !skipWords.has(clean.toLowerCase())) {
-          // This word isn't a common word — likely a name
-          searchName = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
-          break;
-        }
-      }
-
-      // Determine table
-      let table = "quotes";
-      if (/customer/i.test(lm)) table = "customers";
-      else if (/invoice/i.test(lm)) table = "invoices";
-      else if (/job/i.test(lm)) table = "jobs";
-
+    // Helper to execute the lookup
+    async function executeLookup(table: string, searchName?: string): Promise<string> {
       let rows: any[] = [];
       if (table === "quotes" || table === "invoices") {
         let query = supabase.from(table).select("*, customers(name, email, phone, address)").order("created_at", { ascending: false }).limit(15);
@@ -325,24 +313,21 @@ export async function POST(req: NextRequest) {
         const { data } = await query;
         rows = data || [];
       }
-
-      if (rows.length) {
-        const summary = rows.map((r: any, i: number) => {
-          const cn = r.customers?.name || "No customer";
-          if (table === "customers") return (i+1) + ". " + (r.name || "?") + " | " + (r.phone || "") + " | " + (r.email || "") + " | " + (r.address || "");
-          if (table === "quotes") {
-            const items = (r.line_items || []).map((li: any) => li.description).filter(Boolean).join(", ");
-            return (i+1) + ". " + r.quote_number + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + " | " + (items || "no items") + (r.service_address ? " | " + r.service_address : "");
-          }
-          if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
-          if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
-          return "";
-        }).join("\n");
-        // Inject data directly into conversation as a system-like message the AI can't miss
-        contextNote += "\n\n## DATABASE RESULTS (" + (searchName || "all") + "):\n" + summary + "\n\nThis is REAL data from the database. Use it to answer. NEVER say you don't have access.";
-      } else {
-        contextNote += "\n\n## LIVE DATA — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
-      }
+      if (!rows.length) return "No records found" + (searchName ? " for " + searchName : "") + ".";
+      return rows.map((r: any, i: number) => {
+        const cn = r.customers?.name || "";
+        if (table === "customers") return (i+1) + ". " + (r.name || "?") + " | " + (r.phone || "") + " | " + (r.email || "") + " | " + (r.address || "");
+        if (table === "quotes") {
+          const items = (r.line_items || []).map((li: any) => {
+            const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
+            return li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")";
+          }).filter(Boolean).join("; ");
+          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
+        }
+        if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
+        if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
+        return "";
+      }).join("\n");
     }
 
     // Pre-detect if this is an action request (create/update) with embedded data
@@ -442,65 +427,114 @@ export async function POST(req: NextRequest) {
     let content = "";
     let usedModel = "";
 
-    if (preferClaude) {
-      // Claude Haiku via Anthropic API
-      try {
-        const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": claudeKey!,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
-            max_tokens: 4000,
-            system: fullPrompt,
-            messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
-          }),
-        });
-
-        if (claudeRes.ok) {
-          const claudeData = await claudeRes.json();
-          content = claudeData.content?.[0]?.text || "";
-          usedModel = "claude";
-        } else {
-          const errText = await claudeRes.text().catch(() => "");
-          console.error("[ai-chat] Claude error:", claudeRes.status, errText);
-          // Fall through to Groq
-        }
-      } catch (err) {
-        console.error("[ai-chat] Claude failed, falling back to Groq:", err);
-      }
-    }
-
-    // Groq fallback (or primary if toggled)
-    if (!content && groqKey) {
-      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    // Groq with function calling (OpenAI-compatible)
+    async function callGroq(msgs: any[], useTools = true): Promise<any> {
+      const body: any = {
+        model: "llama-3.1-8b-instant",
+        messages: [{ role: "system", content: groqPrompt }, ...msgs],
+        temperature: 0.7,
+        max_tokens: 4000,
+      };
+      if (useTools) body.tools = dbTools;
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: [{ role: "system", content: groqPrompt }, ...messages],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
+        body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error("Groq " + res.status);
+      return res.json();
+    }
 
-      if (!groqRes.ok) {
-        const errText = await groqRes.text().catch(() => "unknown");
-        console.error("[ai-chat] Groq error:", groqRes.status, errText);
-        const isRateLimit = groqRes.status === 429;
+    // Claude with function calling
+    async function callClaude(msgs: any[], useTools = true): Promise<any> {
+      const body: any = {
+        model: "claude-3-haiku-20240307",
+        max_tokens: 4000,
+        system: fullPrompt,
+        messages: msgs.map((m: any) => ({ role: m.role, content: m.content })),
+      };
+      if (useTools) {
+        body.tools = [{
+          name: "lookup_data",
+          description: "Look up quotes, customers, invoices, or jobs from the database.",
+          input_schema: {
+            type: "object",
+            properties: {
+              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs"] },
+              search_name: { type: "string", description: "Customer name to filter by" },
+            },
+            required: ["table"],
+          },
+        }];
+      }
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Claude " + res.status);
+      return res.json();
+    }
+
+    // Main AI call with tool use loop
+    try {
+      if (preferClaude) {
+        // Claude tool use flow
+        let claudeData = await callClaude(messages);
+
+        // Check if Claude wants to use a tool
+        const toolUse = claudeData.content?.find((b: any) => b.type === "tool_use");
+        if (toolUse && toolUse.name === "lookup_data") {
+          const result = await executeLookup(toolUse.input.table, toolUse.input.search_name);
+          // Send tool result back to Claude
+          const toolMessages = [
+            ...messages,
+            { role: "assistant", content: claudeData.content },
+            { role: "user", content: [{ type: "tool_result", tool_use_id: toolUse.id, content: result }] },
+          ];
+          claudeData = await callClaude(toolMessages, false);
+        }
+
+        // Extract text content
+        content = (claudeData.content || [])
+          .filter((b: any) => b.type === "text")
+          .map((b: any) => b.text)
+          .join("\n") || "";
+        usedModel = "claude";
+      }
+    } catch (err) {
+      console.error("[ai-chat] Claude error:", err);
+    }
+
+    // Groq fallback
+    if (!content && groqKey) {
+      try {
+        let groqData = await callGroq(messages);
+        const choice = groqData.choices?.[0];
+
+        // Check if Groq wants to call a function
+        if (choice?.message?.tool_calls?.length) {
+          const tc = choice.message.tool_calls[0];
+          const args = JSON.parse(tc.function.arguments);
+          const result = await executeLookup(args.table, args.search_name);
+          // Send function result back
+          const toolMessages = [
+            ...messages,
+            choice.message,
+            { role: "tool", tool_call_id: tc.id, content: result },
+          ];
+          groqData = await callGroq(toolMessages, false);
+        }
+
+        content = groqData.choices?.[0]?.message?.content || "";
+        usedModel = "groq";
+      } catch (err: any) {
+        console.error("[ai-chat] Groq error:", err);
+        const isRateLimit = err.message?.includes("429");
         return NextResponse.json({
-          error: isRateLimit
-            ? "Rate limit reached — wait a few seconds and try again"
-            : "AI service error (" + groqRes.status + ")"
+          error: isRateLimit ? "Rate limit — wait a few seconds" : "AI service error"
         }, { status: 502 });
       }
-
-      const groqData = await groqRes.json();
-      content = groqData.choices?.[0]?.message?.content || "";
-      usedModel = "groq";
     }
 
     if (!content) {
