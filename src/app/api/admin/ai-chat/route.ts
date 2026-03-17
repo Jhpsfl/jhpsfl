@@ -8,11 +8,11 @@ export const maxDuration = 60;
 const CORE_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions, a lawn/landscaping company in Central Florida. Be concise, use **bold** and bullets.
 
 ABSOLUTE RULES — NEVER BREAK THESE:
-1. NEVER make up data. No fake prices, no fake line items, no fake customers, no fake quote numbers, no fake amounts. EVER.
-2. If someone asks about ANY specific data (prices, line items, totals, customer info, quote details) — call lookup_data FIRST. Every single time. No exceptions.
-3. If you cannot verify something from a tool call result, say "I don't have that information" or "Let me look that up." NEVER fill in gaps with guesses.
-4. If the user asks you to list items, prices, or details — call the tool even if you think you remember from earlier. Your memory is unreliable. The tool is the truth.
-5. Only state facts that came directly from a tool result in the current response. Everything else gets "I'm not sure — let me check."
+1. NEVER make up data. No fake prices, line items, customers, amounts. EVER. Say "I don't know" instead.
+2. When the lookup_data tool returns results marked [DATABASE], present that data EXACTLY as formatted. Do not add items, change prices, or invent details.
+3. You CAN freely discuss opinions, give advice, suggest pricing, explain materials, and have normal conversations. That's fine.
+4. The line between OK and NOT OK: opinions and advice = fine. Stating specific data about a real quote/customer/invoice as fact = MUST come from the tool.
+5. If you're unsure whether something is in the database, call the tool. Don't guess.
 
 Tabs: Overview, Customers, Jobs, Payments, Subscriptions, Invoices, Quotes, Yelp Leads, Video Leads, Messages, Analytics.`;
 
@@ -301,7 +301,7 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    // Helper to execute the lookup
+    // Execute lookup and return PRE-FORMATTED response the AI must present verbatim
     async function executeLookup(table: string, searchName?: string): Promise<string> {
       let rows: any[] = [];
       if (table === "quotes" || table === "invoices") {
@@ -318,21 +318,71 @@ export async function POST(req: NextRequest) {
         const { data } = await query;
         rows = data || [];
       }
-      if (!rows.length) return "No records found" + (searchName ? " for " + searchName : "") + ".";
-      return rows.map((r: any, i: number) => {
-        const cn = r.customers?.name || "";
-        if (table === "customers") return (i+1) + ". " + (r.name || "?") + " | " + (r.phone || "") + " | " + (r.email || "") + " | " + (r.address || "");
-        if (table === "quotes") {
-          const items = (r.line_items || []).map((li: any) => {
-            const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
-            return li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")";
-          }).filter(Boolean).join("; ");
-          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
+      if (!rows.length) return "[NO DATA] No " + table + " found" + (searchName ? " for " + searchName : "") + ".";
+
+      // Build pre-formatted output — AI must present this EXACTLY
+      let output = "[DATABASE — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + "]\n\n";
+
+      for (const r of rows) {
+        const cn = r.customers?.name || "No customer";
+
+        if (table === "customers") {
+          output += "**" + (r.name || "Unknown") + "**\n";
+          if (r.phone) output += "Phone: " + r.phone + "\n";
+          if (r.email) output += "Email: " + r.email + "\n";
+          if (r.address) output += "Address: " + r.address + "\n";
+          output += "Type: " + (r.customer_type || "residential") + "\n\n";
         }
-        if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
-        if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
-        return "";
-      }).join("\n");
+
+        if (table === "quotes") {
+          output += "**" + r.quote_number + "** — " + cn + "\n";
+          output += "Status: " + (r.status || "draft") + " | Total: $" + (r.total || 0).toFixed(2) + "\n";
+          if (r.service_address) output += "Service Address: " + r.service_address + "\n";
+          if (r.scope_summary) output += "Scope: " + r.scope_summary + "\n";
+
+          // Line items — exact from database
+          const items = r.line_items || [];
+          if (items.length > 0) {
+            output += "\nLine Items:\n";
+            let currentSection = "";
+            for (const li of items) {
+              if (li.section && li.section !== currentSection) {
+                currentSection = li.section;
+                output += "\n  [" + currentSection + "]\n";
+              }
+              const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
+              output += "  • " + li.description + " — " + li.quantity + unit + " × $" + (li.unit_price || 0).toFixed(2) + " = $" + (li.amount || 0).toFixed(2) + "\n";
+            }
+          }
+
+          output += "\nSubtotal: $" + (r.subtotal || 0).toFixed(2) + "\n";
+          if (r.tax_amount > 0) output += "Tax: $" + r.tax_amount.toFixed(2) + "\n";
+          output += "**Total: $" + (r.total || 0).toFixed(2) + "**\n";
+
+          if (r.payment_terms?.schedule?.length) {
+            output += "\nPayment Schedule:\n";
+            for (const p of r.payment_terms.schedule) {
+              output += "  • " + p.label + ": $" + (p.amount || 0).toFixed(2) + "\n";
+            }
+          }
+
+          if (r.exclusions) output += "\nExclusions: " + r.exclusions + "\n";
+          if (r.warranty) output += "Warranty: " + r.warranty + "\n";
+          output += "\n";
+        }
+
+        if (table === "invoices") {
+          output += "**" + (r.invoice_number || "") + "** — " + cn + "\n";
+          output += "Status: " + (r.status || "") + " | Total: $" + (r.total || 0).toFixed(2) + " | Paid: $" + (r.amount_paid || 0).toFixed(2) + "\n\n";
+        }
+
+        if (table === "jobs") {
+          output += "**" + (r.service_type || "Job") + "** — " + (r.status || "") + " — $" + (r.amount || 0).toFixed(2) + "\n\n";
+        }
+      }
+
+      output += "[END DATABASE — Present this data exactly as shown. Do not add, remove, or modify any items or amounts.]";
+      return output;
     }
 
     // Pre-detect if this is an action request (create/update) with embedded data
