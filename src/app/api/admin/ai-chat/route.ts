@@ -279,14 +279,16 @@ export async function POST(req: NextRequest) {
 
     // Smart data detection — keyword-based (no extra API call)
     const lm = lastUserMsg.toLowerCase();
-    // Check ALL messages in conversation, not just the last one
+    // Check if data lookup is needed — scan all messages for context
     const allText = messages.map((m: any) => m.content || "").join(" ");
     const allLm = allText.toLowerCase();
     const mentionsData = /quote|estimate|customer|invoice|job/i.test(allLm);
-    const isLookup = true; // Always fetch if data is mentioned anywhere in conversation
 
-    let dataInjected = false;
-    if (mentionsData && isLookup) {
+    // Only fetch if we haven't already loaded data in this conversation
+    // (check if any assistant message already contains "QTE-" or "INV-" or database results)
+    const alreadyHasData = messages.some((m: any) => m.role === "assistant" && (/QTE-\d|INV-\d|\$\d/.test(m.content || "")));
+
+    if (mentionsData && !alreadyHasData) {
       // Extract name — find any word that isn't a common verb/preposition
       // Works with lowercase, uppercase, or mixed case
       const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "estimates", "for", "about", "from", "by", "at", "on", "in", "is", "it", "a", "an", "to", "do", "of", "that", "this", "with", "and", "or", "real", "quick", "please", "yo", "hey", "ok", "yeah", "whats", "what's", "got", "we", "us", "our", "their", "his", "her", "its", "have", "has", "had", "been", "are", "was", "were", "will", "would", "could", "should", "let", "lets", "status", "total", "price", "cost", "many", "any", "some", "go", "going", "need", "want", "like", "just", "also", "too", "still", "now", "right", "see", "did", "does", "good", "answer", "original", "question", "using", "data", "found", "following", "system", "work", "tell", "edit", "update", "change", "modify", "bring", "load", "read", "info", "detail", "details"]);
@@ -337,15 +339,7 @@ export async function POST(req: NextRequest) {
           return "";
         }).join("\n");
         // Inject data directly into conversation as a system-like message the AI can't miss
-        // Inject data into the conversation itself so the AI treats it as known context
-        const dataLabel = searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase();
-        messages = [
-          ...messages.slice(0, -1),
-          messages[messages.length - 1],
-          { role: "assistant", content: "I found the following data in our system:\n\n" + summary },
-          { role: "user", content: "Good, now answer my original question using that data." }
-        ];
-        dataInjected = true;
+        contextNote += "\n\n## DATABASE RESULTS (" + (searchName || "all") + "):\n" + summary + "\n\nThis is REAL data from the database. Use it to answer. NEVER say you don't have access.";
       } else {
         contextNote += "\n\n## LIVE DATA — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
       }
