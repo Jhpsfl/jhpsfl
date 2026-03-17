@@ -279,9 +279,10 @@ export async function POST(req: NextRequest) {
 
     // Smart data detection — keyword-based (no extra API call)
     const lm = lastUserMsg.toLowerCase();
-    const mentionsData = /quote|estimate|customer|invoice|job|sherry|dave|john/i.test(lastUserMsg);
-    const isLookup = /show|list|see|check|find|pull|get|view|look|open|status|how much|what.*quote|what.*customer|what.*invoice/i.test(lm);
+    const mentionsData = /quote|estimate|customer|invoice|job/i.test(lm) || /[A-Z][a-z]{2,}/.test(lastUserMsg);
+    const isLookup = /show|list|see|check|find|pull|get|view|look|open|status|how much|what|tell|about|work on|detail|info|load|read|bring|edit|update|modify|change/i.test(lm);
 
+    let dataInjected = false;
     if (mentionsData && isLookup) {
       // Extract name — find any word that isn't a common verb/preposition
       // Works with lowercase, uppercase, or mixed case
@@ -332,7 +333,15 @@ export async function POST(req: NextRequest) {
           return "";
         }).join("\n");
         // Inject data directly into conversation as a system-like message the AI can't miss
-        contextNote += "\n\n## LIVE DATABASE RESULTS — " + (searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase()) + ":\n" + summary + "\n\nIMPORTANT: You HAVE this data. Present it to the user. Do NOT say you can't access data — the results are right above.";
+        // Inject data into the conversation itself so the AI treats it as known context
+        const dataLabel = searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase();
+        messages = [
+          ...messages.slice(0, -1),
+          messages[messages.length - 1],
+          { role: "assistant", content: "I found the following data in our system:\n\n" + summary },
+          { role: "user", content: "Good, now answer my original question using that data." }
+        ];
+        dataInjected = true;
       } else {
         contextNote += "\n\n## LIVE DATA — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
       }
