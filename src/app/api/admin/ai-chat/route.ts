@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 const CORE_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions, a lawn/landscaping company in Central Florida. Be concise, use **bold** and bullets.
 
-You CAN see live data — it's in LIVE DATA section below. Never say "I can't access" or "navigate to" — just use the data provided.
+CRITICAL RULE: You HAVE live database access. When LIVE DATABASE RESULTS appear below, that IS real data from the actual database. Present it to the user. NEVER say "I don't have access to data" or "I can't look up" — the data is provided to you automatically. If you see LIVE DATABASE RESULTS, those are REAL.
 
 Tabs: Overview, Customers, Jobs, Payments, Subscriptions, Invoices, Quotes, Yelp Leads, Video Leads, Messages, Analytics.`;
 
@@ -331,7 +331,8 @@ export async function POST(req: NextRequest) {
           if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
           return "";
         }).join("\n");
-        contextNote += "\n\n## LIVE DATA — " + (searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase()) + ":\n" + summary + "\n\nPresent this clearly to the user.";
+        // Inject data directly into conversation as a system-like message the AI can't miss
+        contextNote += "\n\n## LIVE DATABASE RESULTS — " + (searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase()) + ":\n" + summary + "\n\nIMPORTANT: You HAVE this data. Present it to the user. Do NOT say you can't access data — the results are right above.";
       } else {
         contextNote += "\n\n## LIVE DATA — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
       }
