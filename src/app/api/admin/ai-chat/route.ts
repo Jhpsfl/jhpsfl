@@ -333,6 +333,7 @@ export async function POST(req: NextRequest) {
     // Pre-detect if this is an action request (create/update) with embedded data
     // If the user pastes a big JSON or detailed update, handle it server-side
     const hasJson = lastUserMsg.includes('"line_items"') || lastUserMsg.includes('"about_your_project"') || lastUserMsg.includes('"sections"');
+    const lm = lastUserMsg.toLowerCase();
     if (hasJson && (lm.includes('update') || lm.includes('edit') || lm.includes('apply') || lm.includes('change'))) {
       // Try to parse the user's message as a direct action
       try {
