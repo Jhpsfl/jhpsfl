@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are the JHPS AI Assistant — a smart, helpful assistant for Jenkins Home & Property Solutions, a lawn care and property maintenance company in Florida.
 
@@ -135,6 +135,10 @@ Example flow:
   "start_date":"2026-03-25",
   "completion_date":"Ongoing weekly service"
 }}\`\`\`
+
+#### Update/Edit Existing Quote
+\`\`\`action{"type":"update_quote","data":{"quote_number":"QTE-2603-XXXX","updates":{"service_address":"...","scope_summary":"...","line_items":[...],"exclusions":"...","warranty":"...","closing_statement":"...","ai_project_notes":"...","notes":"...","start_date":"...","completion_date":"..."}}}\`\`\`
+Use this when the user wants to edit/update an existing quote. Find it by quote_number, then update only the fields provided.
 
 #### Create Invoice
 \`\`\`action{"type":"create_invoice","data":{"customer_name":"...","line_items":[...],"tax_rate":0,"due_days":15}}\`\`\`
@@ -322,7 +326,7 @@ export async function POST(req: NextRequest) {
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "system", content: SYSTEM_PROMPT + memoryNote + contextNote }, ...messages],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     });
 
@@ -345,7 +349,7 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               model: "llama-3.3-70b-versatile",
               messages: [{ role: "system", content: SYSTEM_PROMPT + '\n\n## SEARCH RESULTS for "' + sq.query + '":\n' + results }, ...messages],
-              temperature: 0.7, max_tokens: 2000,
+              temperature: 0.7, max_tokens: 4000,
             }),
           });
           if (res2.ok) {
@@ -492,6 +496,63 @@ export async function POST(req: NextRequest) {
           if (error) action.result = "Failed: " + error.message;
           else action.result = "Quote " + quoteNumber + " created — $" + total.toFixed(2) + " total";
           action.created_id = newQuote?.id;
+        }
+
+        if (action.type === "update_quote" && action.data) {
+          const qNum = action.data.quote_number;
+          if (qNum) {
+            // Find the quote
+            const { data: existing } = await supabase
+              .from("quotes")
+              .select("id")
+              .eq("quote_number", qNum)
+              .single();
+
+            if (existing) {
+              const updates: any = {};
+              const u = action.data.updates || action.data;
+
+              if (u.service_address) updates.service_address = u.service_address;
+              if (u.scope_summary) updates.scope_summary = u.scope_summary;
+              if (u.exclusions) updates.exclusions = u.exclusions;
+              if (u.warranty) updates.warranty = u.warranty;
+              if (u.closing_statement) updates.closing_statement = u.closing_statement;
+              if (u.ai_project_notes) updates.ai_project_notes = u.ai_project_notes;
+              if (u.notes) updates.notes = u.notes;
+              if (u.start_date) updates.start_date = u.start_date;
+              if (u.completion_date) updates.completion_date = u.completion_date;
+
+              if (u.line_items && Array.isArray(u.line_items)) {
+                const lineItems = u.line_items.map((li: any) => ({
+                  id: li.id || ("ai_" + Math.random().toString(36).slice(2, 8)),
+                  description: li.description || "",
+                  quantity: li.quantity || 1,
+                  unit: li.unit || "flat",
+                  unit_price: li.unit_price || li.rate || 0,
+                  amount: li.amount || (li.quantity || 1) * (li.unit_price || li.rate || 0),
+                }));
+                updates.line_items = lineItems;
+                const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
+                updates.subtotal = subtotal;
+                updates.total = subtotal + (updates.tax_amount || 0);
+              }
+
+              updates.updated_at = new Date().toISOString();
+
+              const { error } = await supabase
+                .from("quotes")
+                .update(updates)
+                .eq("id", existing.id);
+
+              if (error) {
+                action.result = "Failed to update: " + error.message;
+              } else {
+                action.result = "Quote " + qNum + " updated successfully";
+              }
+            } else {
+              action.result = "Quote " + qNum + " not found";
+            }
+          }
         }
 
         if (action.type === "create_invoice" && action.data) {
