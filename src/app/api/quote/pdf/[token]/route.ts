@@ -14,7 +14,7 @@ export async function GET(
 
   const { data: quote, error } = await supabase
     .from("quotes")
-    .select("*, customers(name, email, phone)")
+    .select("*, customers(name, email, phone, address)")
     .eq("public_token", token)
     .single();
 
@@ -22,19 +22,38 @@ export async function GET(
     return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
   }
 
+  // Resolve terms
+  let termsText: string[] | undefined;
+  if (quote.terms_conditions && Array.isArray(quote.terms_conditions) && quote.terms_conditions.length > 0) {
+    try {
+      const { data: terms } = await supabase
+        .from("quote_terms")
+        .select("title, body")
+        .in("id", quote.terms_conditions)
+        .order("sort_order");
+      if (terms?.length) {
+        termsText = terms.map((t: any) => t.title + " — " + t.body);
+      }
+    } catch {}
+  }
+
   const estimateData: EstimateData = {
     quoteNumber: quote.quote_number,
     quoteDate: new Date(quote.created_at),
     expirationDate: quote.expiration_date ? new Date(quote.expiration_date) : undefined,
+    dueDate: quote.due_date ? new Date(quote.due_date) : undefined,
     quoteStatus: quote.status === "accepted" ? "ACCEPTED" : "PENDING",
     showFinancing: quote.show_financing || false,
     paymentTerms: quote.payment_terms || null,
     customerName: quote.customers?.name || "Customer",
     customerEmail: quote.customers?.email || "",
     customerPhone: quote.customers?.phone || undefined,
-    lineItems: (quote.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
+    customerAddress: quote.customers?.address || undefined,
+    lineItems: (quote.line_items || []).map((item: any) => ({
       name: item.description,
+      description: item.section || undefined,
       quantity: item.quantity || 1,
+      unit: item.unit || undefined,
       unitPrice: Math.round((item.unit_price || item.amount || 0) * 100),
       totalPrice: Math.round((item.amount || 0) * 100),
     })),
@@ -42,15 +61,30 @@ export async function GET(
     taxAmount: Math.round((quote.tax_amount || 0) * 100),
     totalAmount: Math.round((quote.total || 0) * 100),
     notes: quote.notes || undefined,
+    serviceAddress: quote.service_address || undefined,
+    scopeSummary: quote.scope_summary || undefined,
+    aiProjectNotes: quote.ai_project_notes || undefined,
+    startDate: quote.start_date || undefined,
+    completionDate: quote.completion_date || undefined,
+    exclusions: quote.exclusions || undefined,
+    warranty: quote.warranty || undefined,
+    closingStatement: quote.closing_statement || undefined,
+    termsText,
   };
 
-  const pdfBuffer = await generateEstimatePDF(estimateData);
-  const filename = getEstimateFilename(estimateData);
+  try {
+    const pdfBuffer = await generateEstimatePDF(estimateData);
+    const filename = getEstimateFilename(estimateData);
 
-  return new NextResponse(Buffer.from(pdfBuffer), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+    return new NextResponse(Buffer.from(pdfBuffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("PDF_TOKEN_ERROR:", err);
+    return NextResponse.json({ error: "PDF generation failed" }, { status: 500 });
+  }
 }

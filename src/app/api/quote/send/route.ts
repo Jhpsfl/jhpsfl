@@ -38,19 +38,38 @@ export async function POST(req: NextRequest) {
   const taxCents = Math.round((quote.tax_amount || 0) * 100);
   const totalCents = Math.round((quote.total || 0) * 100);
 
+  // Resolve terms
+  let termsText: string[] | undefined;
+  if (quote.terms_conditions && Array.isArray(quote.terms_conditions) && quote.terms_conditions.length > 0) {
+    try {
+      const { data: terms } = await supabase
+        .from("quote_terms")
+        .select("title, body")
+        .in("id", quote.terms_conditions)
+        .order("sort_order");
+      if (terms?.length) {
+        termsText = terms.map((t: any) => t.title + " \u2014 " + t.body);
+      }
+    } catch {}
+  }
+
   const estimateData: EstimateData = {
     quoteNumber: quote.quote_number,
     quoteDate: new Date(quote.created_at),
     expirationDate: quote.expiration_date ? new Date(quote.expiration_date) : undefined,
+    dueDate: quote.due_date ? new Date(quote.due_date) : undefined,
     quoteStatus: quote.status === 'accepted' ? 'ACCEPTED' : 'PENDING',
     showFinancing: quote.show_financing || false,
     paymentTerms: quote.payment_terms || null,
     customerName: customer.name || 'Valued Customer',
     customerEmail: customer.email,
     customerPhone: customer.phone || undefined,
-    lineItems: (quote.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
+    customerAddress: (customer as any).address || undefined,
+    lineItems: (quote.line_items || []).map((item: any) => ({
       name: item.description,
+      description: item.section || undefined,
       quantity: item.quantity || 1,
+      unit: item.unit || undefined,
       unitPrice: Math.round((item.unit_price || item.amount || 0) * 100),
       totalPrice: Math.round((item.amount || 0) * 100),
     })),
@@ -58,6 +77,15 @@ export async function POST(req: NextRequest) {
     taxAmount: taxCents,
     totalAmount: totalCents,
     notes: quote.notes || undefined,
+    serviceAddress: quote.service_address || undefined,
+    scopeSummary: quote.scope_summary || undefined,
+    aiProjectNotes: quote.ai_project_notes || undefined,
+    startDate: quote.start_date || undefined,
+    completionDate: quote.completion_date || undefined,
+    exclusions: quote.exclusions || undefined,
+    warranty: quote.warranty || undefined,
+    closingStatement: quote.closing_statement || undefined,
+    termsText,
   };
 
   // ─── Generate PDF ───
