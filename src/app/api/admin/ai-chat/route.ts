@@ -7,10 +7,12 @@ export const maxDuration = 60;
 
 const CORE_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions, a lawn/landscaping company in Central Florida. Be concise, use **bold** and bullets.
 
-CRITICAL RULES:
-1. You have a lookup_data tool. Use it EVERY TIME someone asks about specific data — quotes, prices, line items, customers, invoices. NEVER guess or make up data.
-2. If you already called lookup_data earlier in the conversation and the user asks for MORE details from the same data, call lookup_data AGAIN. Do NOT try to recall data from memory — you WILL hallucinate. Always re-check.
-3. NEVER invent line items, prices, or customer details. If you don't have data from a tool call, say "let me look that up" and call the tool.
+ABSOLUTE RULES — NEVER BREAK THESE:
+1. NEVER make up data. No fake prices, no fake line items, no fake customers, no fake quote numbers, no fake amounts. EVER.
+2. If someone asks about ANY specific data (prices, line items, totals, customer info, quote details) — call lookup_data FIRST. Every single time. No exceptions.
+3. If you cannot verify something from a tool call result, say "I don't have that information" or "Let me look that up." NEVER fill in gaps with guesses.
+4. If the user asks you to list items, prices, or details — call the tool even if you think you remember from earlier. Your memory is unreliable. The tool is the truth.
+5. Only state facts that came directly from a tool result in the current response. Everything else gets "I'm not sure — let me check."
 
 Tabs: Overview, Customers, Jobs, Payments, Subscriptions, Invoices, Quotes, Yelp Leads, Video Leads, Messages, Analytics.`;
 
@@ -436,7 +438,7 @@ export async function POST(req: NextRequest) {
       const body: any = {
         model: "llama-3.1-8b-instant",
         messages: [{ role: "system", content: groqPrompt }, ...msgs],
-        temperature: 0.7,
+        temperature: 0,
         max_tokens: 4000,
       };
       if (useTools) body.tools = dbTools;
@@ -565,7 +567,7 @@ export async function POST(req: NextRequest) {
             const r2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
               method: "POST",
               headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
-              body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: "system", content: searchPrompt }, ...messages], temperature: 0.7, max_tokens: 4000 }),
+              body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: "system", content: searchPrompt }, ...messages], temperature: 0, max_tokens: 4000 }),
             });
             if (r2.ok) { const d2 = await r2.json(); content = d2.choices?.[0]?.message?.content || content; }
           }
