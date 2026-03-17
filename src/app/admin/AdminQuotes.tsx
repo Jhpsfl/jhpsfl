@@ -65,6 +65,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     exclusions: "",
     warranty: "",
     terms_conditions: [] as string[],
+    ai_project_notes: "",
+    closing_statement: "",
   });
 
   // Send modal
@@ -392,6 +394,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       exclusions: form.exclusions || null,
       warranty: form.warranty || null,
       terms_conditions: form.terms_conditions.length > 0 ? form.terms_conditions : null,
+      ai_project_notes: form.ai_project_notes || null,
+      closing_statement: form.closing_statement || null,
     };
 
     if (view === "edit" && selectedQuote) {
@@ -605,6 +609,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       exclusions: "",
       warranty: "",
       terms_conditions: availableTerms.filter(t => t.is_default).map(t => t.id),
+      ai_project_notes: "",
+      closing_statement: "We pride ourselves on showing up on time, communicating clearly, and leaving your property better than we found it. Our schedule fills quickly — securing your deposit locks in your spot and gets materials ordered so we can move fast. Questions? Call or text us directly at (407) 686-9817. We look forward to earning your trust on this project and being your go-to team for years to come.\n\n— Jenkins Home & Property Solutions",
     });
   };
 

@@ -65,6 +65,8 @@ export interface Quote {
   warranty: string | null;
   scope_summary: string | null;
   terms_conditions: string[] | null;
+  ai_project_notes: string | null;
+  closing_statement: string | null;
   viewed_at: string | null;
   sent_at: string | null;
   accepted_at: string | null;

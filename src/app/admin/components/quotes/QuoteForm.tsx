@@ -38,6 +38,8 @@ export default function QuoteForm({
     exclusions: string;
     warranty: string;
     terms_conditions: string[];
+    ai_project_notes: string;
+    closing_statement: string;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -560,6 +562,50 @@ export default function QuoteForm({
             />
           </div>
 
+          {/* ─── AI Project Notes ─── */}
+          <div style={{ paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <label style={labelStyle}>About Your Project (AI-Generated)</label>
+              <button
+                type="button"
+                onClick={async () => {
+                  const btn = document.getElementById("ai-notes-btn");
+                  if (btn) { btn.textContent = "Generating..."; btn.setAttribute("disabled", "true"); }
+                  try {
+                    const res = await fetch("/api/quote/ai-notes", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        line_items: form.line_items.filter(i => i.description),
+                        scope_summary: form.scope_summary || form.notes,
+                        service_address: form.service_address,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.notes) setForm(prev => ({ ...prev, ai_project_notes: data.notes }));
+                  } catch {}
+                  if (btn) { btn.textContent = "✨ Generate AI Notes"; btn.removeAttribute("disabled"); }
+                }}
+                id="ai-notes-btn"
+                style={{
+                  padding: "6px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8,
+                  border: "1px solid rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.1)",
+                  color: "#22c55e", cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                ✨ Generate AI Notes
+              </button>
+            </div>
+            <textarea
+              value={form.ai_project_notes}
+              onChange={e => setForm(prev => ({ ...prev, ai_project_notes: e.target.value }))}
+              placeholder="Click 'Generate AI Notes' to create professional project notes based on your line items, or write your own..."
+              rows={5}
+              style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
+            />
+            <p style={{ fontSize: 11, color: "#3a5a3a", marginTop: 4 }}>This appears at the top of the estimate as &quot;About Your Project&quot;</p>
+          </div>
+
           {/* ─── Service Address ─── */}
           <div>
             <label style={labelStyle}>Service Address</label>
@@ -673,6 +719,19 @@ export default function QuoteForm({
               </div>
             </div>
           )}
+
+          {/* ─── Closing Statement ─── */}
+          <div>
+            <label style={labelStyle}>Closing Statement</label>
+            <textarea
+              value={form.closing_statement}
+              onChange={e => setForm(prev => ({ ...prev, closing_statement: e.target.value }))}
+              placeholder="Personal message to close the estimate..."
+              rows={4}
+              style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
+            />
+            <p style={{ fontSize: 11, color: "#3a5a3a", marginTop: 4 }}>Appears after the payment info, before terms & conditions</p>
+          </div>
 
           {/* Payment Terms */}
           <div style={{ marginTop: 8, paddingTop: 20, borderTop: "1px solid #1a3a1a" }}>
