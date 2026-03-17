@@ -162,7 +162,7 @@ export default function AiChatBubble() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-[90] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 hover:scale-105"
+        className="fixed bottom-20 right-4 z-[9999] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 hover:scale-105"
         style={{
           background: 'linear-gradient(135deg, #22c55e, #16a34a)',
           boxShadow: '0 4px 24px rgba(201,168,76,0.4)',
@@ -182,7 +182,7 @@ export default function AiChatBubble() {
   if (minimized) {
     return (
       <div
-        className="fixed bottom-20 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-full shadow-2xl cursor-pointer hover:scale-105 transition-all"
+        className="fixed bottom-20 right-4 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-full shadow-2xl cursor-pointer hover:scale-105 transition-all"
         style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 24px rgba(201,168,76,0.4)' }}
         onClick={() => setMinimized(false)}
       >
@@ -199,7 +199,7 @@ export default function AiChatBubble() {
 
   // Full chat panel
   return (
-    <div className="fixed inset-3 sm:inset-4 sm:left-auto sm:w-[480px] sm:top-4 sm:bottom-20 z-[90] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+    <div className="fixed inset-3 sm:inset-4 sm:left-auto sm:w-[480px] sm:top-4 sm:bottom-20 z-[9999] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 20px rgba(201,168,76,0.1)' }}
     >
       {/* Header */}
