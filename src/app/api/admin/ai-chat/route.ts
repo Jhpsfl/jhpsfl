@@ -279,15 +279,19 @@ export async function POST(req: NextRequest) {
 
     // Smart data detection — keyword-based (no extra API call)
     const lm = lastUserMsg.toLowerCase();
-    const mentionsData = /quote|estimate|customer|invoice|job/i.test(lm) || /[A-Z][a-z]{2,}/.test(lastUserMsg);
-    const isLookup = /show|list|see|check|find|pull|get|view|look|open|status|how much|what|tell|about|work on|detail|info|load|read|bring|edit|update|modify|change/i.test(lm);
+    // Check ALL messages in conversation, not just the last one
+    const allText = messages.map((m: any) => m.content || "").join(" ");
+    const allLm = allText.toLowerCase();
+    const mentionsData = /quote|estimate|customer|invoice|job/i.test(allLm);
+    const isLookup = true; // Always fetch if data is mentioned anywhere in conversation
 
     let dataInjected = false;
     if (mentionsData && isLookup) {
       // Extract name — find any word that isn't a common verb/preposition
       // Works with lowercase, uppercase, or mixed case
-      const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "estimates", "for", "about", "from", "by", "at", "on", "in", "is", "it", "a", "an", "to", "do", "of", "that", "this", "with", "and", "or", "real", "quick", "please", "yo", "hey", "ok", "yeah", "whats", "what's", "got", "we", "us", "our", "their", "his", "her", "its", "have", "has", "had", "been", "are", "was", "were", "will", "would", "could", "should", "let", "lets", "status", "total", "price", "cost", "many", "any", "some", "go", "going", "need", "want", "like", "just", "also", "too", "still", "now", "right", "see", "did", "does"]);
-      const words = lastUserMsg.split(/\s+/);
+      const skipWords = new Set(["show", "me", "the", "all", "my", "see", "can", "you", "get", "find", "check", "look", "pull", "up", "list", "view", "open", "what", "how", "much", "quote", "quotes", "customer", "customers", "invoice", "invoices", "job", "jobs", "estimate", "estimates", "for", "about", "from", "by", "at", "on", "in", "is", "it", "a", "an", "to", "do", "of", "that", "this", "with", "and", "or", "real", "quick", "please", "yo", "hey", "ok", "yeah", "whats", "what's", "got", "we", "us", "our", "their", "his", "her", "its", "have", "has", "had", "been", "are", "was", "were", "will", "would", "could", "should", "let", "lets", "status", "total", "price", "cost", "many", "any", "some", "go", "going", "need", "want", "like", "just", "also", "too", "still", "now", "right", "see", "did", "does", "good", "answer", "original", "question", "using", "data", "found", "following", "system", "work", "tell", "edit", "update", "change", "modify", "bring", "load", "read", "info", "detail", "details"]);
+      // Search ALL messages for names, not just the last one
+      const words = allText.split(/\s+/);
       let searchName: string | null = null;
       for (const w of words) {
         const clean = w.replace(/[^a-zA-Z']/g, "").replace(/'s$/, "");
