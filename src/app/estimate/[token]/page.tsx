@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import CommercialEstimatePage from "./CommercialEstimatePage";
+import { parseProjectNotes } from "@/lib/parse-project-notes";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -305,26 +306,39 @@ export default function EstimatePage() {
           </div>
 
           {/* About Your Project */}
-          {quote.ai_project_notes && (
-            <div style={{
-              background: "linear-gradient(160deg, #0d1f0d, #091409)",
-              border: "1px solid #1a4a1a", borderLeft: "3px solid #4CAF50", borderRadius: 16, padding: "20px 16px",
-              marginBottom: 20, animation: "fadeIn 0.5s ease 0.1s both",
-            }}>
-              <h3 style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 }}>
-                ABOUT YOUR PROJECT
-              </h3>
-              {quote.ai_project_notes.split('\n\n').filter(Boolean).map((p, i) => (
-                <div key={i} style={{
-                  color: "#c8e0c8", fontSize: 14, lineHeight: 1.8,
-                  marginBottom: 14, paddingBottom: 14,
-                  borderBottom: i < quote.ai_project_notes!.split('\n\n').filter(Boolean).length - 1 ? "1px solid rgba(76,175,80,0.15)" : "none"
-                }}>
-                  {p.trim()}
-                </div>
-              ))}
-            </div>
-          )}
+          {quote.ai_project_notes && (() => {
+            const blocks = parseProjectNotes(quote.ai_project_notes);
+            return (
+              <div style={{
+                background: "linear-gradient(160deg, #0d1f0d, #091409)",
+                border: "1px solid #1a4a1a", borderLeft: "3px solid #4CAF50", borderRadius: 16, padding: "24px 20px",
+                marginBottom: 20, animation: "fadeIn 0.5s ease 0.1s both",
+              }}>
+                <h3 style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>
+                  ABOUT YOUR PROJECT
+                </h3>
+                {blocks.map((block, i) => (
+                  <div key={i} style={{
+                    marginBottom: i < blocks.length - 1 ? 16 : 0,
+                    paddingBottom: i < blocks.length - 1 ? 16 : 0,
+                    borderBottom: i < blocks.length - 1 ? "1px solid rgba(76,175,80,0.15)" : "none",
+                  }}>
+                    {block.heading && (
+                      <h4 style={{
+                        color: "#e8f5e8", fontSize: 15, fontWeight: 700,
+                        marginBottom: 6, marginTop: i > 0 ? 0 : 0,
+                      }}>
+                        {block.heading}
+                      </h4>
+                    )}
+                    <p style={{ color: "#c8e0c8", fontSize: 14, lineHeight: 1.8 }}>
+                      {block.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Scope Summary */}
           {quote.scope_summary && (

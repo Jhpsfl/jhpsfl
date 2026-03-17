@@ -32,6 +32,7 @@ import {
 } from '@react-pdf/renderer';
 
 import { getBrand, type BrandKey } from './brand-config';
+import { parseProjectNotes } from './parse-project-notes';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -863,23 +864,6 @@ export interface EstimateData extends BaseDocumentData {
 
 const FINANCING_MESSAGE =
   'This project is eligible for flexible payment options including deposits and installment plans. Contact us to discuss a payment schedule that works for you.';
-
-/** Parse About Your Project text — detect bold subheadings (short lines with no period, followed by paragraph) */
-function parseProjectNotes(text: string): { heading?: string; body: string }[] {
-  const blocks = text.split('\n\n').map(b => b.trim()).filter(Boolean);
-  const result: { heading?: string; body: string }[] = [];
-  for (const block of blocks) {
-    const lines = block.split('\n');
-    const firstLine = lines[0].trim();
-    // Short line, no period at end, followed by more text = subheading
-    if (lines.length > 1 && firstLine.length < 40 && !firstLine.endsWith('.')) {
-      result.push({ heading: firstLine, body: lines.slice(1).join('\n').trim() });
-    } else {
-      result.push({ body: block });
-    }
-  }
-  return result;
-}
 
 /** Sanitize T&C text — fix double %% typo */
 function sanitizeTermText(text: string): string {
