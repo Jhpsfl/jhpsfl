@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateInvoicePDF, generateEstimatePDF } from '@/lib/receipt-generator';
 import type { InvoiceData, EstimateData } from '@/lib/receipt-generator';
-import { createSupabaseAdmin } from '@/lib/supabase';
 import { auth } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
