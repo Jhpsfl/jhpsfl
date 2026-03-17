@@ -425,7 +425,9 @@ export async function POST(req: NextRequest) {
 
     // Smart prompt loading — only include pricing if talking about quotes/estimates
     const needsQuoteKnowledge = messages.some((m: any) => /quote|estimate|price|cost|mow|mulch|sod|pressure|clean|landscap|deposit|payment|line item/i.test(m.content || ""));
+    // Claude gets full prompt, Groq gets stripped version to stay in rate limits
     const fullPrompt = SYSTEM_PROMPT + (needsQuoteKnowledge ? QUOTE_KNOWLEDGE : "") + memoryNote + contextNote;
+    const groqPrompt = CORE_PROMPT + (needsQuoteKnowledge ? QUOTE_KNOWLEDGE : "") + memoryNote + contextNote;
 
     // Model selection — Claude Haiku (primary) or Groq Llama (fallback/toggle)
     const preferClaude = useModel !== "groq" && !!claudeKey;
@@ -470,8 +472,8 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [{ role: "system", content: fullPrompt }, ...messages],
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "system", content: groqPrompt }, ...messages],
           temperature: 0.7,
           max_tokens: 4000,
         }),
@@ -517,7 +519,7 @@ export async function POST(req: NextRequest) {
             const r2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
               method: "POST",
               headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
-              body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "system", content: searchPrompt }, ...messages], temperature: 0.7, max_tokens: 4000 }),
+              body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: "system", content: searchPrompt }, ...messages], temperature: 0.7, max_tokens: 4000 }),
             });
             if (r2.ok) { const d2 = await r2.json(); content = d2.choices?.[0]?.message?.content || content; }
           }

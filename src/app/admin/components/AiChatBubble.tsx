@@ -40,7 +40,7 @@ export default function AiChatBubble() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('Thinking...');
-  const [aiModel, setAiModel] = useState<'claude' | 'groq'>('claude');
+  const [aiModel, setAiModel] = useState<'claude' | 'groq'>('groq');
   const [lastModel, setLastModel] = useState('');
   const [unread, setUnread] = useState(0);
 
