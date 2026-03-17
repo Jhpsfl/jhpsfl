@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Quote, QuoteLineItem, Customer, CustomerJob, PaymentTerms } from "./components/quotes/quoteTypes";
+import type { Quote, QuoteLineItem, QuoteTerm, Customer, CustomerJob, PaymentTerms } from "./components/quotes/quoteTypes";
 import { generateQuoteNumber, formatCurrency, getDefaultExpirationDate, createLineItemId } from "./components/quotes/quoteHelpers";
 import QuoteListView from "./components/quotes/QuoteListView";
 import QuoteForm from "./components/quotes/QuoteForm";
@@ -30,6 +30,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [availableTerms, setAvailableTerms] = useState<QuoteTerm[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -53,10 +54,17 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     show_due_date: false,
     tax_rate: 0,
     notes: "",
-    line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as QuoteLineItem[],
+    line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }] as QuoteLineItem[],
     show_financing: false,
     is_commercial: false,
     payment_terms: null as PaymentTerms | null,
+    service_address: "",
+    scope_summary: "",
+    start_date: "",
+    completion_date: "",
+    exclusions: "",
+    warranty: "",
+    terms_conditions: [] as string[],
   });
 
   // Send modal
@@ -181,6 +189,11 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
 
   useEffect(() => {
     loadQuotes();
+    // Load available terms
+    fetch("/api/admin/quote-terms")
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setAvailableTerms(d); })
+      .catch(() => {});
   }, [loadQuotes]);
 
   // ─── Auto-navigate to initial quote ───
@@ -238,7 +251,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   const addLineItem = () => {
     setForm(prev => ({
       ...prev,
-      line_items: [...prev.line_items, { id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
+      line_items: [...prev.line_items, { id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }],
     }));
   };
 
@@ -372,6 +385,13 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       show_financing: form.show_financing,
       is_commercial: form.is_commercial,
       payment_terms: form.payment_terms || null,
+      service_address: form.service_address || null,
+      scope_summary: form.scope_summary || null,
+      start_date: form.start_date || null,
+      completion_date: form.completion_date || null,
+      exclusions: form.exclusions || null,
+      warranty: form.warranty || null,
+      terms_conditions: form.terms_conditions.length > 0 ? form.terms_conditions : null,
     };
 
     if (view === "edit" && selectedQuote) {
@@ -574,10 +594,17 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       show_due_date: false,
       tax_rate: 0,
       notes: "",
-      line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
+      line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }],
       show_financing: false,
       is_commercial: false,
       payment_terms: null as PaymentTerms | null,
+      service_address: "",
+      scope_summary: "",
+      start_date: "",
+      completion_date: "",
+      exclusions: "",
+      warranty: "",
+      terms_conditions: availableTerms.filter(t => t.is_default).map(t => t.id),
     });
   };
 
@@ -793,6 +820,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           onShowPresetPicker={() => setShowPresetPicker(true)}
           onNavigate={onNavigate}
           onPreviewPdf={handlePreviewFormPdf}
+          availableTerms={availableTerms}
         />
       )}
 

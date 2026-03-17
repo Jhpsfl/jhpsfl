@@ -21,8 +21,19 @@ export interface QuoteLineItem {
   id: string;
   description: string;
   quantity: number;
+  unit: string;
   unit_price: number;
   amount: number;
+  section?: string;
+}
+
+export interface QuoteTerm {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  is_default: boolean;
+  sort_order: number;
 }
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "expired" | "converted";
@@ -47,12 +58,21 @@ export interface Quote {
   show_financing: boolean;
   is_commercial: boolean;
   payment_terms?: PaymentTerms | null;
+  service_address: string | null;
+  start_date: string | null;
+  completion_date: string | null;
+  exclusions: string | null;
+  warranty: string | null;
+  scope_summary: string | null;
+  terms_conditions: string[] | null;
+  viewed_at: string | null;
   sent_at: string | null;
   accepted_at: string | null;
   declined_at: string | null;
+  decline_reason: string | null;
   converted_invoice_id: string | null;
   created_at: string;
   updated_at: string;
   public_token?: string;
-  customers?: { name: string | null; email: string | null; phone: string | null };
+  customers?: { name: string | null; email: string | null; phone: string | null; address?: string | null };
 }

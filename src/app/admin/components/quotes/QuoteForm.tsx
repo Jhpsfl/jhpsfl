@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { Quote, QuoteLineItem, Customer, CustomerJob, PaymentTerms } from "./quoteTypes";
+import type { Quote, QuoteLineItem, QuoteTerm, Customer, CustomerJob, PaymentTerms } from "./quoteTypes";
 import { formatCurrency, formatDate, FINANCING_MESSAGE } from "./quoteHelpers";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import { IconPlus, IconSend, IconTrash, IconBack } from "../invoices/InvoiceIcons";
@@ -31,6 +31,13 @@ export default function QuoteForm({
     show_financing: boolean;
     is_commercial: boolean;
     payment_terms: PaymentTerms | null;
+    service_address: string;
+    scope_summary: string;
+    start_date: string;
+    completion_date: string;
+    exclusions: string;
+    warranty: string;
+    terms_conditions: string[];
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -55,6 +62,7 @@ export default function QuoteForm({
   onShowPresetPicker: () => void;
   onNavigate?: () => void;
   onPreviewPdf?: () => void;
+  availableTerms?: QuoteTerm[];
 }) {
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "12px 14px", background: "#0d1a0d",
@@ -432,6 +440,7 @@ export default function QuoteForm({
               }}>
                 <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Description</span>
                 <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Qty</span>
+                <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Unit</span>
                 <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Rate</span>
                 <span style={{ fontSize: 10, color: "#3a5a3a", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", textAlign: "right" }}>Amount</span>
                 <span />
@@ -449,14 +458,31 @@ export default function QuoteForm({
                     rows={2}
                     style={{ ...inputStyle, padding: "10px 12px", fontSize: 13, width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", marginBottom: 8, resize: "none", lineHeight: 1.5, overflow: "hidden", wordBreak: "break-word" }}
                   />
-                  <div style={{ display: "grid", gridTemplateColumns: "64px 1fr auto 32px", gap: 8, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "56px 70px 1fr auto 32px", gap: 6, alignItems: "center" }}>
                     <input
                       value={item.quantity}
                       onChange={e => updateLineItem(item.id, "quantity", parseInt(e.target.value) || 0)}
                       inputMode="numeric"
                       placeholder="Qty"
-                      style={{ ...inputStyle, padding: "8px 8px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
+                      style={{ ...inputStyle, padding: "8px 6px", fontSize: 13, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
                     />
+                    <select
+                      value={item.unit || "flat"}
+                      onChange={e => updateLineItem(item.id, "unit", e.target.value)}
+                      style={{ ...inputStyle, padding: "8px 4px", fontSize: 11, appearance: "none" as const }}
+                    >
+                      <option value="flat">flat</option>
+                      <option value="sqft">sq ft</option>
+                      <option value="lnft">ln ft</option>
+                      <option value="hour">hour</option>
+                      <option value="each">each</option>
+                      <option value="bag">bag</option>
+                      <option value="cuyd">cu yd</option>
+                      <option value="load">load</option>
+                      <option value="visit">visit</option>
+                      <option value="acre">acre</option>
+                      <option value="lot">lot</option>
+                    </select>
                     <div style={{ position: "relative" }}>
                       <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#4CAF50", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>$</span>
                       <input
@@ -533,6 +559,120 @@ export default function QuoteForm({
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </div>
+
+          {/* ─── Service Address ─── */}
+          <div>
+            <label style={labelStyle}>Service Address</label>
+            <input
+              value={form.service_address}
+              onChange={e => setForm(prev => ({ ...prev, service_address: e.target.value }))}
+              placeholder="Job site address (if different from billing)"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* ─── Scope Summary ─── */}
+          <div>
+            <label style={labelStyle}>Scope of Work Summary</label>
+            <textarea
+              value={form.scope_summary}
+              onChange={e => setForm(prev => ({ ...prev, scope_summary: e.target.value }))}
+              placeholder="Brief description of the work to be performed..."
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+
+          {/* ─── Timeline ─── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Estimated Start Date</label>
+              <input
+                type="date"
+                value={form.start_date}
+                onChange={e => setForm(prev => ({ ...prev, start_date: e.target.value }))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Estimated Completion</label>
+              <input
+                value={form.completion_date}
+                onChange={e => setForm(prev => ({ ...prev, completion_date: e.target.value }))}
+                placeholder="e.g. 2-3 weeks"
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          {/* ─── Exclusions ─── */}
+          <div>
+            <label style={labelStyle}>Exclusions (what&apos;s NOT included)</label>
+            <textarea
+              value={form.exclusions}
+              onChange={e => setForm(prev => ({ ...prev, exclusions: e.target.value }))}
+              placeholder={"e.g. Irrigation repairs\nFertilizer application\nTree removal over 12 inches"}
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+
+          {/* ─── Warranty ─── */}
+          <div>
+            <label style={labelStyle}>Warranty Statement</label>
+            <input
+              value={form.warranty}
+              onChange={e => setForm(prev => ({ ...prev, warranty: e.target.value }))}
+              placeholder="e.g. All workmanship guaranteed for 30 days"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* ─── Terms & Conditions (toggleable) ─── */}
+          {availableTerms && availableTerms.length > 0 && (
+            <div style={{ paddingTop: 16, borderTop: "1px solid #1a3a1a" }}>
+              <label style={labelStyle}>Terms & Conditions</label>
+              <p style={{ fontSize: 12, color: "#5a8a5a", marginBottom: 12 }}>Select which terms to include on this estimate.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {availableTerms.map(term => {
+                  const isOn = form.terms_conditions.includes(term.id);
+                  return (
+                    <div
+                      key={term.id}
+                      onClick={() => {
+                        setForm(prev => ({
+                          ...prev,
+                          terms_conditions: isOn
+                            ? prev.terms_conditions.filter(id => id !== term.id)
+                            : [...prev.terms_conditions, term.id],
+                        }));
+                      }}
+                      style={{
+                        display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
+                        background: isOn ? "rgba(34,197,94,0.08)" : "#0d1a0d",
+                        border: isOn ? "1px solid rgba(34,197,94,0.3)" : "1px solid #1a3a1a",
+                        borderRadius: 10, cursor: "pointer", transition: "all 0.15s",
+                      }}
+                    >
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 1,
+                        background: isOn ? "#22c55e" : "transparent",
+                        border: isOn ? "none" : "2px solid #2a4a2a",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#000", fontSize: 13, fontWeight: 700,
+                      }}>
+                        {isOn && "✓"}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: isOn ? "#c8e0c8" : "#7a9a7a" }}>{term.title}</div>
+                        <div style={{ fontSize: 12, color: "#5a8a5a", lineHeight: 1.5, marginTop: 2 }}>{term.body.slice(0, 120)}{term.body.length > 120 ? "..." : ""}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Payment Terms */}
           <div style={{ marginTop: 8, paddingTop: 20, borderTop: "1px solid #1a3a1a" }}>
