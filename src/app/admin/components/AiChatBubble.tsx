@@ -39,6 +39,7 @@ export default function AiChatBubble() {
   });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('Thinking...');
   const [unread, setUnread] = useState(0);
 
   // Persist chat to sessionStorage
@@ -73,6 +74,14 @@ export default function AiChatBubble() {
     setInput('');
     setLoading(true);
 
+    // Detect what kind of request this is for status display
+    const lm = text.toLowerCase();
+    if (lm.includes('search') || lm.includes('look up') || lm.includes('find')) setLoadingStatus('Searching...');
+    else if (lm.includes('create') || lm.includes('make') || lm.includes('new')) setLoadingStatus('Creating...');
+    else if (lm.includes('update') || lm.includes('edit') || lm.includes('change') || lm.includes('modify')) setLoadingStatus('Updating...');
+    else if (lm.includes('list') || lm.includes('show') || lm.includes('how many')) setLoadingStatus('Loading data...');
+    else setLoadingStatus('Thinking...');
+
     try {
       const res = await fetch('/api/admin/ai-chat', {
         method: 'POST',
@@ -84,9 +93,19 @@ export default function AiChatBubble() {
       });
 
       const data = await res.json();
+
+      // Check if response was cut off (incomplete action block)
+      let content = data.content || data.error || 'Sorry, something went wrong.';
+      if (content.includes('```action') && !content.includes('```\n') && !content.endsWith('```')) {
+        // Response was truncated — the action block is incomplete
+        // Show what we got and add a note
+        content = content.replace(/```action[\s\S]*$/, '').trim();
+        if (!content) content = 'Working on that — the request was too large for one response. Try breaking it into smaller pieces, or just provide the key changes.';
+      }
+
       const reply: Message = {
         role: 'assistant',
-        content: data.content || data.error || 'Sorry, something went wrong.',
+        content,
       };
       setMessages(prev => [...prev, reply]);
       if (minimized || !open) setUnread(prev => prev + 1);
@@ -251,7 +270,7 @@ export default function AiChatBubble() {
           <div className="flex justify-start">
             <div className="bg-[#111] border border-white/5 rounded-2xl rounded-bl-md px-3.5 py-2.5 flex items-center gap-2">
               <IconLoader size={16} className="animate-spin text-[#22c55e]" />
-              <span className="text-[15px] text-white/40">Thinking...</span>
+              <span className="text-[15px] text-white/40">{loadingStatus}</span>
             </div>
           </div>
         )}
