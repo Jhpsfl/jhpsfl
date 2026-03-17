@@ -31,7 +31,7 @@ export default function AiChatBubble() {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('ro_ai_chat');
+        const saved = localStorage.getItem('jhps_ai_chat');
         if (saved) return JSON.parse(saved);
       } catch {}
     }
@@ -44,10 +44,10 @@ export default function AiChatBubble() {
   const [lastModel, setLastModel] = useState('');
   const [unread, setUnread] = useState(0);
 
-  // Persist chat to sessionStorage
+  // Persist chat to localStorage
   useEffect(() => {
     if (messages.length > 0) {
-      try { sessionStorage.setItem('ro_ai_chat', JSON.stringify(messages)); } catch {}
+      try { localStorage.setItem('jhps_ai_chat', JSON.stringify(messages.slice(-50))); } catch {}
     }
   }, [messages]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -228,7 +228,7 @@ export default function AiChatBubble() {
           </button>
           {messages.length > 0 && (
             <button
-              onClick={() => { setMessages([]); try { sessionStorage.removeItem('ro_ai_chat'); } catch {} }}
+              onClick={() => { setMessages([]); try { localStorage.removeItem('jhps_ai_chat'); } catch {} }}
               className="px-2 py-1 text-[11px] text-white/20 hover:text-white/50 transition-colors"
               title="Clear chat"
             >

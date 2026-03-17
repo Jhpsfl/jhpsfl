@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "claude-3-5-haiku-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 4000,
             system: fullPrompt,
             messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
@@ -510,7 +510,7 @@ export async function POST(req: NextRequest) {
             const r2 = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
               headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-              body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 4000, system: searchPrompt, messages: messages.map((m: any) => ({ role: m.role, content: m.content })) }),
+              body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 4000, system: searchPrompt, messages: messages.map((m: any) => ({ role: m.role, content: m.content })) }),
             });
             if (r2.ok) { const d2 = await r2.json(); content = d2.content?.[0]?.text || content; }
           } else if (groqKey) {
