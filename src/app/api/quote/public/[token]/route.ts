@@ -28,7 +28,25 @@ export async function GET(
     }
   }
 
-  // Return public-safe data
+  // Track first view
+  if (!quote.viewed_at) {
+    await supabase.from("quotes").update({ viewed_at: new Date().toISOString() }).eq("id", quote.id);
+  }
+
+  // Resolve terms_conditions IDs to text
+  let terms_text: string[] | null = null;
+  if (quote.terms_conditions && Array.isArray(quote.terms_conditions) && quote.terms_conditions.length > 0) {
+    const { data: terms } = await supabase
+      .from("quote_terms")
+      .select("title, body")
+      .in("id", quote.terms_conditions)
+      .order("sort_order");
+    if (terms?.length) {
+      terms_text = terms.map((t: any) => t.title + " — " + t.body);
+    }
+  }
+
+  // Return public-safe data with all new fields
   return NextResponse.json({
     quote: {
       id: quote.id,
@@ -49,6 +67,15 @@ export async function GET(
       customer_email: quote.customers?.email || "",
       customer_phone: quote.customers?.phone || "",
       customer_address: quote.customers?.address || "",
+      service_address: quote.service_address || null,
+      scope_summary: quote.scope_summary || null,
+      ai_project_notes: quote.ai_project_notes || null,
+      start_date: quote.start_date || null,
+      completion_date: quote.completion_date || null,
+      exclusions: quote.exclusions || null,
+      warranty: quote.warranty || null,
+      closing_statement: quote.closing_statement || null,
+      terms_text,
     },
   });
 }

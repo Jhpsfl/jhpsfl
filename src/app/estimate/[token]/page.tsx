@@ -12,8 +12,10 @@ interface LineItem {
   id?: string;
   description: string;
   quantity: number;
+  unit?: string;
   unit_price: number;
   amount: number;
+  section?: string;
 }
 interface ScheduleItem {
   label: string;
@@ -39,6 +41,15 @@ interface QuoteData {
   customer_email: string;
   customer_phone: string;
   customer_address: string;
+  service_address: string | null;
+  scope_summary: string | null;
+  ai_project_notes: string | null;
+  start_date: string | null;
+  completion_date: string | null;
+  exclusions: string | null;
+  warranty: string | null;
+  closing_statement: string | null;
+  terms_text: string[] | null;
 }
 
 // ─── PDF.js loader ───
@@ -276,6 +287,12 @@ export default function EstimatePage() {
                   <p style={{ color: "#c8e0c8", fontSize: 14, marginTop: 4 }}>{quote.customer_phone}</p>
                 </div>
               )}
+              {quote.service_address && (
+                <div>
+                  <p style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Service Location</p>
+                  <p style={{ color: "#c8e0c8", fontSize: 14, marginTop: 4 }}>{quote.service_address}</p>
+                </div>
+              )}
             </div>
 
             {quote.expiration_date && !isExpired && (
@@ -287,6 +304,51 @@ export default function EstimatePage() {
             )}
           </div>
 
+          {/* About Your Project */}
+          {quote.ai_project_notes && (
+            <div style={{
+              background: "linear-gradient(160deg, #0d1f0d, #091409)",
+              border: "1px solid #1a4a1a", borderLeft: "3px solid #4CAF50", borderRadius: 16, padding: "20px 16px",
+              marginBottom: 20, animation: "fadeIn 0.5s ease 0.1s both",
+            }}>
+              <h3 style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 }}>
+                ABOUT YOUR PROJECT
+              </h3>
+              {quote.ai_project_notes.split('\n\n').map((p, i) => (
+                <p key={i} style={{ color: "#c8e0c8", fontSize: 14, lineHeight: 1.7, marginBottom: 10 }}>{p}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Scope Summary */}
+          {quote.scope_summary && (
+            <div style={{
+              background: "rgba(26,58,26,0.2)", borderRadius: 12, padding: "14px 16px",
+              marginBottom: 16,
+            }}>
+              <h4 style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>SCOPE OF WORK</h4>
+              <p style={{ color: "#c8e0c8", fontSize: 14, lineHeight: 1.6 }}>{quote.scope_summary}</p>
+            </div>
+          )}
+
+          {/* Timeline */}
+          {(quote.start_date || quote.completion_date) && (
+            <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+              {quote.start_date && (
+                <div style={{ background: "rgba(26,58,26,0.2)", borderRadius: 10, padding: "10px 14px", flex: "1 1 140px" }}>
+                  <div style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>START DATE</div>
+                  <div style={{ color: "#c8e0c8", fontSize: 14 }}>{fmtDate(quote.start_date)}</div>
+                </div>
+              )}
+              {quote.completion_date && (
+                <div style={{ background: "rgba(26,58,26,0.2)", borderRadius: 10, padding: "10px 14px", flex: "1 1 140px" }}>
+                  <div style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>EST. COMPLETION</div>
+                  <div style={{ color: "#c8e0c8", fontSize: 14 }}>{quote.completion_date}</div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Line items */}
           <div style={{
             background: "linear-gradient(160deg, #0d1f0d, #091409)",
@@ -294,7 +356,7 @@ export default function EstimatePage() {
             marginBottom: 24, animation: "fadeIn 0.5s ease 0.1s both",
           }}>
             <h3 style={{ color: "#3a5a3a", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>
-              SCOPE OF WORK
+              {quote.scope_summary ? "ITEMIZED BREAKDOWN" : "SCOPE OF WORK"}
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 0, overflowX: "hidden" }}>
               {/* Header */}
@@ -303,17 +365,46 @@ export default function EstimatePage() {
                 <span style={{ width: 36, color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "center", flexShrink: 0 }}>Qty</span>
                 <span style={{ width: 72, color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", textAlign: "right", flexShrink: 0 }}>Amount</span>
               </div>
-              {/* Items */}
-              {quote.line_items.map((item, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: 8, alignItems: "flex-start",
-                  padding: "14px 0", borderBottom: i < quote.line_items.length - 1 ? "1px solid rgba(26,58,26,0.5)" : "none",
-                }}>
-                  <span style={{ flex: "1 1 0", minWidth: 0, color: "#e8f5e8", fontSize: 14, wordBreak: "break-word" }}>{item.description}</span>
-                  <span style={{ width: 36, color: "#8aba8a", fontSize: 14, textAlign: "center", flexShrink: 0 }}>{item.quantity}</span>
-                  <span style={{ width: 72, color: "#e8f5e8", fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", textAlign: "right", flexShrink: 0 }}>{fmt(item.amount)}</span>
-                </div>
-              ))}
+              {/* Items — grouped by section if sections exist */}
+              {(() => {
+                const hasSections = quote.line_items.some(i => i.section);
+                if (hasSections) {
+                  const sectionMap: { label: string; items: LineItem[] }[] = [];
+                  let current = '';
+                  for (const item of quote.line_items) {
+                    const sec = item.section || '';
+                    if (sec !== current) { sectionMap.push({ label: sec, items: [item] }); current = sec; }
+                    else { sectionMap[sectionMap.length - 1].items.push(item); }
+                  }
+                  return sectionMap.map((section, si) => (
+                    <div key={si}>
+                      {section.label && (
+                        <div style={{ background: "rgba(76,175,80,0.1)", padding: "8px 12px", margin: si > 0 ? "12px 0 0" : "0", borderRadius: 6 }}>
+                          <span style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>{section.label}</span>
+                        </div>
+                      )}
+                      {section.items.map((item, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid rgba(26,58,26,0.3)" }}>
+                          <span style={{ flex: "1 1 0", minWidth: 0, color: "#e8f5e8", fontSize: 14, wordBreak: "break-word" }}>{item.description}</span>
+                          <span style={{ width: 60, color: "#8aba8a", fontSize: 13, textAlign: "center", flexShrink: 0 }}>{item.quantity}{item.unit && item.unit !== 'flat' ? ' ' + item.unit : ''}</span>
+                          <span style={{ width: 72, color: "#e8f5e8", fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", textAlign: "right", flexShrink: 0 }}>{fmt(item.amount)}</span>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 0", gap: 16 }}>
+                        <span style={{ color: "#5a8a5a", fontSize: 12, fontWeight: 600 }}>{section.label} Subtotal</span>
+                        <span style={{ color: "#8aba8a", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(section.items.reduce((s, i) => s + i.amount, 0))}</span>
+                      </div>
+                    </div>
+                  ));
+                }
+                return quote.line_items.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "14px 0", borderBottom: i < quote.line_items.length - 1 ? "1px solid rgba(26,58,26,0.5)" : "none" }}>
+                    <span style={{ flex: "1 1 0", minWidth: 0, color: "#e8f5e8", fontSize: 14, wordBreak: "break-word" }}>{item.description}</span>
+                    <span style={{ width: 60, color: "#8aba8a", fontSize: 13, textAlign: "center", flexShrink: 0 }}>{item.quantity}{item.unit && item.unit !== 'flat' ? ' ' + item.unit : ''}</span>
+                    <span style={{ width: 72, color: "#e8f5e8", fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", textAlign: "right", flexShrink: 0 }}>{fmt(item.amount)}</span>
+                  </div>
+                ));
+              })()}
             </div>
 
             {/* Totals */}
@@ -519,28 +610,86 @@ export default function EstimatePage() {
               </div>
             )}
 
-            {/* Accept button */}
+            {/* Closing Statement */}
+            {quote.closing_statement && (
+              <div style={{ marginTop: 20, padding: "18px 16px", borderRadius: 14, background: "rgba(76,175,80,0.06)", border: "1px solid rgba(76,175,80,0.15)" }}>
+                {quote.closing_statement.split('\n\n').map((p, i) => (
+                  <p key={i} style={{ color: "#c8e0c8", fontSize: 14, lineHeight: 1.7, marginBottom: 8 }}>{p}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Exclusions */}
+            {quote.exclusions && (
+              <div style={{ marginTop: 16 }}>
+                <h4 style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>EXCLUSIONS</h4>
+                <p style={{ color: "#5a8a5a", fontSize: 12, fontStyle: "italic", marginBottom: 6 }}>The following are NOT included:</p>
+                {quote.exclusions.split('\n').filter(Boolean).map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, marginBottom: 4, paddingLeft: 4 }}>
+                    <span style={{ color: "#ef4444", fontSize: 13 }}>•</span>
+                    <span style={{ color: "#8aba8a", fontSize: 13 }}>{item.trim()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Warranty */}
+            {quote.warranty && (
+              <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(59,141,212,0.06)", borderLeft: "3px solid #3b8dd4" }}>
+                <span style={{ color: "#3b8dd4", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>WARRANTY: </span>
+                <span style={{ color: "#c8e0c8", fontSize: 13 }}>{quote.warranty}</span>
+              </div>
+            )}
+
+            {/* Terms & Conditions */}
+            {quote.terms_text && quote.terms_text.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h4 style={{ color: "#5a8a5a", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>TERMS & CONDITIONS</h4>
+                {quote.terms_text.map((term, i) => (
+                  <p key={i} style={{ color: "#6a9a6a", fontSize: 12, lineHeight: 1.6, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, color: "#8aba8a" }}>{i + 1}. </span>{term}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Accept / Decline buttons */}
             {!isExpired && !isAcceptedStatus && (
-              <button
-                onClick={handleAccept}
-                disabled={accepting}
-                style={{
-                  width: "100%", marginTop: 12, padding: "18px", borderRadius: 14,
-                  border: "none",
-                  background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
-                  color: "#fff", fontSize: 17, fontWeight: 800, cursor: accepting ? "wait" : "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
-                  boxShadow: "0 4px 24px rgba(76,175,80,0.4)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  opacity: accepting ? 0.7 : 1, transition: "opacity 0.3s",
-                }}
-              >
-                {accepting ? (
-                  <span style={{ animation: "pulse 1s infinite" }}>Accepting...</span>
-                ) : (
-                  <>✓ Accept This Estimate</>
-                )}
-              </button>
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button
+                  onClick={handleAccept}
+                  disabled={accepting}
+                  style={{
+                    flex: 1, padding: "18px", borderRadius: 14, border: "none",
+                    background: "linear-gradient(135deg, #4CAF50, #2E7D32)",
+                    color: "#fff", fontSize: 17, fontWeight: 800, cursor: accepting ? "wait" : "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                    boxShadow: "0 4px 24px rgba(76,175,80,0.4)",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    opacity: accepting ? 0.7 : 1, transition: "opacity 0.3s",
+                  }}
+                >
+                  {accepting ? "Accepting..." : "✓ Accept"}
+                </button>
+                <button
+                  onClick={async () => {
+                    const reason = prompt("Optional: Why are you declining?") || "";
+                    await fetch("/api/quote/accept", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ token, action: "decline", reason }),
+                    });
+                    if (quote) setQuote({ ...quote, status: "declined" });
+                  }}
+                  style={{
+                    padding: "18px 24px", borderRadius: 14, border: "1px solid rgba(239,68,68,0.3)",
+                    background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 15, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.3s",
+                  }}
+                >
+                  Decline
+                </button>
+              </div>
             )}
 
             {isAcceptedStatus && (
