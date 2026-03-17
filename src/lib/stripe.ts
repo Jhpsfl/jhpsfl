@@ -9,7 +9,21 @@
 import Stripe from 'stripe';
 import { createSupabaseAdmin } from '@/lib/supabase';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY not configured');
+    }
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return _stripe;
+}
+export const stripe = new Proxy({} as Stripe, {
+  get(_, prop) {
+    return (getStripe() as any)[prop];
+  },
+});
 
 /**
  * Create a PaymentIntent for the Stripe Payment Element.
