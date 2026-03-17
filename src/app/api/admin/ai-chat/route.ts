@@ -288,108 +288,91 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Pre-detect data queries with smart name/keyword extraction
-    const lm = lastUserMsg.toLowerCase();
+    // AI-powered intent detection — let the AI decide if data is needed
+    // Quick, cheap call to determine: does this need a DB lookup?
+    const intentRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{
+          role: "system",
+          content: 'You are a query classifier. Given a user message, determine if it needs data from the database. Reply with ONLY a JSON object, nothing else.\n\nIf data is needed: {"need_data":true,"table":"customers|quotes|invoices|jobs","search_name":"PersonName or null"}\nIf no data needed: {"need_data":false}\n\nExamples:\n"yo pull up sherry quote" → {"need_data":true,"table":"quotes","search_name":"Sherry"}\n"show me all customers" → {"need_data":true,"table":"customers","search_name":null}\n"what quotes we got" → {"need_data":true,"table":"quotes","search_name":null}\n"how do I create an invoice" → {"need_data":false}\n"check dave invoices real quick" → {"need_data":true,"table":"invoices","search_name":"Dave"}\n"whats the status on that johnson job" → {"need_data":true,"table":"quotes","search_name":"Johnson"}\n"how much we charging sherry" → {"need_data":true,"table":"quotes","search_name":"Sherry"}'
+        }, {
+          role: "user",
+          content: lastUserMsg
+        }],
+        temperature: 0,
+        max_tokens: 100,
+      }),
+    });
 
-    // Extract a person's name from the query (e.g., "show me Sherry's quote")
-    // Extract name from many phrasings: "Sherry's quote", "quote for Sherry", "see the quote for sherry", etc.
-    const namePatterns = [
-      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'?s?\s*(?:quote|invoice|job|estimate|customer|account)/i,
-      /(?:quote|invoice|job|estimate|customer|account)\s+(?:for|from|about|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /(?:for|from|about|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\??$/i,
-      /(?:see|view|check|find|show|get|pull|look)\s+.*?(?:for|from|about|by)\s+([A-Z][a-z]+)/i,
-    ];
-    let searchName: string | null = null;
-    for (const np of namePatterns) {
-      const m = lastUserMsg.match(np);
-      if (m && m[1]) { searchName = m[1]; break; }
-    }
+    if (intentRes.ok) {
+      try {
+        const intentData = await intentRes.json();
+        const intentText = intentData.choices?.[0]?.message?.content || "";
+        const intentJson = JSON.parse(intentText.replace(/```json?\s*|\s*```/g, "").trim());
 
-    const dataQueryPatterns = [
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load) (?:me |the |all |my )?customer/i, table: "customers" },
-      { pattern: /(?:quote|estimate)s?\s+(?:for|from|about|by)\s+/i, table: "quotes" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?(?:quote|estimate)/i, table: "quotes" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?invoice/i, table: "invoices" },
-      { pattern: /(?:show|list|read|get|display|how many|what|see|find|pull up|check|view|look at|open|load|can you see) (?:me |the |all |my |.{0,30})?job/i, table: "jobs" },
-      { pattern: /[A-Z][a-z]+'s\s+(?:quote|estimate|invoice|job)/i, table: "quotes" },
-    ];
+        if (intentJson.need_data && intentJson.table) {
+          const table = intentJson.table;
+          const searchName = intentJson.search_name;
+          const allowed = ["customers", "quotes", "invoices", "jobs"];
 
-    for (const dq of dataQueryPatterns) {
-      if (dq.pattern.test(lastUserMsg)) {
-        let rows: any[] = [];
+          if (allowed.includes(table)) {
+            let rows: any[] = [];
 
-        if (dq.table === "quotes") {
-          // Join customer name for quotes
-          let query = supabase
-            .from("quotes")
-            .select("*, customers(name, email, phone, address)")
-            .order("created_at", { ascending: false })
-            .limit(15);
+            if (table === "quotes" || table === "invoices") {
+              let query = supabase
+                .from(table)
+                .select("*, customers(name, email, phone, address)")
+                .order("created_at", { ascending: false })
+                .limit(15);
 
-          // Filter by customer name if mentioned
-          if (searchName) {
-            const { data: matchingCustomers } = await supabase
-              .from("customers")
-              .select("id")
-              .ilike("name", "%" + searchName + "%");
-            if (matchingCustomers?.length) {
-              const ids = matchingCustomers.map((c: any) => c.id);
-              query = query.in("customer_id", ids);
+              if (searchName) {
+                const { data: matchingCustomers } = await supabase
+                  .from("customers")
+                  .select("id")
+                  .ilike("name", "%" + searchName + "%");
+                if (matchingCustomers?.length) {
+                  query = query.in("customer_id", matchingCustomers.map((c: any) => c.id));
+                }
+              }
+              const { data } = await query;
+              rows = data || [];
+            } else {
+              let query = supabase
+                .from(table)
+                .select("*")
+                .order("created_at", { ascending: false })
+                .limit(15);
+
+              if (searchName && table === "customers") {
+                query = query.ilike("name", "%" + searchName + "%");
+              }
+              const { data } = await query;
+              rows = data || [];
+            }
+
+            if (rows.length) {
+              const summary = rows.map((r: any, i: number) => {
+                const custName = r.customers?.name || "No customer";
+                if (table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " | " + (r.phone || "no phone") + " | " + (r.email || "no email") + " | " + (r.address || "no address") + " | " + (r.customer_type || "");
+                if (table === "quotes") {
+                  const items = (r.line_items || []).map((li: any) => li.description).filter(Boolean).join(", ");
+                  return (i+1) + ". " + r.quote_number + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "draft") + " | Services: " + (items || "none") + (r.service_address ? " | Address: " + r.service_address : "") + (r.scope_summary ? " | Scope: " + r.scope_summary : "");
+                }
+                if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "") + " | Paid: $" + (r.amount_paid || 0);
+                if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
+                return JSON.stringify(r);
+              }).join("\n");
+              const label = searchName ? table.toUpperCase() + " for " + searchName : table.toUpperCase();
+              contextNote += "\n\n## LIVE DATA — " + label + " (" + rows.length + " results):\n" + summary + "\n\nPresent this data clearly. Include customer names, amounts, statuses, and details.";
+            } else {
+              contextNote += "\n\n## LIVE DATA — " + table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
             }
           }
-          const { data } = await query;
-          rows = data || [];
-        } else if (dq.table === "invoices") {
-          let query = supabase
-            .from("invoices")
-            .select("*, customers(name, email, phone)")
-            .order("created_at", { ascending: false })
-            .limit(15);
-
-          if (searchName) {
-            const { data: matchingCustomers } = await supabase
-              .from("customers")
-              .select("id")
-              .ilike("name", "%" + searchName + "%");
-            if (matchingCustomers?.length) {
-              query = query.in("customer_id", matchingCustomers.map((c: any) => c.id));
-            }
-          }
-          const { data } = await query;
-          rows = data || [];
-        } else {
-          let query = supabase
-            .from(dq.table)
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(15);
-
-          if (searchName && dq.table === "customers") {
-            query = query.ilike("name", "%" + searchName + "%");
-          }
-          const { data } = await query;
-          rows = data || [];
         }
-
-        if (rows.length) {
-          const summary = rows.map((r: any, i: number) => {
-            const custName = r.customers?.name || "No customer";
-            if (dq.table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " | " + (r.phone || "no phone") + " | " + (r.email || "no email") + " | " + (r.address || "no address") + " | " + (r.customer_type || "");
-            if (dq.table === "quotes") {
-              const items = (r.line_items || []).map((li: any) => li.description).filter(Boolean).join(", ");
-              return (i+1) + ". " + r.quote_number + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "draft") + " | Services: " + (items || "none") + (r.service_address ? " | Address: " + r.service_address : "") + (r.scope_summary ? " | Scope: " + r.scope_summary : "");
-            }
-            if (dq.table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | Customer: " + custName + " | $" + (r.total || 0) + " | Status: " + (r.status || "") + " | Paid: $" + (r.amount_paid || 0);
-            if (dq.table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
-            return JSON.stringify(r);
-          }).join("\n");
-          const label = searchName ? dq.table.toUpperCase() + " for " + searchName : dq.table.toUpperCase();
-          contextNote += "\n\n## LIVE DATA — " + label + " (" + rows.length + " results):\n" + summary + "\n\nPresent this data clearly to the user. Include customer names, amounts, statuses, and key details.";
-        } else {
-          contextNote += "\n\n## LIVE DATA — " + dq.table.toUpperCase() + (searchName ? " for " + searchName : "") + ": No records found.";
-        }
-        break;
-      }
+      } catch {}
     }
 
     // Single AI call with all context pre-loaded
