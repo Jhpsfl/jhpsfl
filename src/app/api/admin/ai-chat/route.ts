@@ -438,7 +438,16 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    if (!res.ok) return NextResponse.json({ error: "AI service error" }, { status: 502 });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "unknown");
+      console.error("[ai-chat] Groq error:", res.status, errText);
+      const isRateLimit = res.status === 429;
+      return NextResponse.json({
+        error: isRateLimit
+          ? "Rate limit reached — wait a few seconds and try again"
+          : "AI service error (" + res.status + ")"
+      }, { status: 502 });
+    }
 
     const data = await res.json();
     let content = data.choices?.[0]?.message?.content || "";
