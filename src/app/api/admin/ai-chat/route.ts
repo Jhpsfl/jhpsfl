@@ -375,6 +375,92 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Pre-detect if this is an action request (create/update) with embedded data
+    // If the user pastes a big JSON or detailed update, handle it server-side
+    const hasJson = lastUserMsg.includes('"line_items"') || lastUserMsg.includes('"about_your_project"') || lastUserMsg.includes('"sections"');
+    if (hasJson && (lm.includes('update') || lm.includes('edit') || lm.includes('apply') || lm.includes('change'))) {
+      // Try to parse the user's message as a direct action
+      try {
+        const jsonMatch = lastUserMsg.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const qNum = parsed.estimate_number || parsed.quote_number;
+          if (qNum) {
+            const { data: existing } = await supabase.from("quotes").select("id").eq("quote_number", qNum).single();
+            if (existing) {
+              const updates: any = { updated_at: new Date().toISOString() };
+
+              if (parsed.service_address) updates.service_address = parsed.service_address;
+              if (parsed.about_your_project) updates.ai_project_notes = parsed.about_your_project;
+              if (parsed.scope_summary) updates.scope_summary = parsed.scope_summary;
+              if (parsed.closing_statement) updates.closing_statement = parsed.closing_statement;
+              if (parsed.notes) updates.notes = parsed.notes;
+              if (parsed.exclusions) updates.exclusions = typeof parsed.exclusions === 'string' ? parsed.exclusions : JSON.stringify(parsed.exclusions);
+              if (parsed.warranty) updates.warranty = parsed.warranty;
+              if (parsed.start_date) updates.start_date = parsed.start_date;
+              if (parsed.completion_date) updates.completion_date = parsed.completion_date;
+
+              // Handle sections → flat line items
+              if (parsed.sections && Array.isArray(parsed.sections)) {
+                const allItems: any[] = [];
+                for (const section of parsed.sections) {
+                  for (const li of (section.line_items || [])) {
+                    allItems.push({
+                      id: "ai_" + Math.random().toString(36).slice(2, 8),
+                      description: li.description || "",
+                      quantity: li.quantity || 1,
+                      unit: li.unit || "flat",
+                      unit_price: li.rate || li.unit_price || 0,
+                      amount: li.amount || (li.quantity || 1) * (li.rate || li.unit_price || 0),
+                      section: section.label || undefined,
+                    });
+                  }
+                }
+                if (allItems.length > 0) {
+                  updates.line_items = allItems;
+                  updates.subtotal = allItems.reduce((s: number, i: any) => s + i.amount, 0);
+                  updates.total = updates.subtotal;
+                }
+              } else if (parsed.line_items && Array.isArray(parsed.line_items)) {
+                const items = parsed.line_items.map((li: any) => ({
+                  id: "ai_" + Math.random().toString(36).slice(2, 8),
+                  description: li.description || "",
+                  quantity: li.quantity || 1,
+                  unit: li.unit || "flat",
+                  unit_price: li.rate || li.unit_price || 0,
+                  amount: li.amount || (li.quantity || 1) * (li.rate || li.unit_price || 0),
+                }));
+                updates.line_items = items;
+                updates.subtotal = items.reduce((s: number, i: any) => s + i.amount, 0);
+                updates.total = updates.subtotal;
+              }
+
+              if (parsed.totals?.deposit_required) {
+                updates.payment_terms = {
+                  type: "deposit_balance",
+                  deposit_amount: parsed.totals.deposit_required,
+                  deposit_percentage: Math.round((parsed.totals.deposit_required / (updates.total || parsed.totals.total || 1)) * 100),
+                  schedule: [
+                    { label: "Deposit", amount: parsed.totals.deposit_required, status: "pending" },
+                    { label: "Balance Due on Completion", amount: parsed.totals.balance_due_on_completion || (updates.total - parsed.totals.deposit_required), status: "pending" },
+                  ],
+                };
+              }
+
+              const { error } = await supabase.from("quotes").update(updates).eq("id", existing.id);
+              const resultMsg = error
+                ? "Failed to update " + qNum + ": " + error.message
+                : "Quote " + qNum + " updated successfully with all your changes — service address, project notes, line items, closing statement, and payment terms all applied.";
+
+              return NextResponse.json({ role: "assistant", content: "**" + resultMsg + "**\n\nYou can view the updated estimate in the Quotes tab." });
+            }
+          }
+        }
+      } catch (parseErr) {
+        // Not valid JSON or couldn't process — fall through to normal AI call
+      }
+    }
+
     // Single AI call with all context pre-loaded
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
