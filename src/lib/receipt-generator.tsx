@@ -334,7 +334,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
             )}
             <TableColumnHeaders primaryColor={primaryColor} />
             {section.items.map((item, i) => (
-              <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
+              <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
                 <View style={s.colSvc}>
                   <Text style={s.cellBold}>{item.name}</Text>
                 </View>
@@ -357,7 +357,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
             <TableColumnHeaders primaryColor={primaryColor} />
           </View>
           {items.map((item, i) => (
-            <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
+            <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
               <View style={s.colSvc}>
                 <Text style={s.cellBold}>{item.name}</Text>
               </View>
