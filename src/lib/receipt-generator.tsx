@@ -802,6 +802,15 @@ export interface EstimateData extends BaseDocumentData {
   quoteStatus: 'PENDING' | 'ACCEPTED';
   showFinancing: boolean;
   paymentTerms?: { type: string; schedule: EstimatePaymentScheduleItem[] } | null;
+  serviceAddress?: string;
+  scopeSummary?: string;
+  aiProjectNotes?: string;
+  startDate?: string;
+  completionDate?: string;
+  exclusions?: string;
+  warranty?: string;
+  closingStatement?: string;
+  termsText?: string[];
 }
 
 const FINANCING_MESSAGE =
@@ -837,6 +846,12 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
             <Text style={s.metaVal}>{data.customerEmail}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
             {data.customerAddress && <Text style={s.metaVal}>{data.customerAddress}</Text>}
+            {data.serviceAddress && (
+              <View style={{ marginTop: 6, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 8, color: '#718096', fontFamily: 'Helvetica-Bold', letterSpacing: 0.5, marginBottom: 2 }}>SERVICE LOCATION</Text>
+                <Text style={s.metaVal}>{data.serviceAddress}</Text>
+              </View>
+            )}
           </View>
           <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
             <Text style={s.metaLabel}>Estimate Details</Text>
@@ -846,6 +861,33 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
             {data.dueDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Due Date: {formatDateShort(data.dueDate)}</Text>}
           </View>
         </View>
+        {/* ─── AI Project Notes ─── */}
+        {data.aiProjectNotes && (
+          <View style={{ marginTop: 16, padding: 14, backgroundColor: '#F0FFF4', borderRadius: 6, borderLeftWidth: 3, borderLeftColor: '#48BB78' }} wrap={false}>
+            <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 6, letterSpacing: 0.5 }}>ABOUT YOUR PROJECT</Text>
+            {data.aiProjectNotes.split('\n\n').map((para, i) => (
+              <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.6, marginBottom: i < data.aiProjectNotes!.split('\n\n').length - 1 ? 8 : 0 }}>{para.trim()}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* ─── Scope Summary ─── */}
+        {data.scopeSummary && (
+          <View style={{ marginTop: 14 }} wrap={false}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 6 }}>SCOPE OF WORK</Text>
+            <Text style={{ fontSize: 9.5, color: '#4A5568', lineHeight: 1.6 }}>{data.scopeSummary}</Text>
+          </View>
+        )}
+
+        {/* ─── Timeline ─── */}
+        {(data.startDate || data.completionDate) && (
+          <View style={{ marginTop: 14, flexDirection: 'row', gap: 20 }} wrap={false}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5 }}>TIMELINE:</Text>
+            {data.startDate && <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Start: {data.startDate}</Text>}
+            {data.completionDate && <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Completion: {data.completionDate}</Text>}
+          </View>
+        )}
+
         <ItemsTable items={data.lineItems} />
         <TotalsBlock
           subtotal={data.subtotal}
@@ -886,6 +928,53 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           <View style={{ marginTop: 20, padding: 14, borderRadius: 6, borderWidth: 1.5, borderColor: '#26A69A', backgroundColor: '#E0F2F1' }} wrap={false}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#00695C', marginBottom: 6 }}>$ FLEXIBLE PAYMENT OPTIONS AVAILABLE</Text>
             <Text style={{ fontSize: 9, color: '#004D40', lineHeight: 1.5 }}>{FINANCING_MESSAGE}</Text>
+          </View>
+        )}
+
+        {/* ─── Closing Statement ─── */}
+        {data.closingStatement && (
+          <View style={{ marginTop: 20, padding: 16, backgroundColor: '#F0FFF4', borderRadius: 6, borderWidth: 1, borderColor: '#C6F6D5' }} wrap={false}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 8, letterSpacing: 0.5 }}>READY TO GET STARTED?</Text>
+            {data.closingStatement.split('\n\n').map((para, i) => (
+              <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.7, marginBottom: 6 }}>{para.trim()}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* ─── Exclusions ─── */}
+        {data.exclusions && (
+          <View style={{ marginTop: 16 }} wrap={false}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 6 }}>EXCLUSIONS</Text>
+            <Text style={{ fontSize: 8.5, color: '#718096', fontStyle: 'italic', marginBottom: 4 }}>The following items are NOT included in this estimate:</Text>
+            {data.exclusions.split('\n').filter(Boolean).map((item, i) => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 3, paddingLeft: 4 }}>
+                <Text style={{ fontSize: 9, color: '#E53E3E', width: 12 }}>•</Text>
+                <Text style={{ fontSize: 9, color: '#4A5568', flex: 1, lineHeight: 1.5 }}>{item.trim()}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ─── Warranty ─── */}
+        {data.warranty && (
+          <View style={{ marginTop: 12, padding: 10, backgroundColor: '#EBF8FF', borderRadius: 4, borderLeftWidth: 3, borderLeftColor: '#3182CE' }} wrap={false}>
+            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#2B6CB0', marginBottom: 3 }}>WARRANTY</Text>
+            <Text style={{ fontSize: 9, color: '#2D3748', lineHeight: 1.5 }}>{data.warranty}</Text>
+          </View>
+        )}
+
+        {/* ─── Terms & Conditions ─── */}
+        {data.termsText && data.termsText.length > 0 && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 8 }}>TERMS & CONDITIONS</Text>
+            {data.termsText.map((term, i) => (
+              <View key={i} style={{ marginBottom: 6 }} wrap={false}>
+                <Text style={{ fontSize: 8.5, color: '#4A5568', lineHeight: 1.5 }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', color: '#2D3748' }}>{i + 1}. </Text>
+                  {term}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 

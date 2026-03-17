@@ -77,6 +77,16 @@ export async function POST(req: NextRequest) {
         taxAmount: Math.round((data.tax_amount || 0) * 100),
         totalAmount: Math.round((data.total || 0) * 100),
         notes: data.notes || undefined,
+        serviceAddress: data.service_address || undefined,
+        scopeSummary: data.scope_summary || undefined,
+        aiProjectNotes: data.ai_project_notes || undefined,
+        startDate: data.start_date || undefined,
+        completionDate: data.completion_date || undefined,
+        exclusions: data.exclusions || undefined,
+        warranty: data.warranty || undefined,
+        closingStatement: data.closing_statement || undefined,
+        termsText: data.terms_text || undefined,
+        customerAddress: data.customer_address || undefined,
       };
       pdfBuffer = await generateEstimatePDF(estimateData);
     } else {
