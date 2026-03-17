@@ -140,8 +140,39 @@ Example flow:
 }}\`\`\`
 
 #### Update/Edit Existing Quote
-\`\`\`action{"type":"update_quote","data":{"quote_number":"QTE-2603-XXXX","updates":{"service_address":"...","scope_summary":"...","line_items":[...],"exclusions":"...","warranty":"...","closing_statement":"...","ai_project_notes":"...","notes":"...","start_date":"...","completion_date":"..."}}}\`\`\`
-Use this when the user wants to edit/update an existing quote. Find it by quote_number, then update only the fields provided.
+\`\`\`action{"type":"update_quote","data":{"quote_number":"QTE-2603-XXXX","updates":{...fields to change...}}}\`\`\`
+
+ALL updatable fields:
+- "service_address": "123 Main St, Orlando FL"
+- "scope_summary": "Description of work..."
+- "ai_project_notes": "About Your Project paragraphs..."
+- "line_items": [{"description":"...","quantity":1,"unit":"flat","unit_price":100}] — REPLACES all items
+- "exclusions": "Item 1\nItem 2\nItem 3"
+- "warranty": "30-day workmanship guarantee..."
+- "closing_statement": "Ready to get started?..."
+- "notes": "Internal notes..."
+- "start_date": "2026-04-01"
+- "completion_date": "2-3 weeks"
+- "tax_rate": 7 (percent)
+- "expiration_date": "2026-04-15"
+- "show_financing": true/false
+- "is_commercial": true/false
+- "terms_conditions": ["term_id_1","term_id_2"] — array of term IDs to enable
+- "payment_terms": {"type":"deposit_balance","deposit_amount":800,"schedule":[{"label":"Deposit","amount":800},{"label":"Balance","amount":765}]}
+  Payment types: "full" | "deposit_balance" | "deposit_installments"
+
+Only include the fields you're changing. Omitted fields stay as-is.
+
+Granular operations (add/remove without replacing everything):
+- "add_items": [{"description":"New item","quantity":1,"unit":"flat","unit_price":100}] — ADDS to existing items
+- "remove_items": ["hedge trimming", "debris"] — REMOVES items matching these descriptions
+- "add_terms": ["term_id_1"] — turns ON specific terms
+- "remove_terms": ["term_id_2"] — turns OFF specific terms
+
+For terms, use these IDs from the quote_terms table:
+- Payment Terms, Scope of Work, Cancellation Policy, Property Access, Liability Limitation, Weather Delays, Change Orders (these are ON by default)
+- Material Price Fluctuation, Independent Contractor, Warranty, FL Lien Rights, Dispute Resolution (these are OFF by default)
+When the user says "add warranty term" or "turn on lien rights", fetch the term IDs first with a query action if needed.
 
 #### Create Invoice
 \`\`\`action{"type":"create_invoice","data":{"customer_name":"...","line_items":[...],"tax_rate":0,"due_days":15}}\`\`\`
@@ -177,6 +208,28 @@ Use this when the user wants to edit/update an existing quote. Find it by quote_
 - Mulch: $50-75/cuyd installed | Sod: $1.50-3.00/sqft
 - Rock/gravel: $75-125/cuyd | Landscape border: $8-15/lnft
 - Rubber mulch: $100-150/cuyd (lasts 10+ years)
+
+### Building Changes Over Multiple Messages
+The user may discuss changes across several messages before saying "do it" or "apply that" or "go ahead". When this happens:
+- Keep track of what they want changed in your conversation
+- When they say "go ahead", "apply it", "do it", "update it now", "make those changes" — THEN execute the update_quote action with ALL discussed changes combined
+- Include EVERY field discussed across the conversation in one single update action
+- Confirm what you're about to change before executing: "I'll update QTE-XXXX with: [list changes]. Go ahead?"
+
+### Natural Language → Action Translation
+When the user says things informally, translate to the right action:
+- "add a 50% deposit" → payment_terms: {type: "deposit_balance", deposit_percentage: 50}
+- "make it 3 monthly payments" → payment_terms: {type: "deposit_installments", num_installments: 3}
+- "turn on warranty" or "add warranty term" → include warranty term ID in terms_conditions array
+- "remove the lien rights" → remove that term ID from terms_conditions
+- "make it commercial" → is_commercial: true
+- "add financing" → show_financing: true
+- "change the price of hedge trimming to 250" → update that line item
+- "add mulch spreading for $100" → add new line item to existing items
+- "delete the debris removal" → remove that item from line_items
+- "set tax to 7%" → tax_rate: 7
+- "expires in 2 weeks" → expiration_date: calculated date
+- "start next monday" → start_date: calculated date
 
 ### Quote Building Rules
 1. ALWAYS use realistic quantities — not 1 for everything
@@ -644,27 +697,89 @@ export async function POST(req: NextRequest) {
         if (action.type === "update_quote" && action.data) {
           const qNum = action.data.quote_number;
           if (qNum) {
-            // Find the quote
             const { data: existing } = await supabase
               .from("quotes")
-              .select("id")
+              .select("id, subtotal, tax_rate, total, line_items, terms_conditions, payment_terms")
               .eq("quote_number", qNum)
               .single();
 
             if (existing) {
-              const updates: any = {};
+              const updates: any = { updated_at: new Date().toISOString() };
               const u = action.data.updates || action.data;
 
-              if (u.service_address) updates.service_address = u.service_address;
-              if (u.scope_summary) updates.scope_summary = u.scope_summary;
-              if (u.exclusions) updates.exclusions = u.exclusions;
-              if (u.warranty) updates.warranty = u.warranty;
-              if (u.closing_statement) updates.closing_statement = u.closing_statement;
-              if (u.ai_project_notes) updates.ai_project_notes = u.ai_project_notes;
-              if (u.notes) updates.notes = u.notes;
-              if (u.start_date) updates.start_date = u.start_date;
-              if (u.completion_date) updates.completion_date = u.completion_date;
+              // Text fields
+              const textFields = ["service_address", "scope_summary", "exclusions", "warranty",
+                "closing_statement", "ai_project_notes", "notes", "start_date", "completion_date"];
+              for (const f of textFields) {
+                if (u[f] !== undefined) updates[f] = u[f] || null;
+              }
 
+              // Number fields
+              if (u.tax_rate !== undefined) updates.tax_rate = Number(u.tax_rate) || 0;
+
+              // Boolean fields
+              if (u.show_financing !== undefined) updates.show_financing = !!u.show_financing;
+              if (u.is_commercial !== undefined) updates.is_commercial = !!u.is_commercial;
+
+              // Date fields
+              if (u.expiration_date !== undefined) updates.expiration_date = u.expiration_date || null;
+              if (u.due_date !== undefined) updates.due_date = u.due_date || null;
+
+              // Terms conditions (array of IDs)
+              if (u.terms_conditions !== undefined) {
+                updates.terms_conditions = Array.isArray(u.terms_conditions) ? u.terms_conditions : null;
+              }
+
+              // Payment terms (object)
+              if (u.payment_terms !== undefined) {
+                updates.payment_terms = u.payment_terms || null;
+              }
+
+              // Add individual line items (append to existing)
+              if (u.add_items && Array.isArray(u.add_items)) {
+                const currentItems = existing.line_items || [];
+                const newItems = u.add_items.map((li: any) => ({
+                  id: "ai_" + Math.random().toString(36).slice(2, 8),
+                  description: li.description || "",
+                  quantity: li.quantity || 1,
+                  unit: li.unit || "flat",
+                  unit_price: li.unit_price || li.rate || 0,
+                  amount: li.amount || (li.quantity || 1) * (li.unit_price || li.rate || 0),
+                  section: li.section || undefined,
+                }));
+                updates.line_items = [...currentItems, ...newItems];
+                const subtotal = updates.line_items.reduce((s: number, li: any) => s + (li.amount || 0), 0);
+                updates.subtotal = subtotal;
+                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
+                updates.tax_amount = subtotal * (taxRate / 100);
+                updates.total = subtotal + updates.tax_amount;
+              }
+
+              // Remove line items by description match
+              if (u.remove_items && Array.isArray(u.remove_items)) {
+                const currentItems = updates.line_items || existing.line_items || [];
+                const removeDescs = u.remove_items.map((r: string) => r.toLowerCase());
+                updates.line_items = currentItems.filter((li: any) =>
+                  !removeDescs.some((rd: string) => (li.description || "").toLowerCase().includes(rd))
+                );
+                const subtotal = updates.line_items.reduce((s: number, li: any) => s + (li.amount || 0), 0);
+                updates.subtotal = subtotal;
+                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
+                updates.tax_amount = subtotal * (taxRate / 100);
+                updates.total = subtotal + updates.tax_amount;
+              }
+
+              // Toggle terms on/off
+              if (u.add_terms && Array.isArray(u.add_terms)) {
+                const current = existing.terms_conditions || [];
+                updates.terms_conditions = [...new Set([...current, ...u.add_terms])];
+              }
+              if (u.remove_terms && Array.isArray(u.remove_terms)) {
+                const current = updates.terms_conditions || existing.terms_conditions || [];
+                updates.terms_conditions = current.filter((id: string) => !u.remove_terms.includes(id));
+              }
+
+              // Line items (replace all)
               if (u.line_items && Array.isArray(u.line_items)) {
                 const lineItems = u.line_items.map((li: any) => ({
                   id: li.id || ("ai_" + Math.random().toString(36).slice(2, 8)),
@@ -673,14 +788,22 @@ export async function POST(req: NextRequest) {
                   unit: li.unit || "flat",
                   unit_price: li.unit_price || li.rate || 0,
                   amount: li.amount || (li.quantity || 1) * (li.unit_price || li.rate || 0),
+                  section: li.section || undefined,
                 }));
                 updates.line_items = lineItems;
                 const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
                 updates.subtotal = subtotal;
-                updates.total = subtotal + (updates.tax_amount || 0);
+                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
+                updates.tax_amount = subtotal * (taxRate / 100);
+                updates.total = subtotal + updates.tax_amount;
               }
 
-              updates.updated_at = new Date().toISOString();
+              // Recalc totals if tax_rate changed but no new line items
+              if (u.tax_rate !== undefined && !u.line_items) {
+                const subtotal = existing.subtotal || 0;
+                updates.tax_amount = subtotal * (Number(u.tax_rate) / 100);
+                updates.total = subtotal + updates.tax_amount;
+              }
 
               const { error } = await supabase
                 .from("quotes")
@@ -690,7 +813,8 @@ export async function POST(req: NextRequest) {
               if (error) {
                 action.result = "Failed to update: " + error.message;
               } else {
-                action.result = "Quote " + qNum + " updated successfully";
+                const changedFields = Object.keys(updates).filter(k => k !== "updated_at");
+                action.result = "Quote " + qNum + " updated — changed: " + changedFields.join(", ");
               }
             } else {
               action.result = "Quote " + qNum + " not found";
