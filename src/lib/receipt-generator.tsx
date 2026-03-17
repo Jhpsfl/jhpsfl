@@ -324,9 +324,9 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
   return (
     <>
       {hasSections ? (
-        // Render with section headers
+        // Render with section headers — each section wrapped for page-break integrity
         sections.map((section, si) => (
-          <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }}>
+          <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }} wrap={section.items.length > 15 ? true : false}>
             {section.label && (
               <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 6, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>{section.label.toUpperCase()}</Text>
@@ -864,11 +864,47 @@ export interface EstimateData extends BaseDocumentData {
 const FINANCING_MESSAGE =
   'This project is eligible for flexible payment options including deposits and installment plans. Contact us to discuss a payment schedule that works for you.';
 
+/** Parse About Your Project text — detect bold subheadings (short lines with no period, followed by paragraph) */
+function parseProjectNotes(text: string): { heading?: string; body: string }[] {
+  const blocks = text.split('\n\n').map(b => b.trim()).filter(Boolean);
+  const result: { heading?: string; body: string }[] = [];
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    const firstLine = lines[0].trim();
+    // Short line, no period at end, followed by more text = subheading
+    if (lines.length > 1 && firstLine.length < 40 && !firstLine.endsWith('.')) {
+      result.push({ heading: firstLine, body: lines.slice(1).join('\n').trim() });
+    } else {
+      result.push({ body: block });
+    }
+  }
+  return result;
+}
+
+/** Sanitize T&C text — fix double %% typo */
+function sanitizeTermText(text: string): string {
+  return text.replace(/%%/g, '%');
+}
+
 const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data, logoUrl }) => {
   const isAccepted = data.quoteStatus === 'ACCEPTED';
   const badge = isAccepted ? s.badgePaid : s.badgeDue;
   const badgeText = isAccepted ? s.badgePaidText : s.badgeDueText;
   const label = isAccepted ? 'ACCEPTED' : 'PENDING';
+
+  // Compute section subtotals for the totals block
+  const sections: { label: string; items: DocumentLineItem[] }[] = [];
+  let currentSection = '';
+  for (const item of data.lineItems) {
+    const section = item.description || '';
+    if (section !== currentSection) {
+      sections.push({ label: section, items: [item] });
+      currentSection = section;
+    } else {
+      sections[sections.length - 1].items.push(item);
+    }
+  }
+  const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].label);
 
   return (
     <Document title={`JHPS Estimate - ${data.quoteNumber}`} author={BRAND.name} subject="Service Estimate">
@@ -909,15 +945,23 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
             {data.dueDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Due Date: {formatDateShort(data.dueDate)}</Text>}
           </View>
         </View>
-        {/* ─── AI Project Notes ─── */}
+        {/* ─── AI Project Notes (with auto bold subheadings) ─── */}
         {data.aiProjectNotes && (
-          <View style={{ marginTop: 16, padding: 14, backgroundColor: '#F0FFF4', borderRadius: 6, borderLeftWidth: 3, borderLeftColor: '#48BB78' }} wrap={false}>
+          <View style={{ marginTop: 16, padding: 14, backgroundColor: '#F0FFF4', borderRadius: 6, borderLeftWidth: 3, borderLeftColor: '#48BB78' }}>
             <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 6, letterSpacing: 0.5 }}>ABOUT YOUR PROJECT</Text>
-            {data.aiProjectNotes.split('\n\n').map((para, i) => (
-              <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.6, marginBottom: i < data.aiProjectNotes!.split('\n\n').length - 1 ? 8 : 0 }}>{para.trim()}</Text>
+            {parseProjectNotes(data.aiProjectNotes).map((block, i) => (
+              <View key={i} style={{ marginBottom: 6 }}>
+                {block.heading && (
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 3 }}>{block.heading}</Text>
+                )}
+                <Text style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.6 }}>{block.body}</Text>
+              </View>
             ))}
           </View>
         )}
+
+        {/* ─── Page break after About Your Project if present ─── */}
+        {data.aiProjectNotes && <View break />}
 
         {/* ─── Scope Summary ─── */}
         {data.scopeSummary && (
@@ -936,41 +980,86 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           </View>
         )}
 
+        {/* ─── Line Items (sections wrapped with wrap={false} for integrity) ─── */}
         <ItemsTable items={data.lineItems} />
-        <TotalsBlock
-          subtotal={data.subtotal}
-          taxAmount={data.taxAmount}
-          discountAmount={data.discountAmount}
-          totalAmount={data.totalAmount}
-          totalLabel="Estimated Total"
-          depositAmount={data.paymentTerms?.schedule?.[0]?.amount}
-          balanceAmount={data.paymentTerms?.schedule && data.paymentTerms.schedule.length > 1
-            ? data.paymentTerms.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0)
-            : undefined}
-        />
 
-        {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
-          <View style={{ marginTop: 20 }} wrap={false}>
-            <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
-              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
-            </View>
-            <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
-              {/* Header row */}
-              <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 6, paddingHorizontal: 12 }}>
-                <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>DESCRIPTION</Text>
-                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
-                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
-              </View>
-              {data.paymentTerms.schedule.map((item, i) => (
-                <View key={i} style={{ flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
-                  <Text style={{ flex: 2, fontSize: 9, color: '#2D3748' }}>{item.label}</Text>
-                  <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{item.due_date ? formatDateShort(new Date(item.due_date)) : 'TBD'}</Text>
-                  <Text style={{ flex: 1, fontSize: 9, color: '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{fmt(Math.round(item.amount * 100))}</Text>
+        {/* ─── Totals + Payment Schedule (kept together) ─── */}
+        <View wrap={false}>
+          {/* Totals block — show section subtotals if sectioned */}
+          <View style={s.totalsWrap}>
+            <View style={s.totalsBlock}>
+              {hasSections ? (
+                <>
+                  {sections.filter(sec => sec.label).map((sec, i) => (
+                    <View key={i} style={s.totalsRow}>
+                      <Text style={s.totalsLabel}>{sec.label} Subtotal</Text>
+                      <Text style={s.totalsVal}>{fmt(sec.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
+                    </View>
+                  ))}
+                </>
+              ) : (
+                <View style={s.totalsRow}>
+                  <Text style={s.totalsLabel}>Subtotal</Text>
+                  <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
                 </View>
-              ))}
+              )}
+              {data.taxAmount > 0 && (
+                <View style={s.totalsRow}>
+                  <Text style={s.totalsLabel}>Tax</Text>
+                  <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
+                </View>
+              )}
+              {(data.discountAmount ?? 0) > 0 && (
+                <View style={s.totalsRow}>
+                  <Text style={s.totalsLabel}>Discount</Text>
+                  <Text style={[s.totalsVal, { color: C.paidGreen }]}>-{fmt(data.discountAmount!)}</Text>
+                </View>
+              )}
+              <View style={s.totalsDivider} />
+              <View style={s.grandTotal}>
+                <Text style={s.grandTotalText}>Total</Text>
+                <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
+              </View>
+              {data.paymentTerms?.schedule?.[0]?.amount != null && data.paymentTerms.schedule[0].amount > 0 && (
+                <>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
+                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(data.paymentTerms!.schedule[0].amount * 100))}</Text>
+                  </View>
+                  {data.paymentTerms!.schedule.length > 1 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 4, marginTop: 2 }}>
+                      <Text style={{ fontSize: 9, color: '#4A5568' }}>Remaining Balance</Text>
+                      <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(data.paymentTerms!.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0) * 100))}</Text>
+                    </View>
+                  )}
+                </>
+              )}
             </View>
           </View>
-        )}
+
+          {/* Payment Schedule table — stays with totals */}
+          {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
+            <View style={{ marginTop: 20 }}>
+              <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
+              </View>
+              <View style={{ borderWidth: 1, borderColor: '#CBD5E0', borderTopWidth: 0, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
+                <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 6, paddingHorizontal: 12 }}>
+                  <Text style={{ flex: 2, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568' }}>DESCRIPTION</Text>
+                  <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'center' }}>DUE DATE</Text>
+                  <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>AMOUNT</Text>
+                </View>
+                {data.paymentTerms.schedule.map((item, i) => (
+                  <View key={i} style={{ flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#E2E8F0', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#F7FAFC' }}>
+                    <Text style={{ flex: 2, fontSize: 9, color: '#2D3748' }}>{item.label}</Text>
+                    <Text style={{ flex: 1, fontSize: 9, color: '#4A5568', textAlign: 'center' }}>{item.due_date ? formatDateShort(new Date(item.due_date)) : 'To be confirmed upon deposit receipt'}</Text>
+                    <Text style={{ flex: 1, fontSize: 9, color: '#2D3748', fontFamily: 'Helvetica-Bold', textAlign: 'right' }}>{fmt(Math.round(item.amount * 100))}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
 
         {data.showFinancing && (
           <View style={{ marginTop: 20, padding: 14, borderRadius: 6, borderWidth: 1.5, borderColor: '#26A69A', backgroundColor: '#E0F2F1' }} wrap={false}>
@@ -979,10 +1068,9 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           </View>
         )}
 
-        {/* ─── Closing Statement ─── */}
+        {/* ─── Closing Statement (no redundant header — paragraph stands alone) ─── */}
         {data.closingStatement && (
           <View style={{ marginTop: 20, padding: 16, backgroundColor: '#F0FFF4', borderRadius: 6, borderWidth: 1, borderColor: '#C6F6D5' }} wrap={false}>
-            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 8, letterSpacing: 0.5 }}>READY TO GET STARTED?</Text>
             {data.closingStatement.split('\n\n').map((para, i) => (
               <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.7, marginBottom: 6 }}>{para.trim()}</Text>
             ))}
@@ -1011,7 +1099,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           </View>
         )}
 
-        {/* ─── Terms & Conditions ─── */}
+        {/* ─── Terms & Conditions (each clause wrap={false}) ─── */}
         {data.termsText && data.termsText.length > 0 && (
           <View style={{ marginTop: 16 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 8 }}>TERMS & CONDITIONS</Text>
@@ -1019,7 +1107,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
               <View key={i} style={{ marginBottom: 6 }} wrap={false}>
                 <Text style={{ fontSize: 8.5, color: '#4A5568', lineHeight: 1.5 }}>
                   <Text style={{ fontFamily: 'Helvetica-Bold', color: '#2D3748' }}>{i + 1}. </Text>
-                  {term}
+                  {sanitizeTermText(term)}
                 </Text>
               </View>
             ))}
