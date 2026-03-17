@@ -289,12 +289,13 @@ export async function POST(req: NextRequest) {
         type: "function",
         function: {
           name: "lookup_data",
-          description: "Look up quotes, customers, invoices, or jobs from the JHPS database. Call this whenever you need real data to answer a question.",
+          description: "Look up quotes, customers, invoices, or jobs from the JHPS database. Call this whenever you need real data to answer a question. For a specific quote, pass quote_number. For terms & conditions options, use table 'quote_terms'.",
           parameters: {
             type: "object",
             properties: {
               table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"], description: "Which table to query. Use quote_terms to get available terms & conditions with their IDs." },
               search_name: { type: "string", description: "Customer name to filter by (optional)" },
+              quote_number: { type: "string", description: "Specific quote number to look up (e.g. QTE-2603-0001). Returns full details including terms, exclusions, warranty, etc." },
             },
             required: ["table"],
           },
@@ -303,7 +304,7 @@ export async function POST(req: NextRequest) {
     ];
 
     // Helper to execute the lookup
-    async function executeLookup(table: string, searchName?: string): Promise<string> {
+    async function executeLookup(table: string, searchName?: string, quoteNumber?: string): Promise<string> {
       // Special case: quote_terms returns all available terms with IDs
       if (table === "quote_terms") {
         const { data: terms } = await supabase.from("quote_terms").select("*").order("sort_order");
@@ -311,6 +312,58 @@ export async function POST(req: NextRequest) {
         return terms.map((t: any, i: number) =>
           (i+1) + ". ID: " + t.id + " | " + t.title + " | Default: " + (t.is_default ? "ON" : "OFF") + "\n   " + (t.body || "").slice(0, 120)
         ).join("\n");
+      }
+
+      // Specific quote lookup — returns ALL fields
+      if (table === "quotes" && quoteNumber) {
+        const { data: q } = await supabase
+          .from("quotes")
+          .select("*, customers(name, email, phone, address)")
+          .eq("quote_number", quoteNumber)
+          .single();
+        if (!q) return "Quote " + quoteNumber + " not found.";
+
+        const cn = q.customers?.name || "Unknown";
+        const items = (q.line_items || []).map((li: any) => {
+          const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
+          return "  - " + li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")" + (li.section ? " [" + li.section + "]" : "");
+        }).join("\n");
+
+        // Resolve active terms to names
+        let termsInfo = "None active";
+        if (q.terms_conditions && Array.isArray(q.terms_conditions) && q.terms_conditions.length > 0) {
+          const { data: terms } = await supabase.from("quote_terms").select("id, title").in("id", q.terms_conditions);
+          if (terms?.length) {
+            termsInfo = terms.map((t: any) => t.title + " (ID: " + t.id + ")").join(", ");
+          }
+        }
+
+        return "QUOTE: " + q.quote_number +
+          "\nCustomer: " + cn +
+          "\nEmail: " + (q.customers?.email || "") +
+          "\nPhone: " + (q.customers?.phone || "") +
+          "\nCustomer Address: " + (q.customers?.address || "") +
+          "\nService Address: " + (q.service_address || "Not set") +
+          "\nStatus: " + (q.status || "draft") +
+          "\nCreated: " + q.created_at +
+          "\nExpiration: " + (q.expiration_date || "Not set") +
+          "\n\nLine Items:\n" + (items || "  None") +
+          "\n\nSubtotal: $" + (q.subtotal || 0) +
+          "\nTax Rate: " + (q.tax_rate || 0) + "%" +
+          "\nTax Amount: $" + (q.tax_amount || 0) +
+          "\nTotal: $" + (q.total || 0) +
+          "\n\nScope Summary: " + (q.scope_summary || "Not set") +
+          "\nAI Project Notes: " + (q.ai_project_notes || "Not set") +
+          "\nStart Date: " + (q.start_date || "Not set") +
+          "\nCompletion Date: " + (q.completion_date || "Not set") +
+          "\nExclusions: " + (q.exclusions || "Not set") +
+          "\nWarranty: " + (q.warranty || "Not set") +
+          "\nClosing Statement: " + (q.closing_statement || "Not set") +
+          "\nNotes: " + (q.notes || "Not set") +
+          "\nShow Financing: " + (q.show_financing ? "Yes" : "No") +
+          "\nPayment Terms: " + (q.payment_terms ? JSON.stringify(q.payment_terms) : "None") +
+          "\n\nActive Terms & Conditions: " + termsInfo +
+          "\nTerms IDs (raw): " + JSON.stringify(q.terms_conditions || []);
       }
 
       let rows: any[] = [];
@@ -337,7 +390,8 @@ export async function POST(req: NextRequest) {
             const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
             return li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")";
           }).filter(Boolean).join("; ");
-          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
+          const termCount = Array.isArray(r.terms_conditions) ? r.terms_conditions.length : 0;
+          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + " | Terms: " + termCount + " active" + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
         }
         if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
         if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
@@ -472,12 +526,13 @@ export async function POST(req: NextRequest) {
       if (useTools) {
         body.tools = [{
           name: "lookup_data",
-          description: "Look up quotes, customers, invoices, or jobs from the database.",
+          description: "Look up quotes, customers, invoices, or jobs from the database. Pass quote_number for full quote details.",
           input_schema: {
             type: "object",
             properties: {
               table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"] },
               search_name: { type: "string", description: "Customer name to filter by" },
+              quote_number: { type: "string", description: "Specific quote number for full details" },
             },
             required: ["table"],
           },
@@ -501,7 +556,7 @@ export async function POST(req: NextRequest) {
         // Check if Claude wants to use a tool
         const toolUse = claudeData.content?.find((b: any) => b.type === "tool_use");
         if (toolUse && toolUse.name === "lookup_data") {
-          const result = await executeLookup(toolUse.input.table, toolUse.input.search_name);
+          const result = await executeLookup(toolUse.input.table, toolUse.input.search_name, toolUse.input.quote_number);
           // Send tool result back to Claude
           const toolMessages = [
             ...messages,
@@ -532,7 +587,7 @@ export async function POST(req: NextRequest) {
         if (choice?.message?.tool_calls?.length) {
           const tc = choice.message.tool_calls[0];
           const args = JSON.parse(tc.function.arguments);
-          const result = await executeLookup(args.table, args.search_name);
+          const result = await executeLookup(args.table, args.search_name, args.quote_number);
           // Send function result back
           const toolMessages = [
             ...messages,
