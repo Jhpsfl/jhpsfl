@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateInvoicePDF, generateEstimatePDF } from '@/lib/receipt-generator';
 import type { InvoiceData, EstimateData } from '@/lib/receipt-generator';
+import { createSupabaseAdmin } from '@/lib/supabase';
 import { auth } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
@@ -55,6 +56,22 @@ export async function POST(req: NextRequest) {
       };
       pdfBuffer = await generateInvoicePDF(invoiceData);
     } else if (type === 'estimate') {
+      // Resolve terms_conditions IDs to actual text
+      let termsText: string[] | undefined;
+      if (data.terms_conditions && Array.isArray(data.terms_conditions) && data.terms_conditions.length > 0) {
+        try {
+          const supabase = createSupabaseAdmin();
+          const { data: terms } = await supabase
+            .from('quote_terms')
+            .select('title, body')
+            .in('id', data.terms_conditions)
+            .order('sort_order');
+          if (terms?.length) {
+            termsText = terms.map((t: any) => t.title + ' — ' + t.body);
+          }
+        } catch {}
+      }
+
       const estimateData: EstimateData = {
         quoteNumber: data.quote_number || 'PREVIEW',
         quoteDate: new Date(data.created_at || Date.now()),
@@ -67,11 +84,13 @@ export async function POST(req: NextRequest) {
         customerEmail: data.customer_email || '',
         customerPhone: data.customer_phone || undefined,
         companyName: data.company_name || undefined,
-        lineItems: (data.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
+        lineItems: (data.line_items || []).map((item: any) => ({
           name: item.description,
+          description: item.section || undefined,
           quantity: item.quantity || 1,
           unitPrice: Math.round((item.unit_price || item.amount || 0) * 100),
           totalPrice: Math.round((item.amount || 0) * 100),
+          unit: item.unit || undefined,
         })),
         subtotal: Math.round((data.subtotal || 0) * 100),
         taxAmount: Math.round((data.tax_amount || 0) * 100),
@@ -85,7 +104,7 @@ export async function POST(req: NextRequest) {
         exclusions: data.exclusions || undefined,
         warranty: data.warranty || undefined,
         closingStatement: data.closing_statement || undefined,
-        termsText: data.terms_text || undefined,
+        termsText,
         customerAddress: data.customer_address || undefined,
       };
       pdfBuffer = await generateEstimatePDF(estimateData);

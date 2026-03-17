@@ -39,10 +39,11 @@ import { getBrand, type BrandKey } from './brand-config';
 
 export interface DocumentLineItem {
   name: string;
-  description?: string;
+  description?: string;  // used as section label (e.g., "Labor", "Materials")
   quantity: number;
-  unitPrice: number;   // in cents (Square standard)
-  totalPrice: number;  // in cents
+  unit?: string;         // e.g., "sqft", "flat", "bag"
+  unitPrice: number;     // in cents (Square standard)
+  totalPrice: number;    // in cents
 }
 
 /** Shared fields for both invoices and receipts */
@@ -305,25 +306,72 @@ const ContinuationHeader: React.FC<{ docType: string; docNumber: string; primary
  * The column header is rendered inline (page 1) and also appears in the
  * fixed ContinuationHeader on subsequent pages.
  */
-const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }> = ({ items, primaryColor }) => (
-  <>
-    <View style={{ marginTop: 8 }}>
-      <TableColumnHeaders primaryColor={primaryColor} />
-    </View>
-    {items.map((item, i) => (
-      <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
-        <View style={s.colSvc}>
-          <Text style={s.cellBold}>{item.name}</Text>
-          {item.description && <Text style={s.cellDesc}>{item.description}</Text>}
-        </View>
-        <Text style={[s.cell, s.colQty]}>{item.quantity}</Text>
-        <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
-        <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
-      </View>
-    ))}
-    <View style={{ marginBottom: 20 }} />
-  </>
-);
+const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }> = ({ items, primaryColor }) => {
+  // Group items by section (description field holds section label)
+  const sections: { label: string; items: DocumentLineItem[] }[] = [];
+  let currentSection = '';
+  for (const item of items) {
+    const section = item.description || '';
+    if (section !== currentSection) {
+      sections.push({ label: section, items: [item] });
+      currentSection = section;
+    } else {
+      sections[sections.length - 1].items.push(item);
+    }
+  }
+  const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].label);
+
+  return (
+    <>
+      {hasSections ? (
+        // Render with section headers
+        sections.map((section, si) => (
+          <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }}>
+            {section.label && (
+              <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 6, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>{section.label.toUpperCase()}</Text>
+              </View>
+            )}
+            <TableColumnHeaders primaryColor={primaryColor} />
+            {section.items.map((item, i) => (
+              <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
+                <View style={s.colSvc}>
+                  <Text style={s.cellBold}>{item.name}</Text>
+                </View>
+                <Text style={[s.cell, s.colQty]}>{item.quantity}{item.unit ? ' ' + item.unit : ''}</Text>
+                <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
+                <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
+              </View>
+            ))}
+            {/* Section subtotal */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 5, paddingHorizontal: 12, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
+              <Text style={{ flex: 1, fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>{section.label ? section.label + ' Subtotal' : 'Subtotal'}</Text>
+              <Text style={{ width: 80, fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#2D3748', textAlign: 'right' }}>{fmt(section.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
+            </View>
+          </View>
+        ))
+      ) : (
+        // Flat list (no sections)
+        <>
+          <View style={{ marginTop: 8 }}>
+            <TableColumnHeaders primaryColor={primaryColor} />
+          </View>
+          {items.map((item, i) => (
+            <View key={i} style={[s.tRow, i % 2 === 1 ? s.tRowAlt : {}]} wrap={false}>
+              <View style={s.colSvc}>
+                <Text style={s.cellBold}>{item.name}</Text>
+              </View>
+              <Text style={[s.cell, s.colQty]}>{item.quantity}{item.unit ? ' ' + item.unit : ''}</Text>
+              <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
+              <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
+            </View>
+          ))}
+        </>
+      )}
+      <View style={{ marginBottom: 20 }} />
+    </>
+  );
+};
 
 const TotalsBlock: React.FC<{
   subtotal: number; taxAmount: number; discountAmount?: number;
