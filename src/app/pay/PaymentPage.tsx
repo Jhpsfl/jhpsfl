@@ -1021,6 +1021,9 @@ export default function PaymentPage() {
           .mobile-hamburger { display: flex !important; }
           .card-field-grid { grid-template-columns: 1fr; }
           .form-2col { grid-template-columns: 1fr !important; }
+          .pay-card { padding: 20px 16px !important; }
+          .pay-card-inner { padding: 16px !important; }
+          .pay-main { padding-left: 12px !important; padding-right: 12px !important; }
         }
       `}</style>
 
@@ -1108,7 +1111,7 @@ export default function PaymentPage() {
           pointerEvents: "none", zIndex: 0,
         }} />
 
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
+        <div className="pay-main" style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
           {/* Page Header */}
           <FadeIn delay={0.05}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
@@ -1298,7 +1301,7 @@ export default function PaymentPage() {
 
                       {/* ── Invoice Summary (invoice mode only) ── */}
                       {invoiceMode && (
-                        <div style={{
+                        <div className="pay-card" style={{
                           background: brand.colors.bgElevated,
                           border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                         }}>
@@ -1404,7 +1407,7 @@ export default function PaymentPage() {
                       )}
 
                       {/* ── Contact Information ── */}
-                      <div style={{
+                      <div className="pay-card" style={{
                         background: brand.colors.bgElevated,
                         border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
@@ -1558,7 +1561,7 @@ export default function PaymentPage() {
                       </div>
 
                       {/* ── Service Address ── */}
-                      <div style={{
+                      <div className="pay-card" style={{
                         background: brand.colors.bgElevated,
                         border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
@@ -1685,7 +1688,7 @@ export default function PaymentPage() {
 
                   {/* ─── Step 2: Payment ─── */}
                   {step === "payment" && (
-                    <div style={{
+                    <div className="pay-card" style={{
                       background: brand.colors.bgElevated,
                       border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "36px 32px",
                     }}>
@@ -1700,7 +1703,7 @@ export default function PaymentPage() {
                       </div>
 
                       {/* Payment form — Stripe or Square depending on active processor */}
-                      <div style={{
+                      <div className="pay-card-inner" style={{
                         border: `1px solid ${brand.colors.border}`, borderRadius: 16, padding: "24px",
                         background: brand.colors.bgCard, marginBottom: 24,
                       }}>
