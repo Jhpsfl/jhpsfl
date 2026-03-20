@@ -423,6 +423,62 @@ export async function POST(req: NextRequest) {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ─── TEST: AI Reply via Gmail SMTP (kptkid52@gmail.com trigger) ──────────
+  if (from_email === 'kptkid52@gmail.com' && process.env.ANTHROPIC_API_KEY && process.env.GMAIL_CLIENT_ID) {
+    try {
+      const text = body_text || '';
+      console.log('TEST TRIGGER from kptkid52@gmail.com — generating AI reply...');
+
+      const testSystemPrompt = `You are a friendly scheduling assistant for Jenkins Home & Property Solutions (JHPS), a Central Florida property maintenance company. Keep replies to 2-3 sentences. Warm and conversational. End with "- The JHPS Team".`;
+      const testPrompt = `A customer just emailed us with subject "${subjectStr}" and message: "${text.substring(0, 500)}"\n\nWrite a warm, helpful first reply. Keep it 2-3 sentences.`;
+
+      const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY!,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 500,
+          system: testSystemPrompt,
+          messages: [{ role: 'user', content: testPrompt }],
+        }),
+      });
+
+      if (!aiResp.ok) {
+        const errText = await aiResp.text();
+        console.error('TEST: Anthropic API error:', aiResp.status, errText);
+      } else {
+        const aiData = await aiResp.json();
+        const replyText = aiData.content?.find((b: { type: string }) => b.type === 'text')?.text?.trim() || '';
+        console.log('TEST: AI reply generated:', replyText.substring(0, 100));
+
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            type: 'OAuth2',
+            user: process.env.GMAIL_USER,
+            clientId: process.env.GMAIL_CLIENT_ID,
+            clientSecret: process.env.GMAIL_CLIENT_SECRET,
+            refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+          },
+        });
+        await transporter.sendMail({
+          from: `Jenkins Home & Property Solutions <${process.env.GMAIL_USER}>`,
+          to: from_email,
+          subject: `Re: ${subjectStr}`,
+          text: replyText,
+        });
+        console.log('TEST: Reply sent via Gmail SMTP to kptkid52@gmail.com');
+      }
+    } catch (err) {
+      console.error('TEST trigger failed:', err);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Forward a copy to Gmail so it's readable from any device
   const forwardTo = process.env.EMAIL_FORWARD_TO || 'FRLawnCareFL@gmail.com';
   try {
