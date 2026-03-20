@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { Resend } from 'resend';
-import Groq from 'groq-sdk';
 import nodemailer from 'nodemailer';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
-const getGroq = () => new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Extract plain email address from "Display Name <email@x.com>" format
 function parseEmail(raw: string): string {
@@ -110,18 +108,29 @@ CRITICAL: You MUST reference at least one specific detail from their request. Do
 
 End with "- The JHPS Team".`;
 
-  const groq = getGroq();
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0.7,
-    max_tokens: 500,
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': process.env.ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: prompt }],
+    }),
   });
 
-  return response.choices[0].message.content?.trim() || '';
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic API error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const textBlock = data.content?.find((b: { type: string }) => b.type === 'text');
+  return textBlock?.text?.trim() || '';
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -319,7 +328,7 @@ export async function POST(req: NextRequest) {
       } else {
         const isNewLead = subjectStr.includes('new lead on Yelp');
 
-        if (isNewLead && from_email.includes('@messaging.yelp.com') && process.env.GROQ_API_KEY) {
+        if (isNewLead && from_email.includes('@messaging.yelp.com') && process.env.ANTHROPIC_API_KEY) {
           // ─── INSTANT FIRST REPLY (serverless, no Puppeteer) ─────────────
           try {
             const parsed = parseYelpLeadEmail(text, html);
