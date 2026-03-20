@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { Resend } from 'resend';
 import Groq from 'groq-sdk';
+import nodemailer from 'nodemailer';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
@@ -325,11 +326,21 @@ export async function POST(req: NextRequest) {
             const replyText = await generateFirstReply(parsed);
 
             if (replyText) {
-              // Send reply email to Yelp's masked address
-              const resend = new Resend(process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY);
-              await resend.emails.send({
-                from: 'Jenkins Home & Property Solutions <info@jhpsfl.com>',
-                to: [from_email],
+              // Send reply email to Yelp's masked address via Gmail SMTP (OAuth2)
+              // Yelp rejects Resend's mail servers — Gmail from the registered account works
+              const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                  type: 'OAuth2',
+                  user: process.env.GMAIL_USER,
+                  clientId: process.env.GMAIL_CLIENT_ID,
+                  clientSecret: process.env.GMAIL_CLIENT_SECRET,
+                  refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+                },
+              });
+              await transporter.sendMail({
+                from: `Jenkins Home & Property Solutions <${process.env.GMAIL_USER}>`,
+                to: from_email,
                 subject: `Re: ${subjectStr}`,
                 text: replyText,
               });
