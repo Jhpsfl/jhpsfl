@@ -24,7 +24,7 @@ interface Message {
   content: string;
 }
 
-export default function AiChatBubble({ hidden }: { hidden?: boolean }) {
+export default function AiChatBubble() {
   const pathname = '/admin';
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -157,46 +157,33 @@ export default function AiChatBubble({ hidden }: { hidden?: boolean }) {
 
   // Always show on admin page
 
-  // Hide on Yelp Leads tab to avoid blocking the reply area
-  if (hidden && !open) return null;
-
-  // Bubble only
-  if (!open) {
+  // Pull-out tab on right edge (closed or minimized)
+  if (!open || minimized) {
     return (
       <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-[9999] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 hover:scale-105"
+        onClick={() => { setOpen(true); setMinimized(false); }}
+        className="fixed z-[9999] flex items-center justify-center shadow-2xl transition-all active:scale-95 hover:translate-x-[-4px]"
         style={{
-          background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-          boxShadow: '0 4px 24px rgba(201,168,76,0.4)',
+          top: '50%',
+          right: 0,
+          transform: 'translateY(-50%)',
+          width: '32px',
+          height: '80px',
+          borderRadius: '12px 0 0 12px',
+          background: 'linear-gradient(180deg, #22c55e, #16a34a)',
+          boxShadow: '-2px 0 12px rgba(0,0,0,0.3)',
+          writingMode: 'vertical-rl' as const,
+          textOrientation: 'mixed' as const,
         }}
       >
-        <IconSparkles size={24} className="text-black" />
+        <IconSparkles size={16} className="text-black" style={{ transform: 'rotate(90deg)', marginBottom: '4px' }} />
+        <span style={{ fontSize: '10px', fontWeight: 700, color: '#000', letterSpacing: '1px' }}>AI</span>
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
             {unread}
           </span>
         )}
       </button>
-    );
-  }
-
-  // Minimized bar
-  if (minimized) {
-    return (
-      <div
-        className="fixed bottom-20 right-4 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-full shadow-2xl cursor-pointer hover:scale-105 transition-all"
-        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 24px rgba(201,168,76,0.4)' }}
-        onClick={() => setMinimized(false)}
-      >
-        <IconSparkles size={18} className="text-black" />
-        <span className="text-black text-[13px] font-semibold">JHPS Assistant</span>
-        {unread > 0 && (
-          <span className="w-5 h-5 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center">
-            {unread}
-          </span>
-        )}
-      </div>
     );
   }
 
