@@ -122,42 +122,23 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id);
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
-    // Fast path: send via email if we have the Yelp masked email
-    let sentViaEmail = false;
-    if (conv.yelp_masked_email) {
-      try {
-        const resend = new Resend(process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY);
-        await resend.emails.send({
-          from: "Jenkins Home & Property Solutions <info@jhpsfl.com>",
-          to: [conv.yelp_masked_email],
-          subject: `Re: ${conv.customer_name} - JHPS`,
-          text: message.trim(),
-        });
-        sentViaEmail = true;
-      } catch (emailErr) {
-        console.error("Email fast path failed, falling back to trigger:", emailErr);
-      }
+    // Create a trigger for the Oracle Puppeteer agent to send via Yelp UI
+    const { error: triggerErr } = await supabase
+      .from("yelp_triggers")
+      .insert({
+        trigger_type: "manual_reply",
+        lead_id: conv.yelp_thread_id,
+        thread_id: conv.yelp_thread_id,
+        customer_name: conv.customer_name,
+        service: (conv.services || []).join(", "),
+        email_body_text: message.trim(),
+        status: "pending",
+      });
+    if (triggerErr) {
+      console.error("Failed to create trigger:", triggerErr);
     }
 
-    // Fallback: create a trigger for the local Puppeteer agent
-    if (!sentViaEmail) {
-      const { error: triggerErr } = await supabase
-        .from("yelp_triggers")
-        .insert({
-          trigger_type: "manual_reply",
-          lead_id: conv.yelp_thread_id,
-          thread_id: conv.yelp_thread_id,
-          customer_name: conv.customer_name,
-          service: (conv.services || []).join(", "),
-          email_body_text: message.trim(),
-          status: "pending",
-        });
-      if (triggerErr) {
-        console.error("Failed to create trigger:", triggerErr);
-      }
-    }
-
-    return NextResponse.json({ ok: true, messages, sentViaEmail });
+    return NextResponse.json({ ok: true, messages, sentViaEmail: false });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

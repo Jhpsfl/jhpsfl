@@ -476,7 +476,7 @@ export async function POST(req: NextRequest) {
               await sendGmailReply(replyText, from_email, subjectStr, original_message_id);
 
               // Create conversation in Supabase
-              const yelpLeadId = parsed.leadId || leadMatch?.[1] || null;
+              const yelpLeadId = parsed.leadId || leadMatch?.[1] || `lead-${Date.now()}`;
               await supabase.from('yelp_conversations').insert({
                 yelp_thread_id: yelpLeadId,
                 customer_name: parsed.customerName || customerName || 'Unknown',
