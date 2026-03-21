@@ -105,6 +105,7 @@ export default function AdminYelpLeads({
   const [sending, setSending] = useState(false);
   const [proofreading, setProofreading] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [suggestion, setSuggestion] = useState("");
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -248,6 +249,26 @@ export default function AdminYelpLeads({
       }
     } catch { /* silent */ }
     setProofreading(false);
+  };
+
+  const syncThread = async () => {
+    if (!selected || syncing) return;
+    setSyncing(true);
+    try {
+      await fetch("/api/yelp-leads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected.id, action: "sync_thread" }),
+      });
+      // Poll for updates for 30 seconds
+      let polls = 0;
+      const poller = setInterval(async () => {
+        polls++;
+        await fetchConversations();
+        if (polls >= 10) { clearInterval(poller); setSyncing(false); }
+      }, 3000);
+      setTimeout(() => setSyncing(false), 30000);
+    } catch { setSyncing(false); }
   };
 
   const fetchSuggestion = useCallback(async (convId: string) => {
@@ -394,8 +415,19 @@ export default function AdminYelpLeads({
               cursor: "pointer", padding: "4px",
             }}>&larr;</button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: "16px", color: "#fff" }}>
+              <div style={{ fontWeight: 700, fontSize: "16px", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
                 {selected.customer_name || "Unknown"}
+                <span
+                  onClick={syncThread}
+                  title=""
+                  style={{
+                    width: "8px", height: "8px", borderRadius: "50%", display: "inline-block",
+                    background: syncing ? "#4CAF50" : "#2a4a2a", cursor: "pointer",
+                    transition: "all 0.3s",
+                    animation: syncing ? "pulse 1s infinite" : "none",
+                    flexShrink: 0,
+                  }}
+                />
               </div>
               <div style={{ fontSize: "12px", color: "#5a8a5a" }}>
                 {(selected.services || []).join(", ")} {selected.zip_code ? `| ${selected.zip_code}` : ""}
@@ -698,6 +730,7 @@ export default function AdminYelpLeads({
   // ─── RENDER ───
   return (
     <div style={{ height: "calc(100vh - 140px)", display: "flex", flexDirection: "column" }}>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.5); } }`}</style>
       {selected ? renderChat() : renderList()}
     </div>
   );

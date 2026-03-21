@@ -141,5 +141,24 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, messages, sentViaEmail: false });
   }
 
+  if (action === "sync_thread") {
+    // Create a trigger for the Oracle agent to scrape this thread and update messages
+    const { error: triggerErr } = await supabase
+      .from("yelp_triggers")
+      .insert({
+        trigger_type: "customer_reply",
+        lead_id: conv.yelp_thread_id,
+        thread_id: conv.yelp_thread_id,
+        customer_name: conv.customer_name,
+        service: (conv.services || []).join(", "),
+        status: "pending",
+      });
+    if (triggerErr) {
+      console.error("Failed to create sync trigger:", triggerErr);
+      return NextResponse.json({ error: triggerErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, syncing: true });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
