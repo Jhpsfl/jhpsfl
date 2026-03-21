@@ -2064,7 +2064,7 @@ export default function AdminDashboard() {
           Press back again to exit
         </div>
       )}
-      <AiChatBubble />
+      <AiChatBubble hidden={activeTab === "yelp_leads"} />
     </>
   );
 }

@@ -24,7 +24,7 @@ interface Message {
   content: string;
 }
 
-export default function AiChatBubble() {
+export default function AiChatBubble({ hidden }: { hidden?: boolean }) {
   const pathname = '/admin';
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -156,6 +156,9 @@ export default function AiChatBubble() {
   };
 
   // Always show on admin page
+
+  // Hide on Yelp Leads tab to avoid blocking the reply area
+  if (hidden && !open) return null;
 
   // Bubble only
   if (!open) {
