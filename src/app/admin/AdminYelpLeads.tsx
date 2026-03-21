@@ -103,6 +103,7 @@ export default function AdminYelpLeads({
   const [filter, setFilter] = useState("all");
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [proofreading, setProofreading] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
   const [showInfo, setShowInfo] = useState(false);
   const [suggestion, setSuggestion] = useState("");
@@ -215,6 +216,30 @@ export default function AdminYelpLeads({
       }
     } catch { /* silent */ }
     setSending(false);
+  };
+
+  const proofreadReply = async () => {
+    if (!selected || !replyText.trim() || proofreading) return;
+    setProofreading(true);
+    try {
+      const res = await fetch("/api/yelp-leads/proofread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: replyText.trim(),
+          customerName: selected.customer_name,
+          service: (selected.services || []).join(", "),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.proofread) {
+          setReplyText(data.proofread);
+          textareaRef.current?.focus();
+        }
+      }
+    } catch { /* silent */ }
+    setProofreading(false);
   };
 
   const fetchSuggestion = useCallback(async (convId: string) => {
@@ -602,6 +627,21 @@ export default function AdminYelpLeads({
                   ta.style.height = Math.min(ta.scrollHeight, 100) + "px";
                 }}
               />
+              <button
+                onClick={proofreadReply}
+                disabled={!replyText.trim() || proofreading || sending}
+                title="AI Proofread"
+                style={{
+                  width: "44px", height: "44px", borderRadius: "50%", border: "none",
+                  background: replyText.trim() && !proofreading ? "#1a3a5a" : "#1a2a1a",
+                  color: replyText.trim() && !proofreading ? "#6ba3c7" : "#3a5a3a",
+                  fontSize: "16px", cursor: replyText.trim() ? "pointer" : "default",
+                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.2s",
+                }}
+              >
+                {proofreading ? "..." : "Aa"}
+              </button>
               <button
                 onClick={sendReply}
                 disabled={!replyText.trim() || sending}
