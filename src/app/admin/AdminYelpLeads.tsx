@@ -229,13 +229,21 @@ export default function AdminYelpLeads({
           message: replyText.trim(),
           customerName: selected.customer_name,
           service: (selected.services || []).join(", "),
+          conversationHistory: selected.messages || [],
         }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.proofread) {
-          setReplyText(data.proofread);
-          textareaRef.current?.focus();
+          if (data.mode === "suggestion") {
+            // Show as AI suggestion popup — user can tap to use or dismiss
+            setSuggestion(data.proofread);
+            setSuggestDismissed(false);
+          } else {
+            // Grammar fix — just replace inline
+            setReplyText(data.proofread);
+            textareaRef.current?.focus();
+          }
         }
       }
     } catch { /* silent */ }
