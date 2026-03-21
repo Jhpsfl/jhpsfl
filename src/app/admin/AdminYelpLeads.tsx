@@ -505,7 +505,23 @@ export default function AdminYelpLeads({
             const isCustomer = msg.role === "customer";
             const isAI = msg.role === "ai";
             const isAdmin = msg.role === "admin";
+            const isSystem = msg.role === "system";
             const isOutgoing = isAI || isAdmin;
+
+            // System messages render as centered info banners
+            if (isSystem) {
+              return (
+                <div key={i} style={{
+                  alignSelf: "center", maxWidth: "90%", textAlign: "center",
+                  padding: "10px 16px", borderRadius: "12px",
+                  background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.15)",
+                  fontSize: "12px", lineHeight: "1.5", color: "#8aba8a",
+                  whiteSpace: "pre-wrap",
+                }}>
+                  {msg.text}
+                </div>
+              );
+            }
 
             return (
               <div key={i} style={{

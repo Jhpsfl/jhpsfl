@@ -486,7 +486,14 @@ export async function POST(req: NextRequest) {
                 first_message: parsed.projectDetails.find(d => d.q?.toLowerCase().includes('other detail'))?.a || '',
                 thread_href: yelpLeadId ? `https://biz.yelp.com/leads_center/Nf0H0JSPqnptTgu6KLy_Lg/leads/${yelpLeadId}` : '',
                 yelp_masked_email: from_email,
-                messages: [{ role: 'ai', text: replyText, ts: new Date().toISOString() }],
+                messages: [
+                  {
+                    role: 'system',
+                    text: `New lead created ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} EST\nService: ${parsed.service || serviceMatch?.[1] || 'Not specified'}\nLocation: ${parsed.zipCode ? `${parsed.zipCode} area` : 'Not specified'}${parsed.projectDetails.find(d => d.q?.toLowerCase().includes('when'))?.a ? `\nTimeline: ${parsed.projectDetails.find(d => d.q?.toLowerCase().includes('when'))?.a}` : ''}${parsed.projectDetails.find(d => d.q?.toLowerCase().includes('other detail'))?.a ? `\nDetails: ${parsed.projectDetails.find(d => d.q?.toLowerCase().includes('other detail'))?.a}` : ''}`,
+                    ts: new Date().toISOString(),
+                  },
+                  { role: 'ai', text: replyText, ts: new Date().toISOString() },
+                ],
                 project_details: parsed.projectDetails,
                 status: 'ai_active',
                 last_ai_reply_at: new Date().toISOString(),
