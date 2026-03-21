@@ -1,12 +1,144 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { Resend } from 'resend';
-import nodemailer from 'nodemailer';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
+
+// ─── GMAIL API HELPER (for Yelp reply-by-email) ────────────────────────────
+async function getGmailAccessToken(): Promise<string> {
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GMAIL_CLIENT_ID!,
+      client_secret: process.env.GMAIL_CLIENT_SECRET!,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN!,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error('Gmail token refresh failed: ' + JSON.stringify(data));
+  return data.access_token;
+}
+
+async function sendGmailReply(replyText: string, toEmail: string, subject: string, originalMessageId: string | null) {
+  const accessToken = await getGmailAccessToken();
+  const gmailUser = process.env.GMAIL_USER!;
+
+  // Step 1: Find the original Yelp email in Gmail (sent to the Gmail account directly)
+  const searchQuery = encodeURIComponent(`from:messaging.yelp.com subject:"${subject}" newer_than:1d`);
+  const searchResp = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const searchData = await searchResp.json();
+  
+  let threadId: string | null = null;
+  let gmailMessageId: string | null = null;
+  let originalBody: string = '';
+  let fromHeader: string = '';
+  let dateHeader: string = '';
+  let replyToAddress: string = toEmail;
+  
+  if (searchData.messages?.length > 0) {
+    const msgId = searchData.messages[0].id;
+    
+    // Get metadata (threadId, headers)
+    const metaResp = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=From&metadataHeaders=Date`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const metaData = await metaResp.json();
+    threadId = metaData.threadId;
+    gmailMessageId = metaData.payload?.headers?.find((h: {name: string}) => h.name === 'Message-ID')?.value || originalMessageId;
+    fromHeader = metaData.payload?.headers?.find((h: {name: string}) => h.name === 'From')?.value || '';
+    dateHeader = metaData.payload?.headers?.find((h: {name: string}) => h.name === 'Date')?.value || '';
+    
+    // Use the Gmail copy's reply-to address (tied to this Gmail account)
+    const fromMatch = fromHeader.match(/<([^>]+)>/);
+    if (fromMatch) replyToAddress = fromMatch[1];
+    
+    // Get full message body for quoting
+    const fullResp = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const fullData = await fullResp.json();
+    
+    // Extract text/plain body (recurse through MIME parts)
+    function getTextBody(payload: { body?: { data?: string }; parts?: Array<{ mimeType: string; body?: { data?: string }; parts?: unknown[] }> }): string {
+      if (payload.body?.data) return Buffer.from(payload.body.data, 'base64url').toString();
+      if (payload.parts) {
+        for (const part of payload.parts) {
+          if (part.mimeType === 'text/plain' && part.body?.data)
+            return Buffer.from(part.body.data, 'base64url').toString();
+        }
+        for (const part of payload.parts) {
+          const sub = getTextBody(part as typeof payload);
+          if (sub) return sub;
+        }
+      }
+      return '';
+    }
+    originalBody = getTextBody(fullData.payload);
+    
+    console.log(`Gmail: found thread ${threadId}, reply-to: ${replyToAddress}, body: ${originalBody.length} chars`);
+  }
+
+  const inReplyTo = gmailMessageId || originalMessageId || '';
+  
+  // Step 2: Build reply body with quoted original (like Gmail's Reply format)
+  const quotedOriginal = originalBody
+    ? originalBody.split('\n').map((line: string) => '> ' + line).join('\n')
+    : '';
+  const fullBody = quotedOriginal
+    ? `${replyText}\n\nOn ${dateHeader}, ${fromHeader} wrote:\n${quotedOriginal}`
+    : replyText;
+  
+  // Step 3: Build raw RFC 2822 email
+  const rawLines = [
+    `From: ${gmailUser}`,
+    `To: ${replyToAddress}`,
+    `Subject: Re: ${subject}`,
+    ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
+    'Content-Type: text/plain; charset="UTF-8"',
+    'MIME-Version: 1.0',
+    '',
+    fullBody,
+  ].join('\r\n');
+
+  const encodedMessage = Buffer.from(rawLines)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  // Step 4: Send via Gmail API with threadId
+  const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      raw: encodedMessage,
+      ...(threadId ? { threadId } : {}),
+    }),
+  });
+  
+  if (!sendResp.ok) {
+    const errText = await sendResp.text();
+    throw new Error(`Gmail API send failed (${sendResp.status}): ${errText}`);
+  }
+  
+  const sendData = await sendResp.json();
+  console.log(`Gmail API: sent message ${sendData.id} in thread ${sendData.threadId}`);
+  return sendData;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Extract plain email address from "Display Name <email@x.com>" format
 function parseEmail(raw: string): string {
@@ -339,28 +471,9 @@ export async function POST(req: NextRequest) {
             const replyText = await generateFirstReply(parsed);
 
             if (replyText) {
-              // Send reply email to Yelp's masked address via Gmail SMTP (OAuth2)
-              // Yelp rejects Resend's mail servers — Gmail from the registered account works
-              const transporter = nodemailer.createTransport({
-                service: 'gmail',
-                auth: {
-                  type: 'OAuth2',
-                  user: process.env.GMAIL_USER,
-                  clientId: process.env.GMAIL_CLIENT_ID,
-                  clientSecret: process.env.GMAIL_CLIENT_SECRET,
-                  refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-                },
-              });
-              await transporter.sendMail({
-                from: `Jenkins Home & Property Solutions <${process.env.GMAIL_USER}>`,
-                to: from_email,
-                subject: `Re: ${subjectStr}`,
-                text: replyText,
-                ...(original_message_id ? {
-                  inReplyTo: original_message_id,
-                  references: original_message_id,
-                } : {}),
-              });
+              // Send reply via Gmail API (reply-in-thread, same as clicking Reply in Gmail)
+              // Yelp's parser requires a proper threaded reply — SMTP/nodemailer doesn't work
+              await sendGmailReply(replyText, from_email, subjectStr, original_message_id);
 
               // Create conversation in Supabase
               const yelpLeadId = parsed.leadId || leadMatch?.[1] || null;
