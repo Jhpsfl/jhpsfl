@@ -242,6 +242,30 @@ export default function AdminYelpLeads({
     setProofreading(false);
   };
 
+  const proofreadReply = async () => {
+    if (!selected || !replyText.trim() || proofreading) return;
+    setProofreading(true);
+    try {
+      const res = await fetch("/api/yelp-leads/proofread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: replyText.trim(),
+          customerName: selected.customer_name,
+          service: (selected.services || []).join(", "),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.proofread) {
+          setReplyText(data.proofread);
+          textareaRef.current?.focus();
+        }
+      }
+    } catch { /* silent */ }
+    setProofreading(false);
+  };
+
   const fetchSuggestion = useCallback(async (convId: string) => {
     setSuggestLoading(true);
     setSuggestion("");
