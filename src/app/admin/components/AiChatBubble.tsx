@@ -176,7 +176,7 @@ export default function AiChatBubble() {
           textOrientation: 'mixed' as const,
         }}
       >
-        <IconSparkles size={16} className="text-black" style={{ transform: 'rotate(90deg)', marginBottom: '4px' }} />
+        <span style={{ transform: 'rotate(90deg)', marginBottom: '4px', display: 'inline-block' }}><IconSparkles size={16} className="text-black" /></span>
         <span style={{ fontSize: '10px', fontWeight: 700, color: '#000', letterSpacing: '1px' }}>AI</span>
         {unread > 0 && (
           <span className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
