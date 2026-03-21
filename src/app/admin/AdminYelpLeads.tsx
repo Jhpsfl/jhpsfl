@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── Types ───
 interface YelpMessage {
-  role: "customer" | "ai" | "admin";
+  role: "customer" | "ai" | "admin" | "system";
   text: string;
   ts: string;
 }
