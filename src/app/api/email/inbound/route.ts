@@ -184,6 +184,7 @@ export async function POST(req: NextRequest) {
   let body_html: string | null = null;
   let body_text: string | null = null;
   let in_reply_to: string | null = null;
+  let original_message_id: string | null = null;
 
   try {
     const resp = await fetch(`https://api.resend.com/emails/receiving/${email_id}`, {
@@ -198,6 +199,8 @@ export async function POST(req: NextRequest) {
       in_reply_to = headers['in-reply-to'] || headers['In-Reply-To'] || null;
       // Strip angle brackets from message-id references
       if (in_reply_to) in_reply_to = in_reply_to.replace(/[<>]/g, '').trim();
+      // Capture original Message-ID for reply threading (needed for Yelp reply-by-email)
+      original_message_id = headers['message-id'] || headers['Message-ID'] || headers['Message-Id'] || null;
     }
   } catch (err) {
     console.error('Failed to fetch full email from Resend:', err);
@@ -353,6 +356,10 @@ export async function POST(req: NextRequest) {
                 to: from_email,
                 subject: `Re: ${subjectStr}`,
                 text: replyText,
+                ...(original_message_id ? {
+                  inReplyTo: original_message_id,
+                  references: original_message_id,
+                } : {}),
               });
 
               // Create conversation in Supabase
