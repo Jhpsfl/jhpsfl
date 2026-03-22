@@ -173,6 +173,12 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
                   <span>Subtotal</span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(invoice.subtotal)}</span>
                 </div>
+                {(invoice as any).surcharge && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#d4a03c" }}>
+                    <span>4% Surcharge</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency((invoice as any).surcharge_amount || 0)}</span>
+                  </div>
+                )}
                 {invoice.tax_rate > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#8aba8a" }}>
                     <span>Tax ({invoice.tax_rate}%)</span>

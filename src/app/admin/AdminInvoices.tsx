@@ -49,6 +49,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }] as InvoiceLineItem[],
     payment_terms: null as PaymentTerms | null,
     brand: 'jhps' as BrandKey,
+    surcharge: false,
   });
 
   // Send modal
@@ -405,8 +406,9 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
   };
 
   const subtotal = form.line_items.reduce((sum, item) => sum + item.amount, 0);
-  const taxAmount = subtotal * (form.tax_rate / 100);
-  const total = subtotal + taxAmount;
+  const surchargeAmount = form.surcharge ? Math.round(subtotal * 0.04 * 100) / 100 : 0;
+  const taxAmount = (subtotal + surchargeAmount) * (form.tax_rate / 100);
+  const total = subtotal + surchargeAmount + taxAmount;
 
   // ─── Save invoice ───
   const handleSaveInvoice = async (asDraft = true) => {
@@ -431,6 +433,8 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       tax_rate: form.tax_rate,
       tax_amount: taxAmount,
       subtotal,
+      surcharge: form.surcharge,
+      surcharge_amount: surchargeAmount,
       total,
       amount_paid: 0,
       notes: finalNotes || null,
@@ -651,6 +655,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       payment_terms: null,
       brand: 'jhps' as BrandKey,
+      surcharge: false,
     });
   };
 
@@ -670,6 +675,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
         : [{ id: createLineItemId(), description: "", quantity: 1, unit_price: 0, amount: 0 }],
       payment_terms: invoice.payment_terms || null,
       brand: (invoice.brand || 'jhps') as BrandKey,
+      surcharge: !!(invoice as any).surcharge,
     });
     setView("edit");
   };
@@ -753,6 +759,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
           setNewCustomerForm={setNewCustomerForm}
           savingNewCustomer={savingNewCustomer}
           subtotal={subtotal}
+          surchargeAmount={surchargeAmount}
           taxAmount={taxAmount}
           total={total}
           onBack={() => { setView("list"); resetForm(); }}

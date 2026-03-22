@@ -387,6 +387,8 @@ export async function POST(request: NextRequest) {
                 payment_terms: payload.payment_terms || null,
                 quote_id: payload.quote_id || null,
                 brand: payload.brand || 'jhps',
+                surcharge: payload.surcharge || false,
+                surcharge_amount: payload.surcharge_amount || 0,
               })
               .select(`*, customers ( name, email, phone )`)
               .single();
@@ -399,7 +401,8 @@ export async function POST(request: NextRequest) {
               "customer_id", "invoice_number", "status", "subtotal",
               "tax_rate", "tax_amount", "total", "amount_paid",
               "due_date", "paid_date", "notes", "line_items",
-              "payment_link", "sent_at", "payment_terms", "quote_id", "brand"
+              "payment_link", "sent_at", "payment_terms", "quote_id", "brand",
+              "surcharge", "surcharge_amount"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];

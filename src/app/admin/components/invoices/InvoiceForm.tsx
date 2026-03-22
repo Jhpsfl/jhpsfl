@@ -12,7 +12,7 @@ export default function InvoiceForm({
   view, isMobile, form, setForm, customers, selectedInvoice,
   customerJobs, loadingJobs, showNewCustomer, setShowNewCustomer,
   newCustomerForm, setNewCustomerForm, savingNewCustomer,
-  subtotal, taxAmount, total,
+  subtotal, surchargeAmount, taxAmount, total,
   onBack, onSave, onCreateNewCustomer, onJobAutoFill,
   updateLineItem, addLineItem, removeLineItem, onShowPresetPicker,
   onNavigate, onPreviewPdf,
@@ -29,6 +29,7 @@ export default function InvoiceForm({
     line_items: InvoiceLineItem[];
     payment_terms: PaymentTerms | null;
     brand: BrandKey;
+    surcharge: boolean;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -41,6 +42,7 @@ export default function InvoiceForm({
   setNewCustomerForm: React.Dispatch<React.SetStateAction<{ name: string; email: string; phone: string; customer_type: "residential" | "commercial"; company_name: string }>>;
   savingNewCustomer: boolean;
   subtotal: number;
+  surchargeAmount: number;
   taxAmount: number;
   total: number;
   onBack: () => void;
@@ -389,6 +391,22 @@ export default function InvoiceForm({
                 style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
               />
             </div>
+            <div>
+              <label style={labelStyle}>4% Surcharge</label>
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, surcharge: !prev.surcharge }))}
+                style={{
+                  width: "100%", padding: "12px 14px", background: form.surcharge ? "rgba(34,197,94,0.15)" : "#0d1a0d",
+                  border: `1px solid ${form.surcharge ? "rgba(34,197,94,0.4)" : "#1a3a1a"}`, borderRadius: 10,
+                  color: form.surcharge ? "#22c55e" : "#5a8a5a", fontSize: 14, fontWeight: 600,
+                  cursor: "pointer", transition: "all 0.2s",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {form.surcharge ? "ON — 4% added" : "OFF"}
+              </button>
+            </div>
           </div>
 
           {/* ─── Line Items ─── */}
@@ -661,8 +679,14 @@ export default function InvoiceForm({
               )}
             </div>
 
+            {form.surcharge && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#d4a03c", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
+                <span>4% Surcharge</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(surchargeAmount)}</span>
+              </div>
+            )}
             {form.tax_rate > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", marginTop: form.surcharge ? 4 : 8, paddingTop: form.surcharge ? 0 : 8, borderTop: form.surcharge ? "none" : "1px dashed #1a3a1a" }}>
                 <span>Tax ({form.tax_rate}%)</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(taxAmount)}</span>
               </div>
