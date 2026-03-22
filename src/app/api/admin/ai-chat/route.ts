@@ -1394,31 +1394,12 @@ async function executeTool(
     case "reply_yelp_conversation": {
       if (!input.conversation_id || !input.message) return { result: "Error: conversation_id and message required." };
 
-      const { data: conv } = await supabase.from("yelp_conversations").select("messages, yelp_thread_id, customer_name, services, taken_over_at").eq("id", input.conversation_id).single();
+      const { data: conv } = await supabase.from("yelp_conversations").select("customer_name").eq("id", input.conversation_id).single();
       if (!conv) return { result: "Yelp conversation not found." };
 
-      // Actually send: append message + create trigger (same as manual reply box)
-      const msgs = conv.messages || [];
-      msgs.push({ role: "admin", text: input.message.trim(), ts: new Date().toISOString() });
-
-      await supabase.from("yelp_conversations").update({
-        messages: msgs,
-        status: input.status || "taken_over",
-        taken_over_at: conv.taken_over_at || new Date().toISOString(),
-      }).eq("id", input.conversation_id);
-
-      await supabase.from("yelp_triggers").insert({
-        trigger_type: "manual_reply",
-        lead_id: conv.yelp_thread_id,
-        thread_id: conv.yelp_thread_id,
-        customer_name: conv.customer_name,
-        service: (conv.services || []).join(", "),
-        email_body_text: input.message.trim(),
-        status: "pending",
-      });
-
+      // Only populate the reply box — admin reviews and hits Send
       return {
-        result: `Reply sent to ${conv.customer_name} on Yelp. Message queued for delivery via Puppeteer (~60-90 seconds).`,
+        result: `Message drafted for ${conv.customer_name}. Opening their conversation — review and hit Send when ready.`,
         action: {
           tab: "yelp_leads",
           yelp_reply: { conversation_id: input.conversation_id, message: input.message.trim(), customer_name: conv.customer_name },
