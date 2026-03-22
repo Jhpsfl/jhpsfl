@@ -24,6 +24,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   const status = searchParams.get("status");
+  const triggerId = searchParams.get("triggerId");
+
+  // Check trigger status
+  if (triggerId) {
+    const { data, error } = await supabase
+      .from("yelp_triggers")
+      .select("id, status, retry_count")
+      .eq("id", triggerId)
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+  }
 
   // Single conversation
   if (id) {
@@ -123,7 +135,7 @@ export async function PATCH(req: NextRequest) {
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
     // Create a trigger for the Oracle Puppeteer agent to send via Yelp UI
-    const { error: triggerErr } = await supabase
+    const { data: triggerData, error: triggerErr } = await supabase
       .from("yelp_triggers")
       .insert({
         trigger_type: "manual_reply",
@@ -133,12 +145,14 @@ export async function PATCH(req: NextRequest) {
         service: (conv.services || []).join(", "),
         email_body_text: message.trim(),
         status: "pending",
-      });
+      })
+      .select("id")
+      .single();
     if (triggerErr) {
       console.error("Failed to create trigger:", triggerErr);
     }
 
-    return NextResponse.json({ ok: true, messages, sentViaEmail: false });
+    return NextResponse.json({ ok: true, messages, triggerId: triggerData?.id || null });
   }
 
   if (action === "sync_thread") {

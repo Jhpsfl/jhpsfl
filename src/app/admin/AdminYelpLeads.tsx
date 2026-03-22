@@ -222,8 +222,31 @@ export default function AdminYelpLeads({
           setSelected(prev => prev ? { ...prev, messages: data.messages, status: "taken_over" } : null);
         }
         setReplyText("");
-        setToast({ message: "Message queued — sending to Yelp", type: "success" });
+        setToast({ message: "Sending to Yelp...", type: "success" });
         fetchConversations();
+
+        // Poll trigger status to confirm delivery
+        if (data.triggerId) {
+          let polls = 0;
+          const poller = setInterval(async () => {
+            polls++;
+            try {
+              const statusRes = await fetch(`/api/yelp-leads?triggerId=${data.triggerId}`);
+              if (statusRes.ok) {
+                const trigger = await statusRes.json();
+                if (trigger.status === "completed") {
+                  clearInterval(poller);
+                  setToast({ message: "Message delivered to Yelp", type: "success" });
+                  fetchConversations();
+                } else if (trigger.status === "failed") {
+                  clearInterval(poller);
+                  setToast({ message: "Failed to deliver on Yelp — message saved, try resending", type: "error" });
+                }
+              }
+            } catch { /* silent */ }
+            if (polls >= 40) { clearInterval(poller); } // stop after ~2 min
+          }, 3000);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         setToast({ message: `Failed to send: ${err.error || res.statusText}`, type: "error" });
