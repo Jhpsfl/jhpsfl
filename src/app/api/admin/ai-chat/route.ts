@@ -602,7 +602,7 @@ async function executeTool(
   name: string,
   input: any,
   supabase: any
-): Promise<{ result: string; action?: { type: string; tab?: string; created_id?: string; description?: string } }> {
+): Promise<{ result: string; action?: { type?: string; tab?: string; created_id?: string; description?: string; yelp_reply?: { conversation_id: string; message: string; customer_name: string } } }> {
   switch (name) {
     // ── READ TOOLS ──
     case "search_customers": {
