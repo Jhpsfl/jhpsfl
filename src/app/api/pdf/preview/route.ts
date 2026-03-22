@@ -3,6 +3,10 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 import { generateInvoicePDF, generateEstimatePDF } from '@/lib/receipt-generator';
 import type { InvoiceData, EstimateData } from '@/lib/receipt-generator';
 import { auth } from '@clerk/nextjs/server';
+import React from 'react';
+import { Document, Page, Text, View, renderToBuffer } from '@react-pdf/renderer';
+
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -30,6 +34,22 @@ export async function POST(req: NextRequest) {
 
   try {
     if (type === 'invoice') {
+      // Quick test: try minimal PDF first to check if @react-pdf works at all
+      if (data._test_minimal) {
+        const minDoc = React.createElement(Document, null,
+          React.createElement(Page, { size: 'LETTER' },
+            React.createElement(View, null,
+              React.createElement(Text, null, 'Test Invoice PDF')
+            )
+          )
+        );
+        const testBuf = await renderToBuffer(minDoc);
+        return new NextResponse(new Uint8Array(testBuf), {
+          status: 200,
+          headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="test.pdf"' },
+        });
+      }
+
       const invoiceData: InvoiceData = {
         invoiceNumber: data.invoice_number || 'PREVIEW',
         invoiceDate: data.created_at ? new Date(data.created_at) : new Date(),
