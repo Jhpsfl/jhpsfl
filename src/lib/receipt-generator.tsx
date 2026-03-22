@@ -1132,8 +1132,35 @@ export async function generateReceiptPDF(data: ReceiptData, logoUrl?: string): P
 }
 
 export async function generateInvoicePDF(data: InvoiceData, logoUrl?: string): Promise<Buffer> {
-  const buf = await renderToBuffer(<InvoiceDoc data={data} logoUrl={logoUrl} />);
-  return Buffer.from(buf);
+  try {
+    const buf = await renderToBuffer(<InvoiceDoc data={data} logoUrl={logoUrl} />);
+    return Buffer.from(buf);
+  } catch (err) {
+    // Fallback: render a simple diagnostic PDF showing what data we received
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const DiagDoc = () => (
+      <Document>
+        <Page size="LETTER" style={{ padding: 50 }}>
+          <View>
+            <Text style={{ fontSize: 16, marginBottom: 10, fontFamily: 'Helvetica-Bold' }}>Invoice PDF Generation Error</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5, color: 'red' }}>{errMsg}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 10 }}>Invoice: {data.invoiceNumber}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Customer: {data.customerName}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Email: {data.customerEmail || 'none'}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Items: {data.lineItems?.length || 0}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Total: ${(data.totalAmount / 100).toFixed(2)}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Brand: {data.brandKey || 'none'}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Has Payment Terms: {String(!!data.paymentTerms)}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 10 }}>Invoice Date type: {typeof data.invoiceDate} = {String(data.invoiceDate)}</Text>
+            <Text style={{ fontSize: 10, marginBottom: 5 }}>Due Date type: {typeof data.dueDate} = {String(data.dueDate)}</Text>
+            <Text style={{ fontSize: 10, color: '#666' }}>This diagnostic PDF was generated because the full invoice PDF failed to render.</Text>
+          </View>
+        </Page>
+      </Document>
+    );
+    const buf = await renderToBuffer(<DiagDoc />);
+    return Buffer.from(buf);
+  }
 }
 
 export function getReceiptFilename(data: ReceiptData): string {
