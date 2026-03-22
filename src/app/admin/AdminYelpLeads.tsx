@@ -106,6 +106,15 @@ export default function AdminYelpLeads({
   const [proofreading, setProofreading] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), toast.type === "error" ? 6000 : 3500);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
   const [showInfo, setShowInfo] = useState(false);
   const [suggestion, setSuggestion] = useState("");
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -213,9 +222,15 @@ export default function AdminYelpLeads({
           setSelected(prev => prev ? { ...prev, messages: data.messages, status: "taken_over" } : null);
         }
         setReplyText("");
+        setToast({ message: "Message queued — sending to Yelp", type: "success" });
         fetchConversations();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: `Failed to send: ${err.error || res.statusText}`, type: "error" });
       }
-    } catch { /* silent */ }
+    } catch (e) {
+      setToast({ message: "Network error — message not sent", type: "error" });
+    }
     setSending(false);
   };
 
@@ -730,7 +745,23 @@ export default function AdminYelpLeads({
   // ─── RENDER ───
   return (
     <div style={{ height: "calc(100vh - 140px)", display: "flex", flexDirection: "column" }}>
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.5); } }`}</style>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.5); } }
+@keyframes toastSlide { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
+
+      {/* Toast notification */}
+      {toast && (
+        <div onClick={() => setToast(null)} style={{
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 10000,
+          padding: "10px 20px", borderRadius: "12px", cursor: "pointer",
+          background: toast.type === "success" ? "linear-gradient(135deg, #4CAF50, #2E7D32)" : "linear-gradient(135deg, #c62828, #8b0000)",
+          color: "#fff", fontSize: "13px", fontWeight: 600,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          animation: "toastSlide 0.3s ease",
+          maxWidth: "min(400px, 90vw)", textAlign: "center",
+        }}>
+          {toast.type === "success" ? "✓ " : "⚠ "}{toast.message}
+        </div>
+      )}
       {selected ? renderChat() : renderList()}
     </div>
   );
