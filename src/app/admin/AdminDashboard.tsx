@@ -195,6 +195,7 @@ export default function AdminDashboard() {
   const [paymentProcessor, setPaymentProcessor] = useState<string>("stripe");
   const [processorSwitching, setProcessorSwitching] = useState(false);
   const [processorMessage, setProcessorMessage] = useState<string | null>(null);
+  const [pendingYelpReply, setPendingYelpReply] = useState<{ conversation_id: string; message: string; customer_name: string } | null>(null);
 
   // Data
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -302,11 +303,20 @@ export default function AdminDashboard() {
     const handleAiRefresh = () => {
       loadTab(activeTab);
     };
+    const handleAiYelpReply = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.conversation_id && detail?.message) {
+        setPendingYelpReply(detail);
+        switchTab("yelp_leads" as Tab);
+      }
+    };
     window.addEventListener('ai-navigate', handleAiNav);
     window.addEventListener('ai-refresh', handleAiRefresh);
+    window.addEventListener('ai-yelp-reply', handleAiYelpReply);
     return () => {
       window.removeEventListener('ai-navigate', handleAiNav);
       window.removeEventListener('ai-refresh', handleAiRefresh);
+      window.removeEventListener('ai-yelp-reply', handleAiYelpReply);
     };
   }, [activeTab]);
 
@@ -1937,7 +1947,7 @@ export default function AdminDashboard() {
 
                     {/* ─── YELP LEADS TAB ─── */}
                     {activeTab === "yelp_leads" && userId && (
-                      <AdminYelpLeads userId={userId} backRef={yelpLeadsBackRef} onNavigate={pushSentinel} />
+                      <AdminYelpLeads userId={userId} backRef={yelpLeadsBackRef} onNavigate={pushSentinel} pendingReply={pendingYelpReply} onPendingReplyConsumed={() => setPendingYelpReply(null)} />
                     )}
 
                     {/* ─── MESSAGES TAB ─── */}

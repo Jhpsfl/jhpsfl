@@ -92,10 +92,14 @@ export default function AdminYelpLeads({
   userId,
   backRef,
   onNavigate,
+  pendingReply,
+  onPendingReplyConsumed,
 }: {
   userId: string;
   backRef?: React.MutableRefObject<(() => boolean) | null>;
   onNavigate?: () => void;
+  pendingReply?: { conversation_id: string; message: string; customer_name: string } | null;
+  onPendingReplyConsumed?: () => void;
 }) {
   const [conversations, setConversations] = useState<YelpConversation[]>([]);
   const [selected, setSelected] = useState<YelpConversation | null>(null);
@@ -174,30 +178,25 @@ export default function AdminYelpLeads({
     return () => clearInterval(pollRef.current);
   }, [fetchConversations]);
 
-  // Listen for AI chatbot yelp reply events
+  // Handle pending reply from AI chatbot (passed as prop from AdminDashboard)
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.conversation_id || !detail?.message) return;
-      // Find the conversation and open it with the message pre-filled
-      const conv = conversations.find(c => c.id === detail.conversation_id);
-      if (conv) {
-        setSelected(conv);
-        setReplyText(detail.message);
-        setTimeout(() => textareaRef.current?.focus(), 300);
-      } else {
-        // Conversation not loaded yet — refetch then try again
-        fetchConversations(true).then(() => {
-          setTimeout(() => {
-            setReplyText(detail.message);
-            textareaRef.current?.focus();
-          }, 500);
-        });
-      }
-    };
-    window.addEventListener("ai-yelp-reply", handler);
-    return () => window.removeEventListener("ai-yelp-reply", handler);
-  }, [conversations, fetchConversations]);
+    if (!pendingReply?.conversation_id || !pendingReply?.message) return;
+    // Refetch to make sure we have the latest conversations
+    fetchConversations(true);
+  }, [pendingReply]);
+
+  // When conversations update and there's a pending reply, open the conversation
+  useEffect(() => {
+    if (!pendingReply?.conversation_id || !pendingReply?.message) return;
+    if (conversations.length === 0) return;
+    const conv = conversations.find(c => c.id === pendingReply.conversation_id);
+    if (conv) {
+      setSelected(conv);
+      setReplyText(pendingReply.message);
+      setTimeout(() => textareaRef.current?.focus(), 300);
+      onPendingReplyConsumed?.();
+    }
+  }, [conversations, pendingReply]);
 
   // Scroll to bottom only when a new message arrives or conversation first opens
   useEffect(() => {
