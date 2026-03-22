@@ -165,6 +165,7 @@ export default function AiChatBubble({ activeTab = 'overview' }: { activeTab?: s
       for (const act of actionList) {
         if (act.tab) window.dispatchEvent(new CustomEvent('ai-navigate', { detail: act.tab }));
         if (act.created_id) window.dispatchEvent(new CustomEvent('ai-refresh'));
+        if (act.yelp_reply) window.dispatchEvent(new CustomEvent('ai-yelp-reply', { detail: act.yelp_reply }));
       }
 
       if (convId) {

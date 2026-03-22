@@ -1394,31 +1394,18 @@ async function executeTool(
     case "reply_yelp_conversation": {
       if (!input.conversation_id || !input.message) return { result: "Error: conversation_id and message required." };
 
-      // Send reply via Yelp PATCH endpoint (triggers Puppeteer agent)
       const { data: conv } = await supabase.from("yelp_conversations").select("messages, yelp_thread_id, customer_name, services, taken_over_at").eq("id", input.conversation_id).single();
       if (!conv) return { result: "Yelp conversation not found." };
 
-      const msgs = conv.messages || [];
-      msgs.push({ role: "admin", text: input.message.trim(), ts: new Date().toISOString() });
-
-      await supabase.from("yelp_conversations").update({
-        messages: msgs,
-        status: input.status || "taken_over",
-        taken_over_at: conv.taken_over_at || new Date().toISOString(),
-      }).eq("id", input.conversation_id);
-
-      // Create trigger for Puppeteer to send via Yelp UI
-      await supabase.from("yelp_triggers").insert({
-        trigger_type: "manual_reply",
-        lead_id: conv.yelp_thread_id,
-        thread_id: conv.yelp_thread_id,
-        customer_name: conv.customer_name,
-        service: (conv.services || []).join(", "),
-        email_body_text: input.message.trim(),
-        status: "pending",
-      });
-
-      return { result: `Yelp reply queued for sending. Status: ${input.status || "taken_over"}` };
+      // Return action to populate the reply box in the Yelp Leads UI
+      // The actual send happens when the admin clicks Send in the app
+      return {
+        result: `Message ready for ${conv.customer_name}. Opening their conversation now — just hit Send to deliver it.`,
+        action: {
+          tab: "yelp_leads",
+          yelp_reply: { conversation_id: input.conversation_id, message: input.message.trim(), customer_name: conv.customer_name },
+        },
+      };
     }
 
     case "compose_email": {

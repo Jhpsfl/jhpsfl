@@ -174,6 +174,31 @@ export default function AdminYelpLeads({
     return () => clearInterval(pollRef.current);
   }, [fetchConversations]);
 
+  // Listen for AI chatbot yelp reply events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.conversation_id || !detail?.message) return;
+      // Find the conversation and open it with the message pre-filled
+      const conv = conversations.find(c => c.id === detail.conversation_id);
+      if (conv) {
+        setSelected(conv);
+        setReplyText(detail.message);
+        setTimeout(() => textareaRef.current?.focus(), 300);
+      } else {
+        // Conversation not loaded yet — refetch then try again
+        fetchConversations(true).then(() => {
+          setTimeout(() => {
+            setReplyText(detail.message);
+            textareaRef.current?.focus();
+          }, 500);
+        });
+      }
+    };
+    window.addEventListener("ai-yelp-reply", handler);
+    return () => window.removeEventListener("ai-yelp-reply", handler);
+  }, [conversations, fetchConversations]);
+
   // Scroll to bottom only when a new message arrives or conversation first opens
   useEffect(() => {
     const count = selected?.messages?.length || 0;
