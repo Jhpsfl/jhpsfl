@@ -112,9 +112,10 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error('PDF_PREVIEW_ERROR:', err);
+    console.error('PDF_PREVIEW_DATA:', JSON.stringify(body?.data || {}, null, 2).substring(0, 1000));
     const message = err instanceof Error ? err.message : 'Unknown error';
-    const stack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : '';
-    return NextResponse.json({ error: 'PDF generation failed', detail: message, stack }, { status: 500 });
+    const stack = err instanceof Error ? err.stack?.split('\n').slice(0, 8).join('\n') : '';
+    return NextResponse.json({ error: 'PDF generation failed', detail: message, stack, dataReceived: body?.data ? Object.keys(body.data) : [] }, { status: 500 });
   }
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

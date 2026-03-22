@@ -661,9 +661,12 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
   const headerBorderColor = docColors.primary;
   const grandTotalBg = docColors.primary;
 
-  return (
-    <Document title={`${docBrand.shortName} ${docType} - ${data.invoiceNumber}`} author={docBrand.name} subject={docType}>
-      <Page size="LETTER" style={s.page}>
+  // Build pages array — @react-pdf crashes if Document receives false/null children
+  const pages: React.ReactElement[] = [];
+
+  // Page 1: Main invoice/contract page
+  pages.push(
+    <Page key="p1" size="LETTER" style={s.page}>
         <ContinuationHeader docType={docTypeShort} docNumber={data.invoiceNumber} primaryColor={docColors.primary} brandShort={docBrand.shortName} />
         <View style={[s.header, { borderBottomColor: headerBorderColor }]}>
           {/* Brand-aware company header */}
@@ -688,40 +691,39 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         <View style={s.metaRow}>
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Bill To</Text>
-            {data.companyName && (
+            {data.companyName ? (
               <>
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
               </>
-            )}
+            ) : <View />}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             <Text style={s.metaVal}>{data.customerEmail}</Text>
-            {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
-            {data.customerAddress && <Text style={s.metaVal}>{data.customerAddress}</Text>}
-            {data.jobAddress && (
+            {data.customerPhone ? <Text style={s.metaVal}>{data.customerPhone}</Text> : <View />}
+            {data.customerAddress ? <Text style={s.metaVal}>{data.customerAddress}</Text> : <View />}
+            {data.jobAddress ? (
               <>
                 <Text style={[s.metaLabel, { marginTop: 8 }]}>Service Location</Text>
                 <Text style={s.metaVal}>{data.jobAddress}</Text>
               </>
-            )}
+            ) : <View />}
           </View>
           <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
             <Text style={s.metaLabel}>{hasPaymentTerms ? 'Contract Details' : 'Invoice Details'}</Text>
             <Text style={s.metaVal}>{hasPaymentTerms ? 'Contract' : 'Invoice'} #: {data.invoiceNumber}</Text>
             <Text style={s.metaVal}>Issued: {formatDateShort(data.invoiceDate)}</Text>
-            {data.dueDate && <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text>}
-            {data.orderId && <Text style={s.metaVal}>Order: {data.orderId}</Text>}
+            {data.dueDate ? <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text> : <View />}
+            {data.orderId ? <Text style={s.metaVal}>Order: {data.orderId}</Text> : <View />}
           </View>
         </View>
 
-        {/* Scope of Work */}
-        {hasPaymentTerms && (
+        {hasPaymentTerms ? (
           <View style={{ marginBottom: 4 }}>
             <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.light, textTransform: 'uppercase', letterSpacing: 1.2 }}>
               Scope of Work
             </Text>
           </View>
-        )}
+        ) : <View />}
         <ItemsTable items={data.lineItems} primaryColor={docColors.primary} />
         <TotalsBlock
           subtotal={data.subtotal}
@@ -734,36 +736,35 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           primaryColor={docColors.primary}
         />
 
-        {/* Regular invoice: everything stays on one page */}
-        {!hasPaymentTerms && (
+        {!hasPaymentTerms ? (
           <>
             <View style={s.infoBox} wrap={false}>
               <Text style={s.infoTitle}>Invoice Information</Text>
               <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
               <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
               <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
-              {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
+              {data.dueDate ? <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View> : <View />}
             </View>
-            {data.paymentLink && (
+            {data.paymentLink ? (
               <View style={s.payLinkBox} wrap={false}>
                 <Text style={[s.payLinkTitle, { color: docColors.primary }]}>Pay Online</Text>
                 <Text style={[s.payLinkUrl, { color: docColors.primaryLight }]}>{data.paymentLink}</Text>
                 <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
               </View>
-            )}
-            {data.notes && <NotesSection text={data.notes} />}
+            ) : <View />}
+            {data.notes ? <NotesSection text={data.notes} /> : <View />}
           </>
-        )}
+        ) : <View />}
 
         <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
       </Page>
+  );
 
-      {/* ══════ CONTRACT PAGE 2: Payment Schedule + Info + Lien Notice ══════ */}
-      {hasPaymentTerms && data.paymentTerms && (
-        <Page size="LETTER" style={s.page}>
+  // Page 2: Payment Schedule (contracts only)
+  if (hasPaymentTerms && data.paymentTerms) {
+    pages.push(
+      <Page key="p2" size="LETTER" style={s.page}>
           <ContinuationHeader docType="CONTRACT" docNumber={data.invoiceNumber} />
-
-          {/* Payment Schedule table */}
           <View style={{ marginTop: 4 }}>
             <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
@@ -798,21 +799,15 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               </View>
             </View>
           </View>
-
-          {/* Contract info */}
           <View style={[s.infoBox, { marginTop: 16 }]}>
             <Text style={s.infoTitle}>Contract Information</Text>
             <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
             <View style={s.infoRow}><Text style={s.infoLabel}>Contract Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
             <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
-            {data.dueDate && <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>}
+            {data.dueDate ? <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View> : <View />}
             <View style={s.infoRow}><Text style={s.infoLabel}>Terms</Text><Text style={[s.infoVal, { fontFamily: 'Helvetica-Bold' }]}>See Terms & Conditions on following pages</Text></View>
           </View>
-
-          {/* Notes */}
-          {data.notes && <NotesSection text={data.notes} />}
-
-          {/* Florida lien notice */}
+          {data.notes ? <NotesSection text={data.notes} /> : <View />}
           <View style={{ marginTop: 12, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 4, borderWidth: 1, borderColor: '#FFB74D' }}>
             <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#E65100', marginBottom: 3, letterSpacing: 0.8, textTransform: 'uppercase' }}>
               Florida Construction Lien Law Notice
@@ -821,13 +816,16 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               {"Under Florida\u2019s Construction Lien Law (Ch. 713, Florida Statutes), those who work on your property or provide materials and are not paid have a right to enforce their claim for payment against your property. This claim is known as a construction lien. If you fail to pay as agreed under this Contract, a lien may be placed on your property. It is recommended that you consult an attorney if you have questions."}
             </Text>
           </View>
-
           <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
         </Page>
-      )}
+    );
+    // Page 3+: Legal Terms
+    pages.push(<LegalTermsPages key="p3" docNumber={data.invoiceNumber} />);
+  }
 
-      {/* Page 2+: Legal Terms & Conditions — only for contracts */}
-      {hasPaymentTerms && <LegalTermsPages docNumber={data.invoiceNumber} />}
+  return (
+    <Document title={`${docBrand.shortName} ${docType} - ${data.invoiceNumber}`} author={docBrand.name} subject={docType}>
+      {pages}
     </Document>
   );
 };
