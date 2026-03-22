@@ -7,9 +7,34 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // ═══════════════════════════════════════════
-// WEB SEARCH (DuckDuckGo)
+// SEARCH: Tavily (primary) + DuckDuckGo (fallback)
 // ═══════════════════════════════════════════
-async function webSearch(query: string): Promise<string> {
+async function tavilySearch(query: string): Promise<string | null> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey, query, max_results: 6, include_answer: true, search_depth: "basic" }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const parts: string[] = [];
+    if (data.answer) parts.push(`**AI Summary:** ${data.answer}\n`);
+    const results = data.results || [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const snippet = r.content ? r.content.slice(0, 300) + (r.content.length > 300 ? "..." : "") : "";
+      parts.push(`${i + 1}. **${r.title}**\n   ${snippet}\n   Source: ${r.url}`);
+    }
+    return parts.length > 0 ? parts.join("\n\n") : null;
+  } catch {
+    return null;
+  }
+}
+
+async function duckDuckGoSearch(query: string): Promise<string> {
   try {
     const encoded = encodeURIComponent(query);
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encoded}`, {
@@ -39,6 +64,12 @@ async function webSearch(query: string): Promise<string> {
   } catch {
     return "Search failed.";
   }
+}
+
+async function smartSearch(query: string): Promise<string> {
+  const tavily = await tavilySearch(query);
+  if (tavily) return tavily;
+  return duckDuckGoSearch(query);
 }
 
 // ═══════════════════════════════════════════
@@ -109,8 +140,13 @@ const READ_TOOLS = [
   },
   {
     name: "web_search",
-    description: "Search the web for current info — pricing, FL codes, regulations, permits, competitor rates. Use when asked about anything that needs up-to-date external data.",
+    description: "Search the web (Tavily AI search + DuckDuckGo fallback) for current info — pricing, FL codes, regulations, permits, competitor rates. Returns AI-summarized answers plus source links with extracted content.",
     input_schema: { type: "object" as const, properties: { query: { type: "string" } }, required: ["query"] },
+  },
+  {
+    name: "property_lookup",
+    description: "Look up real property data by address — returns lot size (sqft + acres), building sqft, bedrooms, bathrooms, year built, property type, assessed value, and owner info. Use when user provides an address and needs property details for quoting. Limited to 50 lookups/month.",
+    input_schema: { type: "object" as const, properties: { address: { type: "string", description: "Full street address (e.g. '123 Oak St, Orlando, FL 32801')" } }, required: ["address"] },
   },
   {
     name: "save_memory",
@@ -779,7 +815,62 @@ async function executeTool(
     }
 
     case "web_search": {
-      return { result: await webSearch(input.query) };
+      return { result: await smartSearch(input.query) };
+    }
+
+    case "property_lookup": {
+      if (!input.address) return { result: "Error: address is required." };
+      const rentcastKey = process.env.RENTCAST_API_KEY;
+      if (!rentcastKey) return { result: "Property lookup not configured (no API key)." };
+
+      // Hard cap: 50 calls/month
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const { count } = await supabase
+        .from("api_usage_log")
+        .select("id", { count: "exact", head: true })
+        .eq("service", "rentcast")
+        .gte("created_at", monthStart);
+      const used = count || 0;
+      if (used >= 50) {
+        return { result: `Monthly property lookup limit reached (${used}/50). Estimate based on neighborhood knowledge instead, or try again next month.` };
+      }
+
+      try {
+        const encoded = encodeURIComponent(input.address);
+        const res = await fetch(`https://api.rentcast.io/v1/properties?address=${encoded}`, {
+          headers: { "X-Api-Key": rentcastKey, Accept: "application/json" },
+        });
+        if (!res.ok) {
+          const err = await res.text();
+          return { result: `Property lookup failed (${res.status}): ${err.slice(0, 200)}` };
+        }
+        const data = await res.json();
+
+        // Log usage
+        await supabase.from("api_usage_log").insert({ service: "rentcast", endpoint: "properties" });
+
+        // Handle array or single result
+        const props = Array.isArray(data) ? data : [data];
+        if (!props.length) return { result: `No property data found for "${input.address}".` };
+
+        const p = props[0];
+        const lotSqft = p.lotSize || p.lotSquareFeet || 0;
+        const lotAcres = lotSqft ? (lotSqft / 43560).toFixed(2) : "?";
+        const lines = [
+          `**Property: ${p.formattedAddress || p.addressLine1 || input.address}**`,
+          `Lot Size: ${lotSqft ? lotSqft.toLocaleString() + " sqft (" + lotAcres + " acres)" : "Not available"}`,
+          `Building: ${p.squareFootage ? p.squareFootage.toLocaleString() + " sqft" : "N/A"}`,
+          `Bedrooms: ${p.bedrooms ?? "N/A"} | Bathrooms: ${p.bathrooms ?? "N/A"}`,
+          `Year Built: ${p.yearBuilt || "N/A"}`,
+          `Property Type: ${p.propertyType || "N/A"}`,
+          `Assessed Value: ${p.assessedValue ? "$" + p.assessedValue.toLocaleString() : "N/A"}`,
+          `Tax: ${p.taxAmount ? "$" + p.taxAmount.toLocaleString() + "/yr" : "N/A"}`,
+          `Owner: ${p.ownerName || p.owner || "N/A"}`,
+        ];
+        return { result: lines.join("\n") };
+      } catch (err: any) {
+        return { result: `Property lookup error: ${err.message}` };
+      }
     }
 
     case "save_memory": {
@@ -1350,7 +1441,7 @@ const SYSTEM_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Soluti
 ## RULES
 - NEVER fabricate database records (customers, quotes, invoices). ALWAYS use tools for database queries.
 - You CAN and SHOULD provide estimates, approximations, and educated guesses when asked about lot sizes, property dimensions, pricing ballparks, project scope, material quantities, etc. Use your knowledge of typical FL neighborhoods, lot sizes, and property types. Always label these clearly as estimates (e.g. "I'd estimate roughly..." or "Typical for that area...") and explain your reasoning.
-- If someone gives you an address, use your knowledge to estimate lot size, property type, and neighborhood context. Use web_search if you want to verify. Don't refuse just because you can't do a database lookup — give your best estimate with reasoning.
+- If someone gives you an address, use the property_lookup tool to get real lot size, sqft, year built, and property data from Rentcast. This is limited to 50/month so use it when you have a specific address. If the lookup fails or you're out of quota, estimate based on neighborhood knowledge.
 - Be concise. Use **bold** and bullet lists.
 - For quotes: DRAFT IN CHAT FIRST. Gather info, present draft with line items and totals, wait for "yes"/"go ahead"/"commit" before creating.
 - Navigate user to new records after creating them.
