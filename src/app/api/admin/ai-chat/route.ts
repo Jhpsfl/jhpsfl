@@ -110,8 +110,13 @@ const READ_TOOLS = [
   },
   {
     name: "search_yelp_conversations",
-    description: "Search Yelp lead conversations by customer name, service, status, or urgency.",
+    description: "Search Yelp lead conversations by customer name, service, status, or urgency. Returns conversation list with latest message preview.",
     input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "ai_active|needs_attention|taken_over|completed" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "get_yelp_conversation",
+    description: "Get the full message thread for a specific Yelp conversation. Returns all messages between us and the customer with timestamps. Use after search_yelp_conversations to read the actual conversation.",
+    input_schema: { type: "object" as const, properties: { conversation_id: { type: "string", description: "Yelp conversation UUID (required)" } }, required: ["conversation_id"] },
   },
   {
     name: "search_video_leads",
@@ -722,12 +727,50 @@ async function executeTool(
       const limit = input.limit || 10;
       let query = supabase
         .from("yelp_conversations")
-        .select("id, customer_name, services, zip_code, urgency, status, ai_exchange_count, last_customer_message_at, created_at");
+        .select("id, customer_name, services, zip_code, urgency, status, ai_exchange_count, messages, last_customer_message_at, created_at");
       if (q) query = query.or(`customer_name.ilike.%${q}%,services.cs.{${q}}`);
       if (input.status) query = query.eq("status", input.status);
       const { data } = await query.order("created_at", { ascending: false }).limit(limit);
       if (!data?.length) return { result: `No Yelp conversations found matching "${input.query}".` };
-      return { result: JSON.stringify(data, null, 2) };
+      // Include last message preview, strip full messages array for brevity
+      const summary = data.map((c: any) => {
+        const msgs = c.messages || [];
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        return {
+          id: c.id,
+          customer_name: c.customer_name,
+          services: c.services,
+          zip_code: c.zip_code,
+          urgency: c.urgency,
+          status: c.status,
+          message_count: msgs.length,
+          last_message: lastMsg ? `[${lastMsg.role || lastMsg.sender || "?"}] ${(lastMsg.text || lastMsg.message_text || "").slice(0, 150)}` : "No messages",
+          last_customer_message_at: c.last_customer_message_at,
+          created_at: c.created_at,
+        };
+      });
+      return { result: JSON.stringify(summary, null, 2) };
+    }
+
+    case "get_yelp_conversation": {
+      if (!input.conversation_id) return { result: "Error: conversation_id required." };
+      const { data: conv } = await supabase
+        .from("yelp_conversations")
+        .select("*")
+        .eq("id", input.conversation_id)
+        .single();
+      if (!conv) return { result: "Yelp conversation not found." };
+
+      const msgs = (conv.messages || []).map((m: any, i: number) => {
+        const role = m.role || m.sender || "unknown";
+        const text = m.text || m.message_text || "";
+        const ts = m.ts || m.sent_at || m.timestamp || "";
+        return `[${i + 1}] ${role.toUpperCase()} (${ts}):\n${text}`;
+      }).join("\n\n");
+
+      return {
+        result: `**Yelp Conversation: ${conv.customer_name}**\nServices: ${(conv.services || []).join(", ")}\nZip: ${conv.zip_code || "?"}\nStatus: ${conv.status}\nUrgency: ${conv.urgency || "?"}\nMessages: ${(conv.messages || []).length}\n\n--- THREAD ---\n\n${msgs || "No messages"}`,
+      };
     }
 
     case "search_video_leads": {
