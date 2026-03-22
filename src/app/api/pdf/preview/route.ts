@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (type === 'invoice') {
       const invoiceData: InvoiceData = {
         invoiceNumber: data.invoice_number || 'PREVIEW',
-        invoiceDate: new Date(data.created_at || Date.now()),
+        invoiceDate: data.created_at ? new Date(data.created_at) : new Date(),
         dueDate: data.due_date ? new Date(data.due_date) : undefined,
         invoiceStatus: data.status === 'overdue' ? 'OVERDUE' : 'DUE',
         customerName: data.customer_name || 'Customer',
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         customerPhone: data.customer_phone || undefined,
         companyName: data.company_name || undefined,
         lineItems: (data.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
-          name: item.description,
+          name: item.description || 'Service',
           quantity: item.quantity || 1,
           unitPrice: Math.round((item.unit_price || item.amount || 0) * 100),
           totalPrice: Math.round((item.amount || 0) * 100),
@@ -50,8 +50,7 @@ export async function POST(req: NextRequest) {
         totalAmount: Math.round((data.total || 0) * 100),
         paymentLink: data.payment_link || undefined,
         notes: data.notes || undefined,
-        paymentTerms: data.payment_terms || undefined,
-        brandKey: data.brand || 'jhps',
+        brandKey: (data.brand || 'jhps') as any,
       };
       pdfBuffer = await generateInvoicePDF(invoiceData);
     } else if (type === 'estimate') {

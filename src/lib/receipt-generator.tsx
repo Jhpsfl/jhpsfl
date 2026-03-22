@@ -692,20 +692,20 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Bill To</Text>
             {data.companyName ? (
-              <>
+              <View>
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
-              </>
+              </View>
             ) : <View />}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             <Text style={s.metaVal}>{data.customerEmail}</Text>
             {data.customerPhone ? <Text style={s.metaVal}>{data.customerPhone}</Text> : <View />}
             {data.customerAddress ? <Text style={s.metaVal}>{data.customerAddress}</Text> : <View />}
             {data.jobAddress ? (
-              <>
+              <View>
                 <Text style={[s.metaLabel, { marginTop: 8 }]}>Service Location</Text>
                 <Text style={s.metaVal}>{data.jobAddress}</Text>
-              </>
+              </View>
             ) : <View />}
           </View>
           <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
@@ -737,7 +737,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         />
 
         {!hasPaymentTerms ? (
-          <>
+          <View>
             <View style={s.infoBox} wrap={false}>
               <Text style={s.infoTitle}>Invoice Information</Text>
               <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
@@ -753,7 +753,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
               </View>
             ) : <View />}
             {data.notes ? <NotesSection text={data.notes} /> : <View />}
-          </>
+          </View>
         ) : <View />}
 
         <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
