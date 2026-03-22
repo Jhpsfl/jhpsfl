@@ -1,194 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createSupabaseAdmin } from "@/lib/supabase";
+import { Resend } from "resend";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const CORE_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions, a lawn/landscaping company in Central Florida. Be concise, use **bold** and bullets.
-
-ABSOLUTE RULES — NEVER BREAK THESE:
-1. NEVER make up data. No fake prices, no fake line items, no fake customers, no fake quote numbers, no fake amounts. EVER.
-2. If someone asks about ANY specific data (prices, line items, totals, customer info, quote details) — call lookup_data FIRST. Every single time. No exceptions.
-3. If you cannot verify something from a tool call result, say "I don't have that information" or "Let me look that up." NEVER fill in gaps with guesses.
-4. If the user asks you to list items, prices, or details — call the tool even if you think you remember from earlier. Your memory is unreliable. The tool is the truth.
-5. Only state facts that came directly from a tool result in the current response. Everything else gets "I'm not sure — let me check."
-
-Tabs: Overview, Customers, Jobs, Payments, Subscriptions, Invoices, Quotes, Yelp Leads, Video Leads, Messages, Analytics.`;
-
-const QUOTE_KNOWLEDGE = `
-## PRICING
-Mow: standard $45, large $75, XL $120. Edge $25, hedge $50, full package $95.
-Pressure wash: driveway $150, house $250, patio $125, fence $100, roof $350, full $450.
-Junk: small $150, half $275, full $450. Land clearing: brush $500/quarter-acre, tree $150-350.
-Cleanup: general $200, post-construction $400, estate $600. Mulch $50-75/cuyd, rubber $100-150/cuyd.
-Sod $1.50-3/sqft, rock $75-125/cuyd, border $8-15/lnft, irrigation $75-150/hr.`;
-
-const SYSTEM_PROMPT = CORE_PROMPT + `
-
-## MEMORY SYSTEM
-When the user says "remember this", "save this", or "note this":
-- Include: \`\`\`memory{"content":"...","category":"..."}\`\`\`
-- When told to forget: \`\`\`forget{"content":"keyword"}\`\`\`
-
-## ACTIONS
-You can execute actions. Include an action block: \`\`\`action{"type":"...","data":{...}}\`\`\`
-
-### CRITICAL: QUESTION BEFORE CREATING
-When a user asks to create a quote or estimate, do NOT create it immediately unless they've given you enough detail. ASK QUESTIONS FIRST to build a complete, professional estimate.
-
-**Minimum info needed before creating a quote:**
-1. Customer name (required)
-2. Service address (ask if not given)
-3. What services are needed (be specific — ask about add-ons)
-4. Lot size or quantity details (standard/large/XL? how many sqft? how many visits?)
-5. Any special conditions (heavy brush, slope, obstacles, HOA requirements?)
-
-**Ask in batches of 2-3 questions, not all at once. Be conversational.**
-
-Example flow:
-- User: "Create a quote for lawn service for Dave"
-- AI: "Got it! A few questions about Dave's job: What's the service address? And is this weekly mowing, or are there additional services like edging, hedge trimming, or cleanup?"
-- User: "123 Oak St, weekly mowing and hedge trimming"
-- AI: "What size lot — standard, large, or XL? And how often for the hedges — every visit or monthly?"
-- User: "Large lot, hedges monthly"
-- AI: Creates complete quote with all fields filled
-
-### Available Actions
-
-#### Create Customer
-\`\`\`action{"type":"create_customer","data":{"name":"...","email":"...","phone":"...","address":"...","customer_type":"residential"}}\`\`\`
-
-#### Create Quote/Estimate (FULL)
-\`\`\`action{"type":"create_quote","data":{
-  "customer_name":"John Smith",
-  "service_address":"123 Oak St, Orlando FL",
-  "scope_summary":"Weekly lawn maintenance including mowing, edging, and monthly hedge trimming for a large residential lot.",
-  "line_items":[
-    {"description":"Weekly Lawn Mowing (Large Lot)","quantity":4,"unit":"visit","unit_price":75},
-    {"description":"Edging - Driveway & Walkways","quantity":4,"unit":"visit","unit_price":25},
-    {"description":"Hedge Trimming","quantity":1,"unit":"visit","unit_price":50}
-  ],
-  "exclusions":"Irrigation repairs\\nFertilizer application\\nTree removal",
-  "warranty":"All workmanship guaranteed for 30 days from completion.",
-  "closing_statement":"We look forward to keeping your property looking its best. Our schedule fills quickly — securing your spot ensures consistent, reliable service. Call or text (407) 686-9817 with any questions.\\n\\n— Jenkins Home & Property Solutions",
-  "tax_rate":0,
-  "notes":"Monthly service - 4 weekly visits",
-  "expiration_days":30,
-  "start_date":"2026-03-25",
-  "completion_date":"Ongoing weekly service"
-}}\`\`\`
-
-#### Update/Edit Existing Quote
-\`\`\`action{"type":"update_quote","data":{"quote_number":"QTE-2603-XXXX","updates":{...fields to change...}}}\`\`\`
-
-ALL updatable fields:
-- "service_address": "123 Main St, Orlando FL"
-- "scope_summary": "Description of work..."
-- "ai_project_notes": "About Your Project paragraphs..."
-- "line_items": [{"description":"...","quantity":1,"unit":"flat","unit_price":100}] — REPLACES all items
-- "exclusions": "Item 1\nItem 2\nItem 3"
-- "warranty": "30-day workmanship guarantee..."
-- "closing_statement": "Ready to get started?..."
-- "notes": "Internal notes..."
-- "start_date": "2026-04-01"
-- "completion_date": "2-3 weeks"
-- "tax_rate": 7 (percent)
-- "expiration_date": "2026-04-15"
-- "show_financing": true/false
-- "is_commercial": true/false
-- "terms_conditions": ["term_id_1","term_id_2"] — array of term IDs to enable
-- "payment_terms": {"type":"deposit_balance","deposit_amount":800,"schedule":[{"label":"Deposit","amount":800},{"label":"Balance","amount":765}]}
-  Payment types: "full" | "deposit_balance" | "deposit_installments"
-
-Only include the fields you're changing. Omitted fields stay as-is.
-
-Granular operations (add/remove without replacing everything):
-- "add_items": [{"description":"New item","quantity":1,"unit":"flat","unit_price":100}] — ADDS to existing items
-- "remove_items": ["hedge trimming", "debris"] — REMOVES items matching these descriptions
-- "add_terms": ["term_id_1"] — turns ON specific terms
-- "remove_terms": ["term_id_2"] — turns OFF specific terms
-
-For terms, you can use term NAMES directly (the system resolves them to IDs automatically):
-- Default ON: Payment Terms, Scope of Work, Cancellation Policy, Property Access, Liability Limitation, Weather Delays, Change Orders
-- Default OFF: Material Price Fluctuation, Independent Contractor, Warranty, FL Lien Rights, Dispute Resolution
-Example: "add_terms": ["Warranty", "FL Lien Rights"] or "remove_terms": ["Cancellation Policy"]
-To see all available terms with their IDs, use lookup_data with table "quote_terms".
-
-#### Create Invoice
-\`\`\`action{"type":"create_invoice","data":{"customer_name":"...","line_items":[...],"tax_rate":0,"due_days":15}}\`\`\`
-
-#### Query Data
-\`\`\`action{"type":"query","data":{"table":"customers|quotes|invoices|jobs","limit":10}}\`\`\`
-
-#### Navigate
-\`\`\`action{"type":"navigate","data":{"tab":"customers|jobs|invoices|quotes|yelp_leads|analytics|messages"}}\`\`\`
-
-### Service Presets & Pricing
-**Lawn Care:**
-- Standard mow: $45/visit | Large: $75 | XL: $120
-- Edging: $25/visit | Leaf blowing: $35 | Hedge trim: $50
-- Full lawn package (mow+edge+blow): $95/visit
-
-**Pressure Washing:**
-- Driveway: $150 | House soft wash: $250 | Patio: $125
-- Fence: $100 | Roof: $350 | Sidewalk: $75 | Full property: $450
-
-**Junk Removal:**
-- Small load: $150 | Half load: $275 | Full load: $450
-- Appliance: $75 | Furniture: $50 | Yard debris: $200
-
-**Land Clearing:**
-- Brush clearing (1/4 acre): $500 | Small tree: $150
-- Medium tree: $350 | Stump: $100 | Full lot: $1500
-
-**Property Cleanup:**
-- General: $200 | Post-construction: $400 | Estate: $600 | Storm: $300
-
-**Landscaping:**
-- Mulch: $50-75/cuyd installed | Sod: $1.50-3.00/sqft
-- Rock/gravel: $75-125/cuyd | Landscape border: $8-15/lnft
-- Rubber mulch: $100-150/cuyd (lasts 10+ years)
-
-### Building Changes Over Multiple Messages
-The user may discuss changes across several messages before saying "do it" or "apply that" or "go ahead". When this happens:
-- Keep track of what they want changed in your conversation
-- When they say "go ahead", "apply it", "do it", "update it now", "make those changes" — THEN execute the update_quote action with ALL discussed changes combined
-- Include EVERY field discussed across the conversation in one single update action
-- Confirm what you're about to change before executing: "I'll update QTE-XXXX with: [list changes]. Go ahead?"
-
-### Natural Language → Action Translation
-When the user says things informally, translate to the right action:
-- "add a 50% deposit" → payment_terms: {type: "deposit_balance", deposit_percentage: 50}
-- "make it 3 monthly payments" → payment_terms: {type: "deposit_installments", num_installments: 3}
-- "turn on warranty" or "add warranty term" → include warranty term ID in terms_conditions array
-- "remove the lien rights" → remove that term ID from terms_conditions
-- "make it commercial" → is_commercial: true
-- "add financing" → show_financing: true
-- "change the price of hedge trimming to 250" → update that line item
-- "add mulch spreading for $100" → add new line item to existing items
-- "delete the debris removal" → remove that item from line_items
-- "set tax to 7%" → tax_rate: 7
-- "expires in 2 weeks" → expiration_date: calculated date
-- "start next monday" → start_date: calculated date
-
-### Quote Building Rules
-1. ALWAYS use realistic quantities — not 1 for everything
-2. Include appropriate units (visit, sqft, cuyd, each, lot, hour)
-3. ALWAYS fill scope_summary — 1-2 sentences describing the work
-4. ALWAYS fill exclusions — list 3-5 things NOT included
-5. ALWAYS fill warranty — default "All workmanship guaranteed for 30 days"
-6. ALWAYS fill closing_statement — warm, professional close with phone number
-7. If the job has a start date, include it
-8. Calculate amounts correctly (qty × unit_price)
-9. After creating, confirm with quote number, total, and summary
-`;
-
+// ═══════════════════════════════════════════
+// WEB SEARCH (DuckDuckGo)
+// ═══════════════════════════════════════════
 async function webSearch(query: string): Promise<string> {
   try {
     const encoded = encodeURIComponent(query);
-    const res = await fetch("https://html.duckduckgo.com/html/?q=" + encoded, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encoded}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
       cache: "no-store",
     });
     if (!res.ok) return "Search failed.";
@@ -198,45 +23,1367 @@ async function webSearch(query: string): Promise<string> {
     const titleRegex = /<a class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
     const snippetRegex = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
     let match;
-    while ((match = titleRegex.exec(html)) !== null && titles.length < 5) {
+    while ((match = titleRegex.exec(html)) !== null && titles.length < 6) {
       const url = match[1].replace(/.*uddg=/, "").split("&")[0];
       const title = match[2].replace(/<[^>]*>/g, "").trim();
       try { titles.push({ url: decodeURIComponent(url), title }); } catch { titles.push({ url, title }); }
     }
-    while ((match = snippetRegex.exec(html)) !== null && snippets.length < 5) {
+    while ((match = snippetRegex.exec(html)) !== null && snippets.length < 6) {
       snippets.push(match[1].replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").trim());
     }
     const results: string[] = [];
-    for (let i = 0; i < Math.min(titles.length, snippets.length); i++) {
-      results.push("[" + (i+1) + "] " + titles[i].title + "\n" + snippets[i] + "\nSource: " + titles[i].url);
+    for (let i = 0; i < titles.length; i++) {
+      results.push(`${i + 1}. **${titles[i].title}**\n   ${snippets[i] || ""}\n   Source: ${titles[i].url}`);
     }
-    return results.length ? results.join("\n\n") : "No results found.";
-  } catch { return "Search failed."; }
+    return results.length > 0 ? results.join("\n\n") : "No results found.";
+  } catch {
+    return "Search failed.";
+  }
 }
 
-// Detect if a query likely needs web search
-function needsWebSearch(lastMessage: string): string | null {
-  const msg = lastMessage.toLowerCase();
-  const searchTriggers = [
-    /what(?:'s| is) the (?:latest|current|new|2024|2025|2026)/,
-    /search (?:for|the web|online|google)/,
-    /look up/,
-    /find (?:me |out )/,
-    /current (?:price|cost|rate|code|regulation|law|requirement)/,
-    /(?:price|cost) of .+ (?:in|near|around)/,
-    /(?:florida|fl) (?:code|law|regulation|permit|license|requirement)/,
-    /how much (?:does|do|is|are) .+ cost/,
-    /latest .+ (?:code|regulation|update|news|price)/,
-  ];
-  for (const trigger of searchTriggers) {
-    if (trigger.test(msg)) return lastMessage;
-  }
-  if (msg.includes('search') || msg.includes('look up') || msg.includes('google')) {
-    return lastMessage;
-  }
-  return null;
+// ═══════════════════════════════════════════
+// TOOL DEFINITIONS (Claude native tool_use)
+// ═══════════════════════════════════════════
+
+// ── READ TOOLS ──
+const READ_TOOLS = [
+  {
+    name: "search_customers",
+    description: "Search customers by name, email, phone, or company. Returns matching customer records.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_quotes",
+    description: "Search quotes/estimates by customer name, quote number, or status. Returns list with totals and line item summaries.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|accepted|declined|expired|converted" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "get_quote_details",
+    description: "Get full quote details including line items, terms, payment schedule, exclusions, warranty, and closing statement. Use quote_number (e.g. QTE-2603-0001) or quote_id.",
+    input_schema: { type: "object" as const, properties: { quote_id: { type: "string" }, quote_number: { type: "string" } } },
+  },
+  {
+    name: "search_invoices",
+    description: "Search invoices by customer name, invoice number, or status.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|paid|overdue|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_jobs",
+    description: "Search jobs by customer name, service type, or status.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "scheduled|in_progress|completed|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_subscriptions",
+    description: "Search recurring service subscriptions by customer name, service type, or frequency.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "active|paused|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_yelp_conversations",
+    description: "Search Yelp lead conversations by customer name, service, status, or urgency.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "ai_active|needs_attention|taken_over|completed" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_video_leads",
+    description: "Search video quote leads by name, email, service requested, or status.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_email_threads",
+    description: "Search email messages/threads by contact name, email address, or subject line.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, folder: { type: "string", description: "inbox|sent|drafts|trash|spam|starred|yelp" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "search_payments",
+    description: "Search payment records by customer name, payment method, or status.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "get_dashboard_stats",
+    description: "Get dashboard overview stats: total customers, quotes, invoices, jobs, revenue, pending amounts, conversion rates. Use when asked about business metrics or 'how are we doing'.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "search_quote_terms",
+    description: "List available terms & conditions templates with their IDs, titles, and default status. Use before toggling terms on a quote.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "web_search",
+    description: "Search the web for current info — pricing, FL codes, regulations, permits, competitor rates. Use when asked about anything that needs up-to-date external data.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" } }, required: ["query"] },
+  },
+  {
+    name: "save_memory",
+    description: "Save info to persistent memory. Use when user says 'remember this', 'save this', or 'note this'.",
+    input_schema: { type: "object" as const, properties: { content: { type: "string" }, category: { type: "string", description: "general|pricing|preferences|projects|codes|materials" } }, required: ["content", "category"] },
+  },
+  {
+    name: "forget_memory",
+    description: "Delete a saved memory by keyword match.",
+    input_schema: { type: "object" as const, properties: { keyword: { type: "string" } }, required: ["keyword"] },
+  },
+];
+
+// ── WRITE TOOLS ──
+const WRITE_TOOLS = [
+  {
+    name: "create_customer",
+    description: "Create a new customer. Requires name at minimum. Returns the created customer with ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "Full name (required)" },
+        email: { type: "string" },
+        phone: { type: "string" },
+        address: { type: "string" },
+        city: { type: "string" },
+        zip: { type: "string" },
+        customer_type: { type: "string", description: "residential or commercial (default residential)" },
+        company_name: { type: "string" },
+        source: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "update_customer",
+    description: "Update an existing customer record. Requires customer ID. Pass any fields to change.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Customer UUID (required)" },
+        name: { type: "string" },
+        email: { type: "string" },
+        phone: { type: "string" },
+        address: { type: "string" },
+        city: { type: "string" },
+        zip: { type: "string" },
+        customer_type: { type: "string" },
+        company_name: { type: "string" },
+        nickname: { type: "string" },
+        billing_address: { type: "string" },
+        billing_city: { type: "string" },
+        billing_zip: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "create_quote",
+    description: "Create a new quote/estimate. Requires customer_id or customer_name (will auto-find/create). Returns created quote with auto-generated QTE-YYMM-XXXX number. IMPORTANT: Draft in chat first, only create after user confirms.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        customer_id: { type: "string", description: "Customer UUID (if known)" },
+        customer_name: { type: "string", description: "Customer name (will search/create if no customer_id)" },
+        service_address: { type: "string" },
+        scope_summary: { type: "string", description: "1-2 sentence description of work" },
+        line_items: {
+          type: "array",
+          description: "Array of line items",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string" },
+              quantity: { type: "number" },
+              unit: { type: "string", description: "visit, sqft, cuyd, each, lot, hour, lnft, flat" },
+              unit_price: { type: "number" },
+              section: { type: "string", description: "Optional section/phase grouping" },
+            },
+          },
+        },
+        exclusions: { type: "string", description: "Newline-separated list of exclusions" },
+        warranty: { type: "string", description: "Warranty text (default: 30-day workmanship guarantee)" },
+        closing_statement: { type: "string", description: "Professional closing with phone number" },
+        tax_rate: { type: "number", description: "Tax percentage (default 0)" },
+        notes: { type: "string", description: "Internal notes" },
+        expiration_days: { type: "number", description: "Days until expiry (default 30)" },
+        start_date: { type: "string", description: "Project start date" },
+        completion_date: { type: "string", description: "Expected completion or 'Ongoing'" },
+        is_commercial: { type: "boolean" },
+        show_financing: { type: "boolean" },
+        payment_terms: {
+          type: "object",
+          description: "Payment structure: {type: 'full'|'deposit_balance'|'deposit_installments', deposit_amount?, deposit_percentage?, num_installments?}",
+        },
+      },
+    },
+  },
+  {
+    name: "update_quote",
+    description: "Update fields on an existing quote. Pass quote_number and any fields to change. Omitted fields stay as-is. Totals auto-recalculate when line items or tax change.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number e.g. QTE-2603-0001 (required)" },
+        service_address: { type: "string" },
+        scope_summary: { type: "string" },
+        ai_project_notes: { type: "string" },
+        exclusions: { type: "string" },
+        warranty: { type: "string" },
+        closing_statement: { type: "string" },
+        notes: { type: "string" },
+        start_date: { type: "string" },
+        completion_date: { type: "string" },
+        tax_rate: { type: "number" },
+        expiration_date: { type: "string" },
+        show_financing: { type: "boolean" },
+        is_commercial: { type: "boolean" },
+        line_items: { type: "array", description: "REPLACES all existing line items", items: { type: "object", properties: { description: { type: "string" }, quantity: { type: "number" }, unit: { type: "string" }, unit_price: { type: "number" }, section: { type: "string" } } } },
+        payment_terms: { type: "object", description: "Payment structure object" },
+        terms_conditions: { type: "array", description: "Array of term IDs to set (replaces all)", items: { type: "string" } },
+      },
+      required: ["quote_number"],
+    },
+  },
+  {
+    name: "add_quote_items",
+    description: "Add line items to an existing quote WITHOUT replacing existing items. Totals auto-recalculate.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number (required)" },
+        items: { type: "array", description: "Items to add", items: { type: "object", properties: { description: { type: "string" }, quantity: { type: "number" }, unit: { type: "string" }, unit_price: { type: "number" }, section: { type: "string" } } } },
+      },
+      required: ["quote_number", "items"],
+    },
+  },
+  {
+    name: "remove_quote_items",
+    description: "Remove line items from a quote by description match (case-insensitive partial match). Totals auto-recalculate.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number (required)" },
+        descriptions: { type: "array", description: "Descriptions to match and remove", items: { type: "string" } },
+      },
+      required: ["quote_number", "descriptions"],
+    },
+  },
+  {
+    name: "update_quote_status",
+    description: "Update quote status. Valid: draft, sent, accepted, declined, expired, converted.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number (required)" },
+        status: { type: "string", description: "New status (required)" },
+      },
+      required: ["quote_number", "status"],
+    },
+  },
+  {
+    name: "toggle_quote_terms",
+    description: "Add or remove terms & conditions on a quote by name or ID. Resolves names to IDs automatically.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number (required)" },
+        add_terms: { type: "array", description: "Term names or IDs to enable", items: { type: "string" } },
+        remove_terms: { type: "array", description: "Term names or IDs to disable", items: { type: "string" } },
+      },
+      required: ["quote_number"],
+    },
+  },
+  {
+    name: "send_quote",
+    description: "Send a quote to the customer via email with PDF. The quote must exist and have line items.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        quote_number: { type: "string", description: "Quote number (required)" },
+        to_email: { type: "string", description: "Recipient email (required)" },
+        to_name: { type: "string" },
+        message: { type: "string", description: "Custom message to include" },
+      },
+      required: ["quote_number", "to_email"],
+    },
+  },
+  {
+    name: "create_invoice",
+    description: "Create a new invoice. Requires customer_id or customer_name. Returns created invoice with auto-generated INV-YYMM-XXXX number.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        customer_id: { type: "string" },
+        customer_name: { type: "string" },
+        line_items: { type: "array", items: { type: "object", properties: { description: { type: "string" }, quantity: { type: "number" }, unit_price: { type: "number" } } } },
+        tax_rate: { type: "number", description: "Tax percentage (default 0)" },
+        due_days: { type: "number", description: "Days until due (default 15)" },
+        notes: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "update_invoice",
+    description: "Update an existing invoice by invoice number.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        invoice_number: { type: "string", description: "Invoice number (required)" },
+        status: { type: "string", description: "draft|sent|paid|overdue|cancelled" },
+        line_items: { type: "array", items: { type: "object", properties: { description: { type: "string" }, quantity: { type: "number" }, unit_price: { type: "number" } } } },
+        tax_rate: { type: "number" },
+        due_date: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["invoice_number"],
+    },
+  },
+  {
+    name: "record_payment",
+    description: "Record a payment against an invoice. Updates amount_paid and status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        invoice_number: { type: "string", description: "Invoice number (required)" },
+        amount: { type: "number", description: "Payment amount (required)" },
+        payment_method: { type: "string", description: "cash|card|check|square (default cash)" },
+        notes: { type: "string" },
+      },
+      required: ["invoice_number", "amount"],
+    },
+  },
+  {
+    name: "send_invoice",
+    description: "Send an invoice to the customer via email.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        invoice_number: { type: "string", description: "Invoice number (required)" },
+        to_email: { type: "string", description: "Recipient email (required)" },
+        to_name: { type: "string" },
+        message: { type: "string" },
+      },
+      required: ["invoice_number", "to_email"],
+    },
+  },
+  {
+    name: "create_job",
+    description: "Create a new job/service entry for a customer.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        customer_id: { type: "string", description: "Customer UUID (required)" },
+        service_type: { type: "string", description: "Type of service (required)" },
+        description: { type: "string" },
+        amount: { type: "number" },
+        status: { type: "string", description: "scheduled|in_progress|completed (default scheduled)" },
+        job_site_id: { type: "string" },
+        crew_notes: { type: "string" },
+        admin_notes: { type: "string" },
+      },
+      required: ["customer_id", "service_type"],
+    },
+  },
+  {
+    name: "update_job",
+    description: "Update a job record by ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Job UUID (required)" },
+        status: { type: "string", description: "scheduled|in_progress|completed|cancelled" },
+        amount: { type: "number" },
+        description: { type: "string" },
+        crew_notes: { type: "string" },
+        admin_notes: { type: "string" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "create_subscription",
+    description: "Create a recurring service subscription for a customer.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        customer_id: { type: "string", description: "Customer UUID (required)" },
+        plan_name: { type: "string", description: "Subscription plan name" },
+        service_type: { type: "string", description: "Service type (required)" },
+        frequency: { type: "string", description: "weekly|biweekly|monthly|quarterly|yearly (required)" },
+        amount: { type: "number", description: "Billing amount per cycle (required)" },
+        job_site_id: { type: "string" },
+      },
+      required: ["customer_id", "service_type", "frequency", "amount"],
+    },
+  },
+  {
+    name: "update_subscription",
+    description: "Update a subscription by ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Subscription UUID (required)" },
+        status: { type: "string", description: "active|paused|cancelled" },
+        frequency: { type: "string" },
+        amount: { type: "number" },
+        plan_name: { type: "string" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "reply_yelp_conversation",
+    description: "Send a reply to a Yelp lead conversation via email. Updates conversation status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        conversation_id: { type: "string", description: "Yelp conversation UUID (required)" },
+        message: { type: "string", description: "Reply message text (required)" },
+        status: { type: "string", description: "Update status: taken_over|completed (optional)" },
+      },
+      required: ["conversation_id", "message"],
+    },
+  },
+  {
+    name: "compose_email",
+    description: "Send a general email via Resend. For follow-ups, thank yous, or any outbound email.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        to_email: { type: "string", description: "Recipient email (required)" },
+        to_name: { type: "string" },
+        subject: { type: "string", description: "Email subject (required)" },
+        body: { type: "string", description: "Email body - can include HTML (required)" },
+      },
+      required: ["to_email", "subject", "body"],
+    },
+  },
+  {
+    name: "reply_email",
+    description: "Reply to an existing email thread.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        thread_id: { type: "string", description: "Email thread ID (required)" },
+        body: { type: "string", description: "Reply body text (required)" },
+      },
+      required: ["thread_id", "body"],
+    },
+  },
+  {
+    name: "update_video_lead",
+    description: "Update a video lead's status or assign to a customer.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        lead_id: { type: "string", description: "Video lead UUID (required)" },
+        status: { type: "string", description: "New status" },
+        customer_id: { type: "string", description: "Assign to customer UUID" },
+      },
+      required: ["lead_id"],
+    },
+  },
+  {
+    name: "navigate",
+    description: "Navigate the user to a specific admin tab. Use after creating records or when user asks to go somewhere.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        tab: { type: "string", description: "Tab name: overview, customers, jobs, payments, subscriptions, invoices, quotes, yelp_leads, video_leads, messages, analytics" },
+        description: { type: "string", description: "Brief description of destination" },
+      },
+      required: ["tab"],
+    },
+  },
+];
+
+const TOOLS = [...READ_TOOLS, ...WRITE_TOOLS];
+
+// ═══════════════════════════════════════════
+// HELPER: Find or create customer by name
+// ═══════════════════════════════════════════
+async function findOrCreateCustomer(supabase: any, name?: string, id?: string): Promise<string | null> {
+  if (id) return id;
+  if (!name) return null;
+  const { data: found } = await supabase
+    .from("customers")
+    .select("id")
+    .ilike("name", `%${name}%`)
+    .limit(1);
+  if (found?.length) return found[0].id;
+  const { data: created } = await supabase
+    .from("customers")
+    .insert({ name, customer_type: "residential" })
+    .select("id")
+    .single();
+  return created?.id || null;
 }
 
+// ═══════════════════════════════════════════
+// HELPER: Generate sequential number
+// ═══════════════════════════════════════════
+async function generateNumber(supabase: any, table: string, column: string, prefix: string): Promise<string> {
+  const now = new Date();
+  const fullPrefix = `${prefix}-${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}-`;
+  const { data: existing } = await supabase
+    .from(table)
+    .select(column)
+    .like(column, `${fullPrefix}%`)
+    .order(column, { ascending: false })
+    .limit(1);
+  let nextNum = 1;
+  if (existing?.length) {
+    const last = parseInt(existing[0][column].replace(fullPrefix, ""), 10);
+    if (!isNaN(last)) nextNum = last + 1;
+  }
+  return `${fullPrefix}${String(nextNum).padStart(4, "0")}`;
+}
+
+// ═══════════════════════════════════════════
+// HELPER: Recalculate quote totals
+// ═══════════════════════════════════════════
+function recalcQuoteTotals(lineItems: any[], taxRate: number) {
+  const subtotal = lineItems.reduce((s: number, li: any) => s + (li.amount || 0), 0);
+  const tax_amount = subtotal * (taxRate / 100);
+  return { subtotal, tax_amount, total: subtotal + tax_amount };
+}
+
+// ═══════════════════════════════════════════
+// HELPER: Resolve term names to IDs
+// ═══════════════════════════════════════════
+async function resolveTermIds(supabase: any, terms: string[]): Promise<string[]> {
+  const ids: string[] = [];
+  for (const t of terms) {
+    if (/^[0-9a-f-]{36}$/i.test(t)) { ids.push(t); continue; }
+    const { data } = await supabase.from("quote_terms").select("id").ilike("title", `%${t}%`).limit(1);
+    if (data?.length) ids.push(data[0].id);
+  }
+  return ids;
+}
+
+// ═══════════════════════════════════════════
+// TOOL EXECUTION
+// ═══════════════════════════════════════════
+async function executeTool(
+  name: string,
+  input: any,
+  supabase: any
+): Promise<{ result: string; action?: { type: string; tab?: string; created_id?: string; description?: string } }> {
+  switch (name) {
+    // ── READ TOOLS ──
+    case "search_customers": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 15;
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name, email, phone, address, city, zip, customer_type, company_name, created_at")
+        .or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,company_name.ilike.%${q}%`)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (!data?.length) return { result: `No customers found matching "${input.query}".` };
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_quotes": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 10;
+      let query = supabase
+        .from("quotes")
+        .select("id, quote_number, status, total, service_address, scope_summary, created_at, customer:customers(name, email, phone)")
+        .or(`quote_number.ilike.%${q}%,scope_summary.ilike.%${q}%,service_address.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) {
+        // Try by customer name
+        const { data: byCustomer } = await supabase
+          .from("quotes")
+          .select("id, quote_number, status, total, service_address, scope_summary, created_at, customer:customers!inner(name, email, phone)")
+          .ilike("customers.name", `%${q}%`)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        if (!byCustomer?.length) return { result: `No quotes found matching "${input.query}".` };
+        return { result: JSON.stringify(byCustomer, null, 2) };
+      }
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "get_quote_details": {
+      let query = supabase.from("quotes").select("*, customer:customers(name, email, phone, address)");
+      if (input.quote_id) query = query.eq("id", input.quote_id);
+      else if (input.quote_number) query = query.eq("quote_number", input.quote_number);
+      else return { result: "Please provide a quote_id or quote_number." };
+      const { data: q } = await query.single();
+      if (!q) return { result: "Quote not found." };
+
+      // Resolve terms to names
+      let termsInfo = "None active";
+      if (q.terms_conditions?.length) {
+        const { data: terms } = await supabase.from("quote_terms").select("id, title").in("id", q.terms_conditions);
+        if (terms?.length) termsInfo = terms.map((t: any) => `${t.title} (${t.id})`).join(", ");
+      }
+
+      const items = (q.line_items || []).map((li: any) =>
+        `  - ${li.description} (qty:${li.quantity} ${li.unit || "flat"} @ $${li.unit_price} = $${li.amount})${li.section ? ` [${li.section}]` : ""}`
+      ).join("\n");
+
+      return {
+        result: `QUOTE: ${q.quote_number}\nCustomer: ${q.customer?.name || "Unknown"}\nEmail: ${q.customer?.email || ""}\nPhone: ${q.customer?.phone || ""}\nService Address: ${q.service_address || "Not set"}\nStatus: ${q.status || "draft"}\nCreated: ${q.created_at}\nExpiration: ${q.expiration_date || "Not set"}\n\nLine Items:\n${items || "  None"}\n\nSubtotal: $${q.subtotal || 0}\nTax: ${q.tax_rate || 0}% ($${q.tax_amount || 0})\nTotal: $${q.total || 0}\n\nScope: ${q.scope_summary || "Not set"}\nAI Notes: ${q.ai_project_notes || "Not set"}\nStart: ${q.start_date || "Not set"}\nCompletion: ${q.completion_date || "Not set"}\nExclusions: ${q.exclusions || "Not set"}\nWarranty: ${q.warranty || "Not set"}\nClosing: ${q.closing_statement || "Not set"}\nNotes: ${q.notes || "Not set"}\nFinancing: ${q.show_financing ? "Yes" : "No"}\nCommercial: ${q.is_commercial ? "Yes" : "No"}\nPayment Terms: ${q.payment_terms ? JSON.stringify(q.payment_terms) : "None"}\nActive Terms: ${termsInfo}`,
+      };
+    }
+
+    case "search_invoices": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 10;
+      let query = supabase
+        .from("invoices")
+        .select("id, invoice_number, status, total, amount_paid, due_date, created_at, customer:customers(name, email, phone)")
+        .or(`invoice_number.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) {
+        const { data: byCustomer } = await supabase
+          .from("invoices")
+          .select("id, invoice_number, status, total, amount_paid, due_date, created_at, customer:customers!inner(name, email, phone)")
+          .ilike("customers.name", `%${q}%`)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        if (!byCustomer?.length) return { result: `No invoices found matching "${input.query}".` };
+        return { result: JSON.stringify(byCustomer, null, 2) };
+      }
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_jobs": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 15;
+      let query = supabase
+        .from("jobs")
+        .select("id, service_type, description, status, amount, completed_date, created_at, customer:customers(name)")
+        .or(`service_type.ilike.%${q}%,description.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) {
+        const { data: byCustomer } = await supabase
+          .from("jobs")
+          .select("id, service_type, description, status, amount, created_at, customer:customers!inner(name)")
+          .ilike("customers.name", `%${q}%`)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        if (!byCustomer?.length) return { result: `No jobs found matching "${input.query}".` };
+        return { result: JSON.stringify(byCustomer, null, 2) };
+      }
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_subscriptions": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 10;
+      let query = supabase
+        .from("subscriptions")
+        .select("id, plan_name, service_type, frequency, amount, status, next_billing_date, created_at, customer:customers(name)")
+        .or(`service_type.ilike.%${q}%,plan_name.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) return { result: `No subscriptions found matching "${input.query}".` };
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_yelp_conversations": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 10;
+      let query = supabase
+        .from("yelp_conversations")
+        .select("id, customer_name, services, zip_code, urgency, status, ai_exchange_count, last_customer_message_at, created_at");
+      if (q) query = query.or(`customer_name.ilike.%${q}%,services.cs.{${q}}`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) return { result: `No Yelp conversations found matching "${input.query}".` };
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_video_leads": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 10;
+      let query = supabase
+        .from("video_leads")
+        .select("id, name, email, phone, address, property_type, service_requested, status, created_at")
+        .or(`name.ilike.%${q}%,email.ilike.%${q}%,service_requested.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) return { result: `No video leads found matching "${input.query}".` };
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "search_email_threads": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 15;
+      let query = supabase
+        .from("email_messages")
+        .select("id, thread_id, direction, from_email, to_email, subject, body_text, read, created_at")
+        .or(`from_email.ilike.%${q}%,to_email.ilike.%${q}%,subject.ilike.%${q}%,body_text.ilike.%${q}%`);
+      if (input.folder === "sent") query = query.eq("direction", "outbound");
+      else if (input.folder === "inbox") query = query.eq("direction", "inbound");
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) return { result: `No emails found matching "${input.query}".` };
+      // Truncate body for summary
+      const summary = data.map((e: any) => ({
+        ...e,
+        body_text: e.body_text ? e.body_text.slice(0, 200) + (e.body_text.length > 200 ? "..." : "") : "",
+      }));
+      return { result: JSON.stringify(summary, null, 2) };
+    }
+
+    case "search_payments": {
+      const q = input.query?.toLowerCase() || "";
+      const limit = input.limit || 15;
+      let query = supabase
+        .from("payments")
+        .select("id, amount, status, payment_method, square_payment_id, created_at, customer:customers(name)")
+        .or(`payment_method.ilike.%${q}%,status.ilike.%${q}%`);
+      if (input.status) query = query.eq("status", input.status);
+      const { data } = await query.order("created_at", { ascending: false }).limit(limit);
+      if (!data?.length) {
+        const { data: byCustomer } = await supabase
+          .from("payments")
+          .select("id, amount, status, payment_method, created_at, customer:customers!inner(name)")
+          .ilike("customers.name", `%${q}%`)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        if (!byCustomer?.length) return { result: `No payments found matching "${input.query}".` };
+        return { result: JSON.stringify(byCustomer, null, 2) };
+      }
+      return { result: JSON.stringify(data, null, 2) };
+    }
+
+    case "get_dashboard_stats": {
+      const [customers, quotes, invoices, jobs, payments] = await Promise.all([
+        supabase.from("customers").select("id", { count: "exact", head: true }),
+        supabase.from("quotes").select("id, status, total"),
+        supabase.from("invoices").select("id, status, total, amount_paid"),
+        supabase.from("jobs").select("id, status, amount"),
+        supabase.from("payments").select("id, amount, status"),
+      ]);
+      const quoteData = quotes.data || [];
+      const invoiceData = invoices.data || [];
+      const jobData = jobs.data || [];
+      const paymentData = payments.data || [];
+      const totalRevenue = paymentData.filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + (p.amount || 0), 0);
+      const pendingInvoices = invoiceData.filter((i: any) => i.status === "sent" || i.status === "overdue");
+      const pendingAmount = pendingInvoices.reduce((s: number, i: any) => s + ((i.total || 0) - (i.amount_paid || 0)), 0);
+      return {
+        result: `Dashboard Stats:\n- Customers: ${customers.count || 0}\n- Quotes: ${quoteData.length} (draft: ${quoteData.filter((q: any) => q.status === "draft").length}, sent: ${quoteData.filter((q: any) => q.status === "sent").length}, accepted: ${quoteData.filter((q: any) => q.status === "accepted").length})\n- Invoices: ${invoiceData.length} (pending: ${pendingInvoices.length}, paid: ${invoiceData.filter((i: any) => i.status === "paid").length})\n- Jobs: ${jobData.length} (active: ${jobData.filter((j: any) => j.status === "in_progress" || j.status === "scheduled").length}, completed: ${jobData.filter((j: any) => j.status === "completed").length})\n- Total Revenue: $${totalRevenue.toLocaleString()}\n- Pending Amount: $${pendingAmount.toLocaleString()}`,
+      };
+    }
+
+    case "search_quote_terms": {
+      const { data: terms } = await supabase.from("quote_terms").select("*").order("sort_order");
+      if (!terms?.length) return { result: "No terms found." };
+      return {
+        result: terms.map((t: any, i: number) =>
+          `${i + 1}. ID: ${t.id} | ${t.title} | Default: ${t.is_default ? "ON" : "OFF"}\n   ${(t.body || "").slice(0, 120)}`
+        ).join("\n"),
+      };
+    }
+
+    case "web_search": {
+      return { result: await webSearch(input.query) };
+    }
+
+    case "save_memory": {
+      await supabase.from("ai_memories").insert({ content: input.content, category: input.category || "general", source: "ai" });
+      return { result: `Memory saved: "${input.content}" (${input.category})` };
+    }
+
+    case "forget_memory": {
+      const { data: deleted } = await supabase.from("ai_memories").delete().ilike("content", `%${input.keyword}%`).select("content");
+      if (deleted?.length) return { result: `Deleted ${deleted.length} memory/memories matching "${input.keyword}".` };
+      return { result: `No memories found matching "${input.keyword}".` };
+    }
+
+    // ── WRITE TOOLS ──
+    case "create_customer": {
+      if (!input.name) return { result: "Error: name is required." };
+      const { data, error } = await supabase
+        .from("customers")
+        .insert({
+          name: input.name,
+          email: input.email || null,
+          phone: input.phone || null,
+          address: input.address || null,
+          city: input.city || null,
+          zip: input.zip || null,
+          customer_type: input.customer_type || "residential",
+          company_name: input.company_name || null,
+        })
+        .select()
+        .single();
+      if (error) return { result: `Error creating customer: ${error.message}` };
+      return {
+        result: `Customer created: ${data.name} (ID: ${data.id})`,
+        action: { type: "create_customer", tab: "customers", created_id: data.id },
+      };
+    }
+
+    case "update_customer": {
+      if (!input.id) return { result: "Error: customer id required." };
+      const { id, ...fields } = input;
+      if (!Object.keys(fields).length) return { result: "Error: no fields to update." };
+      const { data, error } = await supabase
+        .from("customers")
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) return { result: `Error: ${error.message}` };
+      if (!data) return { result: "Customer not found." };
+      return { result: `Customer updated: ${data.name}` };
+    }
+
+    case "create_quote": {
+      const customerId = await findOrCreateCustomer(supabase, input.customer_name, input.customer_id);
+      const quoteNumber = await generateNumber(supabase, "quotes", "quote_number", "QTE");
+
+      const lineItems = (input.line_items || []).map((li: any) => ({
+        id: "ai_" + Math.random().toString(36).slice(2, 8),
+        description: li.description || "",
+        quantity: li.quantity || 1,
+        unit: li.unit || "flat",
+        unit_price: li.unit_price || 0,
+        amount: (li.quantity || 1) * (li.unit_price || 0),
+        section: li.section || undefined,
+      }));
+      const taxRate = input.tax_rate || 0;
+      const totals = recalcQuoteTotals(lineItems, taxRate);
+      const expDays = input.expiration_days || 30;
+      const expDate = new Date(Date.now() + expDays * 86400000).toISOString().split("T")[0];
+
+      // Build payment terms if provided
+      let paymentTerms = input.payment_terms || null;
+      if (paymentTerms && paymentTerms.type === "deposit_balance" && paymentTerms.deposit_percentage && !paymentTerms.deposit_amount) {
+        paymentTerms.deposit_amount = Math.round(totals.total * (paymentTerms.deposit_percentage / 100));
+        paymentTerms.schedule = [
+          { label: "Deposit", amount: paymentTerms.deposit_amount, status: "pending" },
+          { label: "Balance Due on Completion", amount: totals.total - paymentTerms.deposit_amount, status: "pending" },
+        ];
+      }
+
+      const { data, error } = await supabase.from("quotes").insert({
+        quote_number: quoteNumber,
+        customer_id: customerId,
+        status: "draft",
+        line_items: lineItems,
+        ...totals,
+        tax_rate: taxRate,
+        service_address: input.service_address || null,
+        scope_summary: input.scope_summary || null,
+        exclusions: input.exclusions || null,
+        warranty: input.warranty || "All workmanship guaranteed for 30 days from completion.",
+        closing_statement: input.closing_statement || null,
+        notes: input.notes || null,
+        expiration_date: expDate,
+        start_date: input.start_date || null,
+        completion_date: input.completion_date || null,
+        is_commercial: input.is_commercial || false,
+        show_financing: input.show_financing || false,
+        payment_terms: paymentTerms,
+      }).select().single();
+
+      if (error) return { result: `Error creating quote: ${error.message}` };
+      return {
+        result: `Quote ${quoteNumber} created — $${totals.total.toFixed(2)} total`,
+        action: { type: "create_quote", tab: "quotes", created_id: data.id },
+      };
+    }
+
+    case "update_quote": {
+      if (!input.quote_number) return { result: "Error: quote_number required." };
+      const { data: existing } = await supabase
+        .from("quotes")
+        .select("id, line_items, tax_rate, subtotal, terms_conditions")
+        .eq("quote_number", input.quote_number)
+        .single();
+      if (!existing) return { result: `Quote ${input.quote_number} not found.` };
+
+      const updates: any = { updated_at: new Date().toISOString() };
+      const textFields = ["service_address", "scope_summary", "ai_project_notes", "exclusions", "warranty", "closing_statement", "notes", "start_date", "completion_date"];
+      for (const f of textFields) {
+        if (input[f] !== undefined) updates[f] = input[f] || null;
+      }
+      if (input.tax_rate !== undefined) updates.tax_rate = Number(input.tax_rate) || 0;
+      if (input.show_financing !== undefined) updates.show_financing = !!input.show_financing;
+      if (input.is_commercial !== undefined) updates.is_commercial = !!input.is_commercial;
+      if (input.expiration_date !== undefined) updates.expiration_date = input.expiration_date || null;
+      if (input.payment_terms !== undefined) updates.payment_terms = input.payment_terms || null;
+      if (input.terms_conditions !== undefined) updates.terms_conditions = input.terms_conditions;
+
+      if (input.line_items) {
+        updates.line_items = input.line_items.map((li: any) => ({
+          id: li.id || "ai_" + Math.random().toString(36).slice(2, 8),
+          description: li.description || "",
+          quantity: li.quantity || 1,
+          unit: li.unit || "flat",
+          unit_price: li.unit_price || 0,
+          amount: (li.quantity || 1) * (li.unit_price || 0),
+          section: li.section || undefined,
+        }));
+        const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
+        Object.assign(updates, recalcQuoteTotals(updates.line_items, taxRate));
+      } else if (updates.tax_rate !== undefined) {
+        const currentSubtotal = existing.subtotal || 0;
+        updates.tax_amount = currentSubtotal * (updates.tax_rate / 100);
+        updates.total = currentSubtotal + updates.tax_amount;
+      }
+
+      const { error } = await supabase.from("quotes").update(updates).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      const changedFields = Object.keys(updates).filter(k => k !== "updated_at");
+      return { result: `Quote ${input.quote_number} updated — changed: ${changedFields.join(", ")}` };
+    }
+
+    case "add_quote_items": {
+      if (!input.quote_number || !input.items?.length) return { result: "Error: quote_number and items required." };
+      const { data: existing } = await supabase.from("quotes").select("id, line_items, tax_rate").eq("quote_number", input.quote_number).single();
+      if (!existing) return { result: `Quote ${input.quote_number} not found.` };
+
+      const newItems = input.items.map((li: any) => ({
+        id: "ai_" + Math.random().toString(36).slice(2, 8),
+        description: li.description || "",
+        quantity: li.quantity || 1,
+        unit: li.unit || "flat",
+        unit_price: li.unit_price || 0,
+        amount: (li.quantity || 1) * (li.unit_price || 0),
+        section: li.section || undefined,
+      }));
+      const allItems = [...(existing.line_items || []), ...newItems];
+      const totals = recalcQuoteTotals(allItems, existing.tax_rate || 0);
+
+      const { error } = await supabase.from("quotes").update({ line_items: allItems, ...totals, updated_at: new Date().toISOString() }).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Added ${newItems.length} item(s) to ${input.quote_number}. New total: $${totals.total.toFixed(2)}` };
+    }
+
+    case "remove_quote_items": {
+      if (!input.quote_number || !input.descriptions?.length) return { result: "Error: quote_number and descriptions required." };
+      const { data: existing } = await supabase.from("quotes").select("id, line_items, tax_rate").eq("quote_number", input.quote_number).single();
+      if (!existing) return { result: `Quote ${input.quote_number} not found.` };
+
+      const removeDescs = input.descriptions.map((d: string) => d.toLowerCase());
+      const remaining = (existing.line_items || []).filter((li: any) =>
+        !removeDescs.some((rd: string) => (li.description || "").toLowerCase().includes(rd))
+      );
+      const removed = (existing.line_items || []).length - remaining.length;
+      const totals = recalcQuoteTotals(remaining, existing.tax_rate || 0);
+
+      const { error } = await supabase.from("quotes").update({ line_items: remaining, ...totals, updated_at: new Date().toISOString() }).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Removed ${removed} item(s) from ${input.quote_number}. New total: $${totals.total.toFixed(2)}` };
+    }
+
+    case "update_quote_status": {
+      if (!input.quote_number || !input.status) return { result: "Error: quote_number and status required." };
+      const { data: existing } = await supabase.from("quotes").select("id, status").eq("quote_number", input.quote_number).single();
+      if (!existing) return { result: `Quote ${input.quote_number} not found.` };
+      const { error } = await supabase.from("quotes").update({ status: input.status, updated_at: new Date().toISOString() }).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Quote ${input.quote_number} status: ${existing.status} → ${input.status}` };
+    }
+
+    case "toggle_quote_terms": {
+      if (!input.quote_number) return { result: "Error: quote_number required." };
+      const { data: existing } = await supabase.from("quotes").select("id, terms_conditions").eq("quote_number", input.quote_number).single();
+      if (!existing) return { result: `Quote ${input.quote_number} not found.` };
+
+      let current = existing.terms_conditions || [];
+      if (input.add_terms?.length) {
+        const addIds = await resolveTermIds(supabase, input.add_terms);
+        current = Array.from(new Set([...current, ...addIds]));
+      }
+      if (input.remove_terms?.length) {
+        const removeIds = await resolveTermIds(supabase, input.remove_terms);
+        current = current.filter((id: string) => !removeIds.includes(id));
+      }
+
+      const { error } = await supabase.from("quotes").update({ terms_conditions: current, updated_at: new Date().toISOString() }).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Quote ${input.quote_number} terms updated. ${current.length} terms now active.` };
+    }
+
+    case "send_quote": {
+      if (!input.quote_number || !input.to_email) return { result: "Error: quote_number and to_email required." };
+      const { data: q } = await supabase
+        .from("quotes")
+        .select("id, quote_number, total, share_token, customer:customers(name)")
+        .eq("quote_number", input.quote_number)
+        .single();
+      if (!q) return { result: `Quote ${input.quote_number} not found.` };
+
+      // Generate share token if needed
+      let token = q.share_token;
+      if (!token) {
+        const crypto = await import("crypto");
+        token = crypto.randomBytes(16).toString("hex");
+        await supabase.from("quotes").update({ share_token: token }).eq("id", q.id);
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://jhps.co";
+      const viewLink = `${baseUrl}/quote/${token}`;
+      const customerName = input.to_name || q.customer?.name || "there";
+      const customMsg = input.message ? `<p>${input.message}</p>` : "";
+
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: "JHPS Florida <info@jhpsfl.com>",
+          to: [input.to_email],
+          subject: `Your Estimate from Jenkins Home & Property Solutions — ${q.quote_number}`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333"><div style="background:#1B5E20;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px">Jenkins Home & Property Solutions</h1></div><div style="padding:24px"><p>Hi ${customerName},</p>${customMsg}<p>Your estimate <strong>${q.quote_number}</strong> for <strong>$${(q.total || 0).toLocaleString()}</strong> is ready for review.</p><p style="text-align:center;margin:32px 0"><a href="${viewLink}" style="background:#1B5E20;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px">View Your Estimate</a></p><p style="color:#666;font-size:13px">Or copy this link: ${viewLink}</p><p>Questions? Call or text <strong>(407) 686-9817</strong></p><p>— Jenkins Home & Property Solutions</p></div></div>`,
+        });
+
+        // Update status to sent
+        await supabase.from("quotes").update({ status: "sent", updated_at: new Date().toISOString() }).eq("id", q.id);
+
+        return { result: `Quote ${input.quote_number} sent to ${input.to_email} with view link.` };
+      } catch (err: any) {
+        return { result: `Error sending quote: ${err.message}` };
+      }
+    }
+
+    case "create_invoice": {
+      const customerId = await findOrCreateCustomer(supabase, input.customer_name, input.customer_id);
+      const invoiceNumber = await generateNumber(supabase, "invoices", "invoice_number", "INV");
+
+      const lineItems = (input.line_items || []).map((li: any) => ({
+        description: li.description || "",
+        quantity: li.quantity || 1,
+        unit_price: li.unit_price || 0,
+        amount: (li.quantity || 1) * (li.unit_price || 0),
+      }));
+      const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
+      const taxRate = input.tax_rate || 0;
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = subtotal + taxAmount;
+      const dueDays = input.due_days || 15;
+      const dueDate = new Date(Date.now() + dueDays * 86400000).toISOString().split("T")[0];
+
+      const { data, error } = await supabase.from("invoices").insert({
+        invoice_number: invoiceNumber,
+        customer_id: customerId,
+        status: "draft",
+        line_items: lineItems,
+        subtotal, tax_rate: taxRate, tax_amount: taxAmount, total,
+        amount_paid: 0,
+        due_date: dueDate,
+        notes: input.notes || null,
+      }).select().single();
+
+      if (error) return { result: `Error: ${error.message}` };
+      return {
+        result: `Invoice ${invoiceNumber} created — $${total.toFixed(2)} total, due ${dueDate}`,
+        action: { type: "create_invoice", tab: "invoices", created_id: data.id },
+      };
+    }
+
+    case "update_invoice": {
+      if (!input.invoice_number) return { result: "Error: invoice_number required." };
+      const { data: existing } = await supabase.from("invoices").select("id, tax_rate").eq("invoice_number", input.invoice_number).single();
+      if (!existing) return { result: `Invoice ${input.invoice_number} not found.` };
+
+      const updates: any = { updated_at: new Date().toISOString() };
+      if (input.status) updates.status = input.status;
+      if (input.due_date) updates.due_date = input.due_date;
+      if (input.notes !== undefined) updates.notes = input.notes || null;
+      if (input.tax_rate !== undefined) updates.tax_rate = Number(input.tax_rate) || 0;
+
+      if (input.line_items) {
+        updates.line_items = input.line_items.map((li: any) => ({
+          description: li.description || "",
+          quantity: li.quantity || 1,
+          unit_price: li.unit_price || 0,
+          amount: (li.quantity || 1) * (li.unit_price || 0),
+        }));
+        const subtotal = updates.line_items.reduce((s: number, li: any) => s + li.amount, 0);
+        const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
+        updates.subtotal = subtotal;
+        updates.tax_amount = subtotal * (taxRate / 100);
+        updates.total = subtotal + updates.tax_amount;
+      }
+
+      const { error } = await supabase.from("invoices").update(updates).eq("id", existing.id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Invoice ${input.invoice_number} updated.` };
+    }
+
+    case "record_payment": {
+      if (!input.invoice_number || !input.amount) return { result: "Error: invoice_number and amount required." };
+      const { data: inv } = await supabase.from("invoices").select("id, customer_id, total, amount_paid").eq("invoice_number", input.invoice_number).single();
+      if (!inv) return { result: `Invoice ${input.invoice_number} not found.` };
+
+      const newPaid = (inv.amount_paid || 0) + input.amount;
+      const newStatus = newPaid >= (inv.total || 0) ? "paid" : "sent";
+
+      // Record payment
+      await supabase.from("payments").insert({
+        customer_id: inv.customer_id,
+        job_id: null,
+        amount: input.amount,
+        status: "completed",
+        payment_method: input.payment_method || "cash",
+      });
+      // Update invoice
+      await supabase.from("invoices").update({ amount_paid: newPaid, status: newStatus, updated_at: new Date().toISOString() }).eq("id", inv.id);
+
+      return { result: `Payment of $${input.amount.toFixed(2)} recorded on ${input.invoice_number}. Total paid: $${newPaid.toFixed(2)}/${inv.total}. Status: ${newStatus}` };
+    }
+
+    case "send_invoice": {
+      if (!input.invoice_number || !input.to_email) return { result: "Error: invoice_number and to_email required." };
+      const { data: inv } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, total, amount_paid, due_date, customer:customers(name)")
+        .eq("invoice_number", input.invoice_number)
+        .single();
+      if (!inv) return { result: `Invoice ${input.invoice_number} not found.` };
+
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://jhps.co";
+      const viewLink = `${baseUrl}/invoice/${input.invoice_number}`;
+      const customerName = input.to_name || inv.customer?.name || "there";
+      const balance = (inv.total || 0) - (inv.amount_paid || 0);
+      const customMsg = input.message ? `<p>${input.message}</p>` : "";
+
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: "JHPS Florida <info@jhpsfl.com>",
+          to: [input.to_email],
+          subject: `Invoice ${inv.invoice_number} from Jenkins Home & Property Solutions`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333"><div style="background:#1B5E20;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px">Jenkins Home & Property Solutions</h1></div><div style="padding:24px"><p>Hi ${customerName},</p>${customMsg}<p>Invoice <strong>${inv.invoice_number}</strong> for <strong>$${(inv.total || 0).toLocaleString()}</strong> is ready${inv.due_date ? ` — due by <strong>${inv.due_date}</strong>` : ""}.</p>${balance < (inv.total || 0) ? `<p>Amount paid: $${(inv.amount_paid || 0).toLocaleString()} | Balance: $${balance.toLocaleString()}</p>` : ""}<p style="text-align:center;margin:32px 0"><a href="${viewLink}" style="background:#1B5E20;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px">View & Pay Invoice</a></p><p>Questions? Call or text <strong>(407) 686-9817</strong></p><p>— Jenkins Home & Property Solutions</p></div></div>`,
+        });
+
+        await supabase.from("invoices").update({ status: "sent", updated_at: new Date().toISOString() }).eq("id", inv.id);
+        return { result: `Invoice ${input.invoice_number} sent to ${input.to_email}.` };
+      } catch (err: any) {
+        return { result: `Error: ${err.message}` };
+      }
+    }
+
+    case "create_job": {
+      if (!input.customer_id || !input.service_type) return { result: "Error: customer_id and service_type required." };
+      const { data, error } = await supabase.from("jobs").insert({
+        customer_id: input.customer_id,
+        service_type: input.service_type,
+        description: input.description || null,
+        amount: input.amount || 0,
+        status: input.status || "scheduled",
+        job_site_id: input.job_site_id || null,
+        crew_notes: input.crew_notes || null,
+        admin_notes: input.admin_notes || null,
+      }).select().single();
+      if (error) return { result: `Error: ${error.message}` };
+      return {
+        result: `Job created: ${input.service_type} (ID: ${data.id})`,
+        action: { type: "create_job", tab: "jobs", created_id: data.id },
+      };
+    }
+
+    case "update_job": {
+      if (!input.id) return { result: "Error: job id required." };
+      const { id, ...fields } = input;
+      const { error } = await supabase.from("jobs").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Job updated.` };
+    }
+
+    case "create_subscription": {
+      if (!input.customer_id || !input.service_type || !input.frequency || !input.amount) {
+        return { result: "Error: customer_id, service_type, frequency, and amount required." };
+      }
+      const { data, error } = await supabase.from("subscriptions").insert({
+        customer_id: input.customer_id,
+        plan_name: input.plan_name || input.service_type,
+        service_type: input.service_type,
+        frequency: input.frequency,
+        amount: input.amount,
+        status: "active",
+        job_site_id: input.job_site_id || null,
+      }).select().single();
+      if (error) return { result: `Error: ${error.message}` };
+      return {
+        result: `Subscription created: ${input.service_type} ${input.frequency} @ $${input.amount}`,
+        action: { type: "create_subscription", tab: "subscriptions", created_id: data.id },
+      };
+    }
+
+    case "update_subscription": {
+      if (!input.id) return { result: "Error: subscription id required." };
+      const { id, ...fields } = input;
+      const { error } = await supabase.from("subscriptions").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Subscription updated.` };
+    }
+
+    case "reply_yelp_conversation": {
+      if (!input.conversation_id || !input.message) return { result: "Error: conversation_id and message required." };
+
+      // Send reply via Yelp PATCH endpoint (triggers Puppeteer agent)
+      const { data: conv } = await supabase.from("yelp_conversations").select("messages, yelp_thread_id, customer_name, services, taken_over_at").eq("id", input.conversation_id).single();
+      if (!conv) return { result: "Yelp conversation not found." };
+
+      const msgs = conv.messages || [];
+      msgs.push({ role: "admin", text: input.message.trim(), ts: new Date().toISOString() });
+
+      await supabase.from("yelp_conversations").update({
+        messages: msgs,
+        status: input.status || "taken_over",
+        taken_over_at: conv.taken_over_at || new Date().toISOString(),
+      }).eq("id", input.conversation_id);
+
+      // Create trigger for Puppeteer to send via Yelp UI
+      await supabase.from("yelp_triggers").insert({
+        trigger_type: "manual_reply",
+        lead_id: conv.yelp_thread_id,
+        thread_id: conv.yelp_thread_id,
+        customer_name: conv.customer_name,
+        service: (conv.services || []).join(", "),
+        email_body_text: input.message.trim(),
+        status: "pending",
+      });
+
+      return { result: `Yelp reply queued for sending. Status: ${input.status || "taken_over"}` };
+    }
+
+    case "compose_email": {
+      if (!input.to_email || !input.subject || !input.body) return { result: "Error: to_email, subject, and body required." };
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const fromEmail = "JHPS Florida <info@jhpsfl.com>";
+        const { data: sent, error: sendErr } = await resend.emails.send({
+          from: fromEmail,
+          to: [input.to_email],
+          subject: input.subject,
+          html: input.body,
+        });
+        if (sendErr) return { result: `Error sending email: ${sendErr.message}` };
+
+        // Log to email_messages table
+        const threadId = "thread_" + Date.now();
+        await supabase.from("email_messages").insert({
+          thread_id: threadId,
+          direction: "outbound",
+          from_email: "info@jhpsfl.com",
+          to_email: input.to_email,
+          subject: input.subject,
+          body_html: input.body,
+          body_text: input.body.replace(/<[^>]*>/g, ""),
+          resend_message_id: sent?.id || null,
+          read: true,
+        });
+
+        return { result: `Email sent to ${input.to_email}: "${input.subject}"` };
+      } catch (err: any) {
+        return { result: `Error: ${err.message}` };
+      }
+    }
+
+    case "reply_email": {
+      if (!input.thread_id || !input.body) return { result: "Error: thread_id and body required." };
+      try {
+        // Get original thread to find the recipient
+        const { data: original } = await supabase
+          .from("email_messages")
+          .select("from_email, to_email, subject")
+          .eq("thread_id", input.thread_id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .single();
+        if (!original) return { result: "Thread not found." };
+
+        const replyTo = original.direction === "inbound" ? original.from_email : original.to_email;
+        const subject = original.subject?.startsWith("Re: ") ? original.subject : `Re: ${original.subject}`;
+
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const { error: sendErr } = await resend.emails.send({
+          from: "JHPS Florida <info@jhpsfl.com>",
+          to: [replyTo],
+          subject,
+          html: input.body,
+        });
+        if (sendErr) return { result: `Error: ${sendErr.message}` };
+
+        // Log reply
+        await supabase.from("email_messages").insert({
+          thread_id: input.thread_id,
+          direction: "outbound",
+          from_email: "info@jhpsfl.com",
+          to_email: replyTo,
+          subject,
+          body_html: input.body,
+          body_text: input.body.replace(/<[^>]*>/g, ""),
+          read: true,
+        });
+
+        return { result: `Reply sent to ${replyTo} on thread ${input.thread_id}.` };
+      } catch (err: any) {
+        return { result: `Error: ${err.message}` };
+      }
+    }
+
+    case "update_video_lead": {
+      if (!input.lead_id) return { result: "Error: lead_id required." };
+      const updates: any = { updated_at: new Date().toISOString() };
+      if (input.status) updates.status = input.status;
+      if (input.customer_id) updates.customer_id = input.customer_id;
+      const { error } = await supabase.from("video_leads").update(updates).eq("id", input.lead_id);
+      if (error) return { result: `Error: ${error.message}` };
+      return { result: `Video lead updated.` };
+    }
+
+    case "navigate": {
+      return {
+        result: `Navigating to ${input.tab}`,
+        action: { type: "navigate", tab: input.tab, description: input.description || `Going to ${input.tab}` },
+      };
+    }
+
+    default:
+      return { result: `Unknown tool: ${name}` };
+  }
+}
+
+// ═══════════════════════════════════════════
+// SYSTEM PROMPT (cached — keep compact)
+// ═══════════════════════════════════════════
+const SYSTEM_PROMPT = `You are JHPS Assistant for Jenkins Home & Property Solutions (Central Florida lawn/landscaping/property services).
+
+## RULES
+- NEVER fabricate data. ALWAYS use tools for database queries. Present only real results.
+- Be concise. Use **bold** and bullet lists.
+- For quotes: DRAFT IN CHAT FIRST. Gather info, present draft with line items and totals, wait for "yes"/"go ahead"/"commit" before creating.
+- Navigate user to new records after creating them.
+- Confirm before sending emails, quotes, or invoices.
+
+## QUOTE BUILDER FLOW
+1. Gather: customer name, service address, services needed, lot size/qty, special conditions
+2. Ask in batches of 2-3 questions, conversational
+3. Present full draft: line items (qty × price = total), subtotal, exclusions, warranty
+4. Wait for confirmation — "Ready to commit?"
+5. Only then create_quote + navigate
+6. User can request changes — update draft and re-present
+
+## QUOTE RULES
+- Use realistic quantities, not 1 for everything
+- Appropriate units: visit, sqft, cuyd, each, lot, hour, lnft, flat
+- ALWAYS fill: scope_summary, exclusions (3-5), warranty (default 30-day), closing_statement (with phone 407-686-9817)
+- Calculate amounts correctly (qty × unit_price)
+
+## NATURAL LANGUAGE TRANSLATION
+"add 50% deposit" → set_payment_terms deposit_balance 50%, "make it 3 payments" → deposit_installments, "turn on warranty" → toggle_quote_terms add, "make it commercial" → is_commercial:true, "add financing" → show_financing:true, "set tax 7%" → tax_rate:7, "expires in 2 weeks" → calculate expiration_date
+
+## PRICING (Central FL 2025-26)
+Mow: std $45, lg $75, XL $120. Edge $25, hedge $50, full pkg $95. Pressure wash: driveway $150, house $250, patio $125, fence $100, roof $350, full $450. Junk: sm $150, half $275, full $450. Land clear: brush $500/qtr-acre, tree $150-350. Cleanup: general $200, post-construction $400, estate $600. Mulch $50-75/cuyd, rubber $100-150/cuyd. Sod $1.50-3/sqft, rock $75-125/cuyd, border $8-15/lnft, irrigation $75-150/hr.
+
+## TABS
+overview, customers, jobs, payments, subscriptions, invoices, quotes, yelp_leads, video_leads, messages, analytics
+
+## TERMS DEFAULTS
+ON: Payment Terms, Scope of Work, Cancellation Policy, Property Access, Liability Limitation, Weather Delays, Change Orders
+OFF: Material Price Fluctuation, Independent Contractor, Warranty, FL Lien Rights, Dispute Resolution`;
+
+// ═══════════════════════════════════════════
+// MAIN HANDLER
+// ═══════════════════════════════════════════
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -251,769 +1398,156 @@ export async function POST(req: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
-    // Load memories
-    let memoryNote = "";
-    try {
-      const { data: memories } = await supabase
-        .from("ai_memories")
-        .select("content, category")
-        .order("category")
-        .limit(50);
-      if (memories?.length) {
-        const grouped: Record<string, string[]> = {};
-        memories.forEach((m: any) => {
-          const cat = m.category || "general";
-          if (!grouped[cat]) grouped[cat] = [];
-          grouped[cat].push(m.content);
-        });
-        memoryNote = "\n\n## SAVED MEMORIES\n" +
-          Object.entries(grouped).map(([cat, items]) => "**" + cat + ":**\n" + items.map(i => "- " + i).join("\n")).join("\n");
-      }
-    } catch {}
+    // Load persistent memories
+    const { data: memories } = await supabase
+      .from("ai_memories")
+      .select("content, category")
+      .order("category")
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-    let contextNote = currentTab ? "\nUser is on tab: " + currentTab : "";
+    // Build dynamic context (uncached — changes per request)
+    const contextParts: string[] = [];
 
-    // Pre-detect if web search is needed — run it BEFORE the AI call
-    const lastUserMsg = messages[messages.length - 1]?.content || "";
-    const searchQuery = needsWebSearch(lastUserMsg);
-    if (searchQuery) {
-      const searchResults = await webSearch(searchQuery);
-      if (searchResults && searchResults !== "No results found." && searchResults !== "Search failed.") {
-        contextNote += '\n\n## WEB SEARCH RESULTS for "' + searchQuery + '":\n' + searchResults + '\n\nUse these results to answer. Include source URLs.';
-      }
+    if (memories?.length) {
+      contextParts.push("\n## SAVED MEMORIES");
+      const grouped: Record<string, string[]> = {};
+      memories.forEach((m: any) => {
+        const cat = m.category || "general";
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(m.content);
+      });
+      Object.entries(grouped).forEach(([cat, items]) => {
+        contextParts.push(`**${cat}:**`);
+        items.forEach(i => contextParts.push(`- ${i}`));
+      });
     }
 
-    // Function calling tools — AI decides when to look up data
-    const dbTools = [
-      {
-        type: "function",
-        function: {
-          name: "lookup_data",
-          description: "Look up quotes, customers, invoices, or jobs from the JHPS database. Call this whenever you need real data to answer a question. For a specific quote, pass quote_number. For terms & conditions options, use table 'quote_terms'.",
-          parameters: {
-            type: "object",
-            properties: {
-              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"], description: "Which table to query. Use quote_terms to get available terms & conditions with their IDs." },
-              search_name: { type: "string", description: "Customer name to filter by (optional)" },
-              quote_number: { type: "string", description: "Specific quote number to look up (e.g. QTE-2603-0001). Returns full details including terms, exclusions, warranty, etc." },
-            },
-            required: ["table"],
-          },
-        },
-      },
-    ];
+    if (currentTab) contextParts.push(`\nUser is on tab: ${currentTab}`);
 
-    // Helper to execute the lookup
-    async function executeLookup(table: string, searchName?: string, quoteNumber?: string): Promise<string> {
-      // Special case: quote_terms returns all available terms with IDs
-      if (table === "quote_terms") {
-        const { data: terms } = await supabase.from("quote_terms").select("*").order("sort_order");
-        if (!terms?.length) return "No terms found.";
-        return terms.map((t: any, i: number) =>
-          (i+1) + ". ID: " + t.id + " | " + t.title + " | Default: " + (t.is_default ? "ON" : "OFF") + "\n   " + (t.body || "").slice(0, 120)
-        ).join("\n");
-      }
+    const dynamicContext = contextParts.length ? "\n" + contextParts.join("\n") : "";
 
-      // Specific quote lookup — returns ALL fields
-      if (table === "quotes" && quoteNumber) {
-        const { data: q } = await supabase
-          .from("quotes")
-          .select("*, customers(name, email, phone, address)")
-          .eq("quote_number", quoteNumber)
-          .single();
-        if (!q) return "Quote " + quoteNumber + " not found.";
-
-        const cn = q.customers?.name || "Unknown";
-        const items = (q.line_items || []).map((li: any) => {
-          const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
-          return "  - " + li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")" + (li.section ? " [" + li.section + "]" : "");
-        }).join("\n");
-
-        // Resolve active terms to names
-        let termsInfo = "None active";
-        if (q.terms_conditions && Array.isArray(q.terms_conditions) && q.terms_conditions.length > 0) {
-          const { data: terms } = await supabase.from("quote_terms").select("id, title").in("id", q.terms_conditions);
-          if (terms?.length) {
-            termsInfo = terms.map((t: any) => t.title + " (ID: " + t.id + ")").join(", ");
-          }
-        }
-
-        return "QUOTE: " + q.quote_number +
-          "\nCustomer: " + cn +
-          "\nEmail: " + (q.customers?.email || "") +
-          "\nPhone: " + (q.customers?.phone || "") +
-          "\nCustomer Address: " + (q.customers?.address || "") +
-          "\nService Address: " + (q.service_address || "Not set") +
-          "\nStatus: " + (q.status || "draft") +
-          "\nCreated: " + q.created_at +
-          "\nExpiration: " + (q.expiration_date || "Not set") +
-          "\n\nLine Items:\n" + (items || "  None") +
-          "\n\nSubtotal: $" + (q.subtotal || 0) +
-          "\nTax Rate: " + (q.tax_rate || 0) + "%" +
-          "\nTax Amount: $" + (q.tax_amount || 0) +
-          "\nTotal: $" + (q.total || 0) +
-          "\n\nScope Summary: " + (q.scope_summary || "Not set") +
-          "\nAI Project Notes: " + (q.ai_project_notes || "Not set") +
-          "\nStart Date: " + (q.start_date || "Not set") +
-          "\nCompletion Date: " + (q.completion_date || "Not set") +
-          "\nExclusions: " + (q.exclusions || "Not set") +
-          "\nWarranty: " + (q.warranty || "Not set") +
-          "\nClosing Statement: " + (q.closing_statement || "Not set") +
-          "\nNotes: " + (q.notes || "Not set") +
-          "\nShow Financing: " + (q.show_financing ? "Yes" : "No") +
-          "\nPayment Terms: " + (q.payment_terms ? JSON.stringify(q.payment_terms) : "None") +
-          "\n\nActive Terms & Conditions: " + termsInfo +
-          "\nTerms IDs (raw): " + JSON.stringify(q.terms_conditions || []);
-      }
-
-      let rows: any[] = [];
-      if (table === "quotes" || table === "invoices") {
-        let query = supabase.from(table).select("*, customers(name, email, phone, address)").order("created_at", { ascending: false }).limit(15);
-        if (searchName) {
-          const { data: mc } = await supabase.from("customers").select("id").ilike("name", "%" + searchName + "%");
-          if (mc?.length) query = query.in("customer_id", mc.map((c: any) => c.id));
-        }
-        const { data } = await query;
-        rows = data || [];
-      } else {
-        let query = supabase.from(table).select("*").order("created_at", { ascending: false }).limit(15);
-        if (searchName && table === "customers") query = query.ilike("name", "%" + searchName + "%");
-        const { data } = await query;
-        rows = data || [];
-      }
-      if (!rows.length) return "No records found" + (searchName ? " for " + searchName : "") + ".";
-      return rows.map((r: any, i: number) => {
-        const cn = r.customers?.name || "";
-        if (table === "customers") return (i+1) + ". " + (r.name || "?") + " | " + (r.phone || "") + " | " + (r.email || "") + " | " + (r.address || "");
-        if (table === "quotes") {
-          const items = (r.line_items || []).map((li: any) => {
-            const unit = li.unit && li.unit !== "flat" ? " " + li.unit : "";
-            return li.description + " (qty:" + li.quantity + unit + " @ $" + li.unit_price + " = $" + li.amount + ")";
-          }).filter(Boolean).join("; ");
-          const termCount = Array.isArray(r.terms_conditions) ? r.terms_conditions.length : 0;
-          return (i+1) + ". " + r.quote_number + " | Customer: " + cn + " | $" + (r.total || 0) + " | " + (r.status || "draft") + " | Terms: " + termCount + " active" + (r.service_address ? " | " + r.service_address : "") + "\n   Items: " + (items || "none") + (r.scope_summary ? "\n   Scope: " + r.scope_summary : "");
-        }
-        if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " | " + cn + " | $" + (r.total || 0) + " | " + (r.status || "") + " | paid: $" + (r.amount_paid || 0);
-        if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " | " + (r.status || "") + " | $" + (r.amount || 0);
-        return "";
-      }).join("\n");
-    }
-
-    // Pre-detect if this is an action request (create/update) with embedded data
-    // If the user pastes a big JSON or detailed update, handle it server-side
-    const hasJson = lastUserMsg.includes('"line_items"') || lastUserMsg.includes('"about_your_project"') || lastUserMsg.includes('"sections"');
-    const lm = lastUserMsg.toLowerCase();
-    if (hasJson && (lm.includes('update') || lm.includes('edit') || lm.includes('apply') || lm.includes('change'))) {
-      // Try to parse the user's message as a direct action
-      try {
-        const jsonMatch = lastUserMsg.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          const qNum = parsed.estimate_number || parsed.quote_number;
-          if (qNum) {
-            const { data: existing } = await supabase.from("quotes").select("id").eq("quote_number", qNum).single();
-            if (existing) {
-              const updates: any = { updated_at: new Date().toISOString() };
-
-              if (parsed.service_address) updates.service_address = parsed.service_address;
-              if (parsed.about_your_project) updates.ai_project_notes = parsed.about_your_project;
-              if (parsed.scope_summary) updates.scope_summary = parsed.scope_summary;
-              if (parsed.closing_statement) updates.closing_statement = parsed.closing_statement;
-              if (parsed.notes) updates.notes = parsed.notes;
-              if (parsed.exclusions) updates.exclusions = typeof parsed.exclusions === 'string' ? parsed.exclusions : JSON.stringify(parsed.exclusions);
-              if (parsed.warranty) updates.warranty = parsed.warranty;
-              if (parsed.start_date) updates.start_date = parsed.start_date;
-              if (parsed.completion_date) updates.completion_date = parsed.completion_date;
-
-              // Handle sections → flat line items
-              if (parsed.sections && Array.isArray(parsed.sections)) {
-                const allItems: any[] = [];
-                for (const section of parsed.sections) {
-                  for (const li of (section.line_items || [])) {
-                    allItems.push({
-                      id: "ai_" + Math.random().toString(36).slice(2, 8),
-                      description: li.description || "",
-                      quantity: li.quantity || 1,
-                      unit: li.unit || "flat",
-                      unit_price: li.rate || li.unit_price || 0,
-                      amount: li.amount || (li.quantity || 1) * (li.rate || li.unit_price || 0),
-                      section: section.label || undefined,
-                    });
-                  }
-                }
-                if (allItems.length > 0) {
-                  updates.line_items = allItems;
-                  updates.subtotal = allItems.reduce((s: number, i: any) => s + i.amount, 0);
-                  updates.total = updates.subtotal;
-                }
-              } else if (parsed.line_items && Array.isArray(parsed.line_items)) {
-                const items = parsed.line_items.map((li: any) => ({
-                  id: "ai_" + Math.random().toString(36).slice(2, 8),
-                  description: li.description || "",
-                  quantity: li.quantity || 1,
-                  unit: li.unit || "flat",
-                  unit_price: li.rate || li.unit_price || 0,
-                  amount: li.amount || (li.quantity || 1) * (li.rate || li.unit_price || 0),
-                }));
-                updates.line_items = items;
-                updates.subtotal = items.reduce((s: number, i: any) => s + i.amount, 0);
-                updates.total = updates.subtotal;
-              }
-
-              if (parsed.totals?.deposit_required) {
-                updates.payment_terms = {
-                  type: "deposit_balance",
-                  deposit_amount: parsed.totals.deposit_required,
-                  deposit_percentage: Math.round((parsed.totals.deposit_required / (updates.total || parsed.totals.total || 1)) * 100),
-                  schedule: [
-                    { label: "Deposit", amount: parsed.totals.deposit_required, status: "pending" },
-                    { label: "Balance Due on Completion", amount: parsed.totals.balance_due_on_completion || (updates.total - parsed.totals.deposit_required), status: "pending" },
-                  ],
-                };
-              }
-
-              const { error } = await supabase.from("quotes").update(updates).eq("id", existing.id);
-              const resultMsg = error
-                ? "Failed to update " + qNum + ": " + error.message
-                : "Quote " + qNum + " updated successfully with all your changes — service address, project notes, line items, closing statement, and payment terms all applied.";
-
-              return NextResponse.json({ role: "assistant", content: "**" + resultMsg + "**\n\nYou can view the updated estimate in the Quotes tab." });
-            }
-          }
-        }
-      } catch (parseErr) {
-        // Not valid JSON or couldn't process — fall through to normal AI call
-      }
-    }
-
-    // Smart prompt loading — only include pricing if talking about quotes/estimates
-    const needsQuoteKnowledge = messages.some((m: any) => /quote|estimate|price|cost|mow|mulch|sod|pressure|clean|landscap|deposit|payment|line item/i.test(m.content || ""));
-    // Claude gets full prompt, Groq gets stripped version to stay in rate limits
-    const fullPrompt = SYSTEM_PROMPT + (needsQuoteKnowledge ? QUOTE_KNOWLEDGE : "") + memoryNote + contextNote;
-    const groqPrompt = CORE_PROMPT + (needsQuoteKnowledge ? QUOTE_KNOWLEDGE : "") + memoryNote + contextNote;
-
-    // Model selection — Claude Haiku (primary) or Groq Llama (fallback/toggle)
+    // Model selection
     const preferClaude = useModel !== "groq" && !!claudeKey;
     let content = "";
-    let usedModel = "";
+    const actions: { type: string; tab?: string; created_id?: string; description?: string }[] = [];
 
-    // Groq with function calling (OpenAI-compatible)
-    async function callGroq(msgs: any[], useTools = true): Promise<any> {
-      const body: any = {
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "system", content: groqPrompt }, ...msgs],
-        temperature: 0,
-        max_tokens: 4000,
-      };
-      if (useTools) body.tools = dbTools;
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Groq " + res.status);
-      return res.json();
-    }
-
-    // Claude with function calling
-    async function callClaude(msgs: any[], useTools = true): Promise<any> {
-      const body: any = {
-        model: "claude-3-haiku-20240307",
-        max_tokens: 4000,
-        system: fullPrompt,
-        messages: msgs.map((m: any) => ({ role: m.role, content: m.content })),
-      };
-      if (useTools) {
-        body.tools = [{
-          name: "lookup_data",
-          description: "Look up quotes, customers, invoices, or jobs from the database. Pass quote_number for full quote details.",
-          input_schema: {
-            type: "object",
-            properties: {
-              table: { type: "string", enum: ["quotes", "customers", "invoices", "jobs", "quote_terms"] },
-              search_name: { type: "string", description: "Customer name to filter by" },
-              quote_number: { type: "string", description: "Specific quote number for full details" },
-            },
-            required: ["table"],
-          },
-        }];
-      }
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Claude " + res.status);
-      return res.json();
-    }
-
-    // Main AI call with tool use loop
-    try {
-      if (preferClaude) {
-        // Claude tool use flow
-        let claudeData = await callClaude(messages);
-
-        // Check if Claude wants to use a tool
-        const toolUse = claudeData.content?.find((b: any) => b.type === "tool_use");
-        if (toolUse && toolUse.name === "lookup_data") {
-          const result = await executeLookup(toolUse.input.table, toolUse.input.search_name, toolUse.input.quote_number);
-          // Send tool result back to Claude
-          const toolMessages = [
-            ...messages,
-            { role: "assistant", content: claudeData.content },
-            { role: "user", content: [{ type: "tool_result", tool_use_id: toolUse.id, content: result }] },
-          ];
-          claudeData = await callClaude(toolMessages, false);
-        }
-
-        // Extract text content
-        content = (claudeData.content || [])
-          .filter((b: any) => b.type === "text")
-          .map((b: any) => b.text)
-          .join("\n") || "";
-        usedModel = "claude";
-      }
-    } catch (err) {
-      console.error("[ai-chat] Claude error:", err);
-    }
-
-    // Groq fallback
-    if (!content && groqKey) {
+    // ── Claude with native tool_use + prompt caching + multi-round loop ──
+    if (preferClaude) {
       try {
-        let groqData = await callGroq(messages);
-        const choice = groqData.choices?.[0];
+        const apiMessages = messages.map((m: any) => ({ role: m.role, content: m.content }));
 
-        // Check if Groq wants to call a function
-        if (choice?.message?.tool_calls?.length) {
-          const tc = choice.message.tool_calls[0];
-          const args = JSON.parse(tc.function.arguments);
-          const result = await executeLookup(args.table, args.search_name, args.quote_number);
-          // Send function result back
-          const toolMessages = [
-            ...messages,
-            choice.message,
-            { role: "tool", tool_call_id: tc.id, content: result },
-          ];
-          groqData = await callGroq(toolMessages, false);
+        // System prompt: static cached + dynamic uncached
+        const systemBlocks: any[] = [
+          { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+        ];
+        if (dynamicContext) {
+          systemBlocks.push({ type: "text", text: dynamicContext });
         }
 
-        content = groqData.choices?.[0]?.message?.content || "";
-        usedModel = "groq";
+        let claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 4000,
+            system: systemBlocks,
+            messages: apiMessages,
+            tools: TOOLS,
+          }),
+        });
+
+        if (!claudeRes.ok) {
+          console.error("[ai-chat] Claude error:", claudeRes.status, await claudeRes.text());
+        } else {
+          let claudeData = await claudeRes.json();
+
+          // Tool use loop — execute tools and feed results back (max 5 rounds)
+          let rounds = 0;
+          while (claudeData.stop_reason === "tool_use" && rounds < 5) {
+            rounds++;
+            const toolBlocks = claudeData.content.filter((b: any) => b.type === "tool_use");
+            const toolResults: any[] = [];
+            const assistantContent = claudeData.content;
+
+            for (const tool of toolBlocks) {
+              const { result, action } = await executeTool(tool.name, tool.input, supabase);
+              if (action) actions.push(action);
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: tool.id,
+                content: result,
+              });
+            }
+
+            // Continue conversation with tool results
+            claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: "claude-haiku-4-5-20251001",
+                max_tokens: 4000,
+                system: systemBlocks,
+                messages: [
+                  ...apiMessages,
+                  { role: "assistant", content: assistantContent },
+                  { role: "user", content: toolResults },
+                ],
+                tools: TOOLS,
+              }),
+            });
+
+            if (!claudeRes.ok) {
+              console.error("[ai-chat] Claude tool loop error:", claudeRes.status);
+              break;
+            }
+            claudeData = await claudeRes.json();
+          }
+
+          // Extract final text response
+          const textBlocks = claudeData.content?.filter((b: any) => b.type === "text") || [];
+          content = textBlocks.map((b: any) => b.text).join("\n");
+        }
+      } catch (err) {
+        console.error("[ai-chat] Claude failed:", err);
+      }
+    }
+
+    // ── Groq fallback (no native tool_use — simpler prompt) ──
+    if (!content && groqKey) {
+      const groqPrompt = SYSTEM_PROMPT + dynamicContext + "\n\nNote: You do not have database tools in this mode. Answer from context and general knowledge only. Be clear when you are estimating vs stating facts.";
+      try {
+        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${groqKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "system", content: groqPrompt }, ...messages],
+            temperature: 0.7,
+            max_tokens: 4000,
+          }),
+        });
+        if (!groqRes.ok) {
+          const err = await groqRes.text();
+          console.error("[ai-chat] Groq error:", groqRes.status, err);
+          return NextResponse.json({ error: groqRes.status === 429 ? "Rate limit — wait a few seconds" : "AI service error" }, { status: 502 });
+        }
+        const d = await groqRes.json();
+        content = d.choices?.[0]?.message?.content || "";
       } catch (err: any) {
         console.error("[ai-chat] Groq error:", err);
-        const isRateLimit = err.message?.includes("429");
-        return NextResponse.json({
-          error: isRateLimit ? "Rate limit — wait a few seconds" : "AI service error"
-        }, { status: 502 });
       }
     }
 
-    if (!content) {
-      return NextResponse.json({ error: "No AI service available" }, { status: 502 });
-    }
+    if (!content) return NextResponse.json({ error: "No AI service available" }, { status: 502 });
 
-    // If AI still requested a search (for queries we didn't pre-detect), handle it
-    const searchMatch = content.match(/```search\s*(\{[\s\S]*?\})\s*```/);
-    if (searchMatch) {
-      try {
-        const sq = JSON.parse(searchMatch[1]);
-        if (sq.query) {
-          const results = await webSearch(sq.query);
-          content = content.replace(/```search[\s\S]*?```/g, "").trim();
-          const searchPrompt = fullPrompt + '\n\n## SEARCH RESULTS for "' + sq.query + '":\n' + results;
-          if (preferClaude && claudeKey) {
-            const r2 = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-              body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 4000, system: searchPrompt, messages: messages.map((m: any) => ({ role: m.role, content: m.content })) }),
-            });
-            if (r2.ok) { const d2 = await r2.json(); content = d2.content?.[0]?.text || content; }
-          } else if (groqKey) {
-            const r2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: "Bearer " + groqKey, "Content-Type": "application/json" },
-              body: JSON.stringify({ model: "llama-3.1-8b-instant", messages: [{ role: "system", content: searchPrompt }, ...messages], temperature: 0, max_tokens: 4000 }),
-            });
-            if (r2.ok) { const d2 = await r2.json(); content = d2.choices?.[0]?.message?.content || content; }
-          }
-          content = content.replace(/```search[\s\S]*?```/g, "").trim();
-        }
-      } catch {}
-    }
-
-    // Handle action execution
-    let action = null;
-    const actionMatch = content.match(/```action\s*(\{[\s\S]*?\})\s*```/);
-    if (actionMatch) {
-      try {
-        action = JSON.parse(actionMatch[1]);
-
-        if (action.type === "query" && action.data) {
-          const table = action.data.table || "customers";
-          const limit = Math.min(action.data.limit || 10, 25);
-          const allowed = ["customers", "quotes", "invoices", "jobs", "quote_terms"];
-          if (allowed.includes(table)) {
-            const { data: rows, error } = await supabase
-              .from(table)
-              .select("*")
-              .order("created_at", { ascending: false })
-              .limit(limit);
-            if (error) {
-              action.result = "Query failed: " + error.message;
-            } else {
-              action.queryResults = rows;
-              action.result = rows?.length + " " + table + " found";
-              // Inject results into content so AI can summarize
-              const summary = (rows || []).map((r: any, i: number) => {
-                if (table === "customers") return (i+1) + ". " + (r.name || "Unknown") + " — " + (r.phone || "no phone") + " — " + (r.email || "no email");
-                if (table === "quotes") return (i+1) + ". " + (r.quote_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "");
-                if (table === "invoices") return (i+1) + ". " + (r.invoice_number || "") + " — $" + (r.total || 0) + " — " + (r.status || "");
-                if (table === "jobs") return (i+1) + ". " + (r.service_type || "") + " — " + (r.status || "") + " — $" + (r.amount || 0);
-                return JSON.stringify(r);
-              }).join("\n");
-              content += "\n\nHere are the results:\n" + summary;
-            }
-          } else {
-            action.result = "Cannot query table: " + table;
-          }
-        }
-
-        if (action.type === "create_customer" && action.data) {
-          const insertData: any = {
-            name: action.data.name || (action.data.first_name + " " + (action.data.last_name || "")).trim(),
-            customer_type: action.data.customer_type || "residential",
-          };
-          if (action.data.email) insertData.email = action.data.email;
-          if (action.data.phone) insertData.phone = action.data.phone;
-          if (action.data.address) insertData.address = action.data.address;
-
-          const { data: newCust, error } = await supabase
-            .from("customers")
-            .insert(insertData)
-            .select()
-            .single();
-
-          if (error) {
-            console.error("[ai-chat] create_customer error:", error);
-            action.result = "Failed to create customer: " + error.message;
-          } else {
-            action.result = "Customer created: " + (newCust?.name || "");
-            action.created_id = newCust?.id;
-          }
-        }
-
-        if (action.type === "create_quote" && action.data) {
-          // Find or skip customer
-          let customerId = null;
-          if (action.data.customer_name) {
-            const { data: customers } = await supabase
-              .from("customers")
-              .select("id, name")
-              .ilike("name", "%" + action.data.customer_name + "%")
-              .limit(1);
-            if (customers?.length) {
-              customerId = customers[0].id;
-            } else {
-              // Auto-create customer
-              const { data: newCust } = await supabase
-                .from("customers")
-                .insert({ name: action.data.customer_name, customer_type: "residential" })
-                .select().single();
-              customerId = newCust?.id;
-            }
-          }
-
-          // Generate quote number
-          const now = new Date();
-          const prefix = "QTE-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-";
-          const { data: existing } = await supabase
-            .from("quotes")
-            .select("quote_number")
-            .like("quote_number", prefix + "%")
-            .order("quote_number", { ascending: false })
-            .limit(1);
-          let nextNum = 1;
-          if (existing?.length) {
-            const last = parseInt(existing[0].quote_number.replace(prefix, ""), 10);
-            if (!isNaN(last)) nextNum = last + 1;
-          }
-          const quoteNumber = prefix + String(nextNum).padStart(4, "0");
-
-          // Calculate totals
-          const lineItems = (action.data.line_items || []).map((li: any) => ({
-            description: li.description || "",
-            quantity: li.quantity || 1,
-            unit_price: li.unit_price || 0,
-            amount: (li.quantity || 1) * (li.unit_price || 0),
-          }));
-          const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
-          const taxRate = action.data.tax_rate || 0;
-          const taxAmount = subtotal * (taxRate / 100);
-          const total = subtotal + taxAmount;
-          const expDays = action.data.expiration_days || 30;
-          const expDate = new Date(now.getTime() + expDays * 86400000).toISOString().split("T")[0];
-
-          const { data: newQuote, error } = await supabase.from("quotes").insert({
-            quote_number: quoteNumber,
-            customer_id: customerId,
-            status: "draft",
-            line_items: lineItems,
-            subtotal,
-            tax_rate: taxRate,
-            tax_amount: taxAmount,
-            total,
-            notes: action.data.notes || null,
-            expiration_date: expDate,
-            service_address: action.data.service_address || null,
-            scope_summary: action.data.scope_summary || null,
-            exclusions: action.data.exclusions || null,
-            warranty: action.data.warranty || "All workmanship guaranteed for 30 days from completion.",
-            closing_statement: action.data.closing_statement || null,
-            start_date: action.data.start_date || null,
-            completion_date: action.data.completion_date || null,
-          }).select().single();
-
-          if (error) action.result = "Failed: " + error.message;
-          else action.result = "Quote " + quoteNumber + " created — $" + total.toFixed(2) + " total";
-          action.created_id = newQuote?.id;
-        }
-
-        if (action.type === "update_quote" && action.data) {
-          const qNum = action.data.quote_number;
-          if (qNum) {
-            const { data: existing } = await supabase
-              .from("quotes")
-              .select("id, subtotal, tax_rate, total, line_items, terms_conditions, payment_terms")
-              .eq("quote_number", qNum)
-              .single();
-
-            if (existing) {
-              const updates: any = { updated_at: new Date().toISOString() };
-              const u = action.data.updates || action.data;
-
-              // Text fields
-              const textFields = ["service_address", "scope_summary", "exclusions", "warranty",
-                "closing_statement", "ai_project_notes", "notes", "start_date", "completion_date"];
-              for (const f of textFields) {
-                if (u[f] !== undefined) updates[f] = u[f] || null;
-              }
-
-              // Number fields
-              if (u.tax_rate !== undefined) updates.tax_rate = Number(u.tax_rate) || 0;
-
-              // Boolean fields
-              if (u.show_financing !== undefined) updates.show_financing = !!u.show_financing;
-              if (u.is_commercial !== undefined) updates.is_commercial = !!u.is_commercial;
-
-              // Date fields
-              if (u.expiration_date !== undefined) updates.expiration_date = u.expiration_date || null;
-              if (u.due_date !== undefined) updates.due_date = u.due_date || null;
-
-              // Terms conditions (array of IDs)
-              if (u.terms_conditions !== undefined) {
-                updates.terms_conditions = Array.isArray(u.terms_conditions) ? u.terms_conditions : null;
-              }
-
-              // Payment terms (object)
-              if (u.payment_terms !== undefined) {
-                updates.payment_terms = u.payment_terms || null;
-              }
-
-              // Add individual line items (append to existing)
-              if (u.add_items && Array.isArray(u.add_items)) {
-                const currentItems = existing.line_items || [];
-                const newItems = u.add_items.map((li: any) => ({
-                  id: "ai_" + Math.random().toString(36).slice(2, 8),
-                  description: li.description || "",
-                  quantity: li.quantity || 1,
-                  unit: li.unit || "flat",
-                  unit_price: li.unit_price || li.rate || 0,
-                  amount: li.amount || (li.quantity || 1) * (li.unit_price || li.rate || 0),
-                  section: li.section || undefined,
-                }));
-                updates.line_items = [...currentItems, ...newItems];
-                const subtotal = updates.line_items.reduce((s: number, li: any) => s + (li.amount || 0), 0);
-                updates.subtotal = subtotal;
-                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
-                updates.tax_amount = subtotal * (taxRate / 100);
-                updates.total = subtotal + updates.tax_amount;
-              }
-
-              // Remove line items by description match
-              if (u.remove_items && Array.isArray(u.remove_items)) {
-                const currentItems = updates.line_items || existing.line_items || [];
-                const removeDescs = u.remove_items.map((r: string) => r.toLowerCase());
-                updates.line_items = currentItems.filter((li: any) =>
-                  !removeDescs.some((rd: string) => (li.description || "").toLowerCase().includes(rd))
-                );
-                const subtotal = updates.line_items.reduce((s: number, li: any) => s + (li.amount || 0), 0);
-                updates.subtotal = subtotal;
-                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
-                updates.tax_amount = subtotal * (taxRate / 100);
-                updates.total = subtotal + updates.tax_amount;
-              }
-
-              // Toggle terms on/off — supports both UUIDs and title names
-              if (u.add_terms && Array.isArray(u.add_terms)) {
-                // Resolve names to IDs if needed
-                const resolvedIds: string[] = [];
-                for (const t of u.add_terms) {
-                  if (t.match(/^[0-9a-f-]{36}$/i)) { resolvedIds.push(t); continue; }
-                  const { data: found } = await supabase.from("quote_terms").select("id").ilike("title", "%" + t + "%").limit(1);
-                  if (found?.length) resolvedIds.push(found[0].id);
-                }
-                const current = existing.terms_conditions || [];
-                updates.terms_conditions = [...new Set([...current, ...resolvedIds])];
-              }
-              if (u.remove_terms && Array.isArray(u.remove_terms)) {
-                // Resolve names to IDs if needed
-                const resolvedIds: string[] = [];
-                for (const t of u.remove_terms) {
-                  if (t.match(/^[0-9a-f-]{36}$/i)) { resolvedIds.push(t); continue; }
-                  const { data: found } = await supabase.from("quote_terms").select("id").ilike("title", "%" + t + "%").limit(1);
-                  if (found?.length) resolvedIds.push(found[0].id);
-                }
-                const current = updates.terms_conditions || existing.terms_conditions || [];
-                updates.terms_conditions = current.filter((id: string) => !resolvedIds.includes(id));
-              }
-
-              // Line items (replace all)
-              if (u.line_items && Array.isArray(u.line_items)) {
-                const lineItems = u.line_items.map((li: any) => ({
-                  id: li.id || ("ai_" + Math.random().toString(36).slice(2, 8)),
-                  description: li.description || "",
-                  quantity: li.quantity || 1,
-                  unit: li.unit || "flat",
-                  unit_price: li.unit_price || li.rate || 0,
-                  amount: li.amount || (li.quantity || 1) * (li.unit_price || li.rate || 0),
-                  section: li.section || undefined,
-                }));
-                updates.line_items = lineItems;
-                const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
-                updates.subtotal = subtotal;
-                const taxRate = updates.tax_rate !== undefined ? updates.tax_rate : (existing.tax_rate || 0);
-                updates.tax_amount = subtotal * (taxRate / 100);
-                updates.total = subtotal + updates.tax_amount;
-              }
-
-              // Recalc totals if tax_rate changed but no new line items
-              if (u.tax_rate !== undefined && !u.line_items) {
-                const subtotal = existing.subtotal || 0;
-                updates.tax_amount = subtotal * (Number(u.tax_rate) / 100);
-                updates.total = subtotal + updates.tax_amount;
-              }
-
-              const { error } = await supabase
-                .from("quotes")
-                .update(updates)
-                .eq("id", existing.id);
-
-              if (error) {
-                action.result = "Failed to update: " + error.message;
-              } else {
-                const changedFields = Object.keys(updates).filter(k => k !== "updated_at");
-                action.result = "Quote " + qNum + " updated — changed: " + changedFields.join(", ");
-              }
-            } else {
-              action.result = "Quote " + qNum + " not found";
-            }
-          }
-        }
-
-        if (action.type === "create_invoice" && action.data) {
-          let customerId = null;
-          if (action.data.customer_name) {
-            const { data: customers } = await supabase
-              .from("customers")
-              .select("id, name")
-              .ilike("name", "%" + action.data.customer_name + "%")
-              .limit(1);
-            if (customers?.length) customerId = customers[0].id;
-            else {
-              const { data: newCust } = await supabase
-                .from("customers")
-                .insert({ name: action.data.customer_name, customer_type: "residential" })
-                .select().single();
-              customerId = newCust?.id;
-            }
-          }
-
-          const now = new Date();
-          const prefix = "INV-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-";
-          const { data: existing } = await supabase
-            .from("invoices")
-            .select("invoice_number")
-            .like("invoice_number", prefix + "%")
-            .order("invoice_number", { ascending: false })
-            .limit(1);
-          let nextNum = 1;
-          if (existing?.length) {
-            const last = parseInt(existing[0].invoice_number.replace(prefix, ""), 10);
-            if (!isNaN(last)) nextNum = last + 1;
-          }
-          const invoiceNumber = prefix + String(nextNum).padStart(4, "0");
-
-          const lineItems = (action.data.line_items || []).map((li: any) => ({
-            description: li.description || "",
-            quantity: li.quantity || 1,
-            unit_price: li.unit_price || 0,
-            amount: (li.quantity || 1) * (li.unit_price || 0),
-          }));
-          const subtotal = lineItems.reduce((s: number, li: any) => s + li.amount, 0);
-          const taxRate = action.data.tax_rate || 0;
-          const taxAmount = subtotal * (taxRate / 100);
-          const total = subtotal + taxAmount;
-          const dueDays = action.data.due_days || 15;
-          const dueDate = new Date(now.getTime() + dueDays * 86400000).toISOString().split("T")[0];
-
-          const { data: newInv, error } = await supabase.from("invoices").insert({
-            invoice_number: invoiceNumber,
-            customer_id: customerId,
-            status: "draft",
-            line_items: lineItems,
-            subtotal,
-            tax_rate: taxRate,
-            tax_amount: taxAmount,
-            total,
-            amount_paid: 0,
-            due_date: dueDate,
-            notes: action.data.notes || null,
-          }).select().single();
-
-          if (error) action.result = "Failed: " + error.message;
-          else action.result = "Invoice " + invoiceNumber + " created — $" + total.toFixed(2) + " total, due " + dueDate;
-          action.created_id = newInv?.id;
-        }
-
-        content = content.replace(/```action[\s\S]*?```/g, "").trim();
-        if (action.result) content += "\n\n**" + action.result + "**";
-      } catch (err) {
-        console.error("[ai-chat] action error:", err);
-      }
-    }
-
-    // Handle memory save
-    const memMatch = content.match(/```memory\s*(\{[\s\S]*?\})\s*```/);
-    if (memMatch) {
-      try {
-        const mem = JSON.parse(memMatch[1]);
-        await supabase.from("ai_memories").insert({ content: mem.content, category: mem.category || "general", source: "ai" });
-      } catch {}
-      content = content.replace(/```memory[\s\S]*?```/g, "").trim();
-    }
-
-    // Handle forget
-    const fgMatch = content.match(/```forget\s*(\{[\s\S]*?\})\s*```/);
-    if (fgMatch) {
-      try {
-        const fg = JSON.parse(fgMatch[1]);
-        if (fg.content) await supabase.from("ai_memories").delete().ilike("content", "%" + fg.content + "%");
-      } catch {}
-      content = content.replace(/```forget[\s\S]*?```/g, "").trim();
-    }
-
-    return NextResponse.json({ role: "assistant", content, action, model: usedModel });
+    return NextResponse.json({
+      role: "assistant",
+      content,
+      ...(actions.length > 0 ? { actions } : {}),
+    });
   } catch (err: any) {
+    console.error("[ai-chat] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

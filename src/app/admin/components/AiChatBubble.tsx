@@ -24,8 +24,22 @@ interface Message {
   content: string;
 }
 
-export default function AiChatBubble() {
-  const pathname = '/admin';
+// Tab-specific suggested prompts
+const TAB_PROMPTS: Record<string, string[]> = {
+  overview: ['How are we doing this month?', 'Show recent quotes', 'Any overdue invoices?', 'Dashboard stats'],
+  customers: ['Search for a customer', 'Create a new customer', 'Show all commercial customers', 'Who signed up recently?'],
+  quotes: ['Create a new quote', 'Show all draft quotes', 'Find accepted quotes', 'What quotes are expiring soon?'],
+  invoices: ['Show unpaid invoices', 'Create an invoice', 'Any overdue invoices?', 'Record a payment'],
+  jobs: ['Show active jobs', 'Any completed jobs this week?', 'Create a job', 'Show scheduled jobs'],
+  payments: ['Show recent payments', 'Total revenue this month?', 'Find payments by customer', 'Cash payments today'],
+  subscriptions: ['Show active subscriptions', 'Any paused subscriptions?', 'Create a subscription', 'Billing due soon?'],
+  yelp_leads: ['Show new Yelp leads', 'Any needs attention?', 'Reply to a lead', 'Show all Yelp conversations'],
+  video_leads: ['Show new video leads', 'Any unreviewed leads?', 'Send a quote to a lead', 'Recent submissions'],
+  messages: ['Show unread emails', 'Search emails', 'Compose an email', 'Show sent messages'],
+  analytics: ['Revenue breakdown', 'Quote conversion rate', 'Customer growth', 'How are we doing?'],
+};
+
+export default function AiChatBubble({ activeTab = 'overview' }: { activeTab?: string }) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -40,7 +54,7 @@ export default function AiChatBubble() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('Thinking...');
-  const [aiModel, setAiModel] = useState<'claude' | 'groq'>('groq');
+  const [aiModel, setAiModel] = useState<'claude' | 'groq'>('claude');
   const [lastModel, setLastModel] = useState('');
   const [unread, setUnread] = useState(0);
 
@@ -78,10 +92,11 @@ export default function AiChatBubble() {
 
     // Detect what kind of request this is for status display
     const lm = text.toLowerCase();
-    if (lm.includes('search') || lm.includes('look up') || lm.includes('find')) setLoadingStatus('Searching...');
-    else if (lm.includes('create') || lm.includes('make') || lm.includes('new')) setLoadingStatus('Creating...');
+    if (lm.includes('send') || lm.includes('email') || lm.includes('reply')) setLoadingStatus('Sending...');
+    else if (lm.includes('search') || lm.includes('look up') || lm.includes('find')) setLoadingStatus('Searching...');
+    else if (lm.includes('create') || lm.includes('make') || lm.includes('new') || lm.includes('quote') || lm.includes('invoice')) setLoadingStatus('Creating...');
     else if (lm.includes('update') || lm.includes('edit') || lm.includes('change') || lm.includes('modify')) setLoadingStatus('Updating...');
-    else if (lm.includes('list') || lm.includes('show') || lm.includes('how many')) setLoadingStatus('Loading data...');
+    else if (lm.includes('list') || lm.includes('show') || lm.includes('how many') || lm.includes('stats') || lm.includes('dashboard')) setLoadingStatus('Loading data...');
     else setLoadingStatus('Thinking...');
 
     try {
@@ -90,21 +105,14 @@ export default function AiChatBubble() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          currentTab: pathname,
+          currentTab: activeTab,
           useModel: aiModel,
         }),
       });
 
       const data = await res.json();
 
-      // Check if response was cut off (incomplete action block)
-      let content = data.content || data.error || 'Sorry, something went wrong.';
-      if (content.includes('```action') && !content.includes('```\n') && !content.endsWith('```')) {
-        // Response was truncated — the action block is incomplete
-        // Show what we got and add a note
-        content = content.replace(/```action[\s\S]*$/, '').trim();
-        if (!content) content = 'Working on that — the request was too large for one response. Try breaking it into smaller pieces, or just provide the key changes.';
-      }
+      const content = data.content || data.error || 'Sorry, something went wrong.';
 
       const reply: Message = {
         role: 'assistant',
@@ -114,22 +122,13 @@ export default function AiChatBubble() {
       if (data.model) setLastModel(data.model);
       if (minimized || !open) setUnread(prev => prev + 1);
 
-      // Handle actions
-      if (data.action) {
-        if (data.action.type === 'navigate' && data.action.data?.tab) {
-          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: data.action.data.tab }));
+      // Handle actions (supports both single action and actions array)
+      const actionList = data.actions || (data.action ? [data.action] : []);
+      for (const act of actionList) {
+        if (act.tab) {
+          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: act.tab }));
         }
-        if (data.action.type === 'create_quote' && data.action.created_id) {
-          // Navigate to quotes tab and refresh
-          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'quotes' }));
-          window.dispatchEvent(new CustomEvent('ai-refresh'));
-        }
-        if (data.action.type === 'create_invoice' && data.action.created_id) {
-          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'invoices' }));
-          window.dispatchEvent(new CustomEvent('ai-refresh'));
-        }
-        if (data.action.type === 'create_customer' && data.action.created_id) {
-          window.dispatchEvent(new CustomEvent('ai-navigate', { detail: 'customers' }));
+        if (act.created_id) {
           window.dispatchEvent(new CustomEvent('ai-refresh'));
         }
       }
@@ -242,12 +241,7 @@ export default function AiChatBubble() {
             <p className="text-[16px] text-white/50 mb-1">How can I help?</p>
             <p className="text-[14px] text-white/25 mb-4">Ask about the app, construction codes, conversions, or your projects</p>
             <div className="flex flex-wrap gap-1.5 justify-center">
-              {[
-                'How do I create an invoice?',
-                'What services do we offer?',
-                'FL lawn care schedule',
-                'How to manage Yelp leads?',
-              ].map(q => (
+              {(TAB_PROMPTS[activeTab] || TAB_PROMPTS.overview).map(q => (
                 <button
                   key={q}
                   onClick={() => { setInput(q); inputRef.current?.focus(); }}
