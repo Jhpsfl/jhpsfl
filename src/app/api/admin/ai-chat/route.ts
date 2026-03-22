@@ -899,6 +899,45 @@ async function executeTool(
         const p = props[0];
         const lotSqft = p.lotSize || p.lotSquareFeet || 0;
         const lotAcres = lotSqft ? (lotSqft / 43560).toFixed(2) : "?";
+
+        // Extract latest tax assessment and tax amount from nested objects
+        let assessedValue = p.assessedValue || null;
+        let taxAmount = p.taxAmount || null;
+        if (!assessedValue && p.taxAssessments) {
+          const years = Object.keys(p.taxAssessments).sort().reverse();
+          if (years.length) assessedValue = p.taxAssessments[years[0]]?.value;
+        }
+        if (!taxAmount && p.propertyTaxes) {
+          const years = Object.keys(p.propertyTaxes).sort().reverse();
+          if (years.length) taxAmount = p.propertyTaxes[years[0]]?.total;
+        }
+
+        // Owner names (can be array)
+        const ownerName = p.ownerName || (p.owner?.names ? p.owner.names.join(", ") : p.owner) || "N/A";
+
+        // Estimate value: use last sale price + appreciation, or assessed value * 1.2 as rough market estimate
+        let estimatedValue = "N/A";
+        if (p.lastSalePrice && p.lastSaleDate) {
+          const saleYear = new Date(p.lastSaleDate).getFullYear();
+          const yearsAgo = new Date().getFullYear() - saleYear;
+          const appreciated = Math.round(p.lastSalePrice * Math.pow(1.04, yearsAgo)); // ~4% annual appreciation
+          estimatedValue = `~$${appreciated.toLocaleString()} (based on $${p.lastSalePrice.toLocaleString()} sale in ${saleYear} + ~4%/yr appreciation)`;
+        } else if (assessedValue) {
+          const marketEst = Math.round(assessedValue * 1.2); // assessed is typically ~80% of market
+          estimatedValue = `~$${marketEst.toLocaleString()} (est. from $${assessedValue.toLocaleString()} assessed value)`;
+        }
+
+        // Features
+        const features: string[] = [];
+        if (p.features) {
+          if (p.features.cooling) features.push(`Cooling: ${p.features.coolingType || "Yes"}`);
+          if (p.features.heating) features.push(`Heating: ${p.features.heatingType || "Yes"}`);
+          if (p.features.garage) features.push(`Garage: ${p.features.garageType || "Yes"}`);
+          if (p.features.roofType) features.push(`Roof: ${p.features.roofType}`);
+          if (p.features.exteriorType) features.push(`Exterior: ${p.features.exteriorType}`);
+          if (p.features.floorCount) features.push(`Floors: ${p.features.floorCount}`);
+        }
+
         const lines = [
           `**Property: ${p.formattedAddress || p.addressLine1 || input.address}**`,
           `Lot Size: ${lotSqft ? lotSqft.toLocaleString() + " sqft (" + lotAcres + " acres)" : "Not available"}`,
@@ -906,10 +945,14 @@ async function executeTool(
           `Bedrooms: ${p.bedrooms ?? "N/A"} | Bathrooms: ${p.bathrooms ?? "N/A"}`,
           `Year Built: ${p.yearBuilt || "N/A"}`,
           `Property Type: ${p.propertyType || "N/A"}`,
-          `Assessed Value: ${p.assessedValue ? "$" + p.assessedValue.toLocaleString() : "N/A"}`,
-          `Tax: ${p.taxAmount ? "$" + p.taxAmount.toLocaleString() + "/yr" : "N/A"}`,
-          `Owner: ${p.ownerName || p.owner || "N/A"}`,
-        ];
+          `Estimated Value: ${estimatedValue}`,
+          `Assessed Value: ${assessedValue ? "$" + assessedValue.toLocaleString() : "N/A"}`,
+          `Annual Tax: ${taxAmount ? "$" + taxAmount.toLocaleString() + "/yr" : "N/A"}`,
+          `Last Sale: ${p.lastSalePrice ? "$" + p.lastSalePrice.toLocaleString() + " (" + (p.lastSaleDate || "?").split("T")[0] + ")" : "N/A"}`,
+          `Owner: ${ownerName}`,
+          features.length ? `Features: ${features.join(" | ")}` : "",
+          `\n(${used + 1}/50 property lookups used this month)`,
+        ].filter(Boolean);
         return { result: lines.join("\n") };
       } catch (err: any) {
         return { result: `Property lookup error: ${err.message}` };
