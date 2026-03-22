@@ -1611,7 +1611,7 @@ export async function POST(req: NextRequest) {
     // Model selection
     const preferClaude = useModel !== "groq" && !!claudeKey;
     let content = "";
-    const actions: { type: string; tab?: string; created_id?: string; description?: string }[] = [];
+    const actions: { type?: string; tab?: string; created_id?: string; description?: string; yelp_reply?: { conversation_id: string; message: string; customer_name: string } }[] = [];
 
     // ── Claude with native tool_use + prompt caching + multi-round loop ──
     if (preferClaude) {
