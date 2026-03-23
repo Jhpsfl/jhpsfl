@@ -328,11 +328,11 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
         // Render with section headers — each section wrapped for page-break integrity
         sections.map((section, si) => (
           <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }} wrap={section.items.length > 15 ? true : false}>
-            {section.label && (
+            {section.label ? (
               <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 6, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>{section.label.toUpperCase()}</Text>
               </View>
-            )}
+            ) : <View />}
             <TableColumnHeaders primaryColor={primaryColor} />
             {section.items.map((item, i) => (
               <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
@@ -385,43 +385,43 @@ const TotalsBlock: React.FC<{
         <Text style={s.totalsLabel}>Subtotal</Text>
         <Text style={s.totalsVal}>{fmt(p.subtotal)}</Text>
       </View>
-      {p.taxAmount > 0 && (
+      {p.taxAmount > 0 ? (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Tax</Text>
           <Text style={s.totalsVal}>{fmt(p.taxAmount)}</Text>
         </View>
-      )}
-      {(p.discountAmount ?? 0) > 0 && (
+      ) : <View />}
+      {(p.discountAmount ?? 0) > 0 ? (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Discount</Text>
           <Text style={[s.totalsVal, { color: C.paidGreen }]}>−{fmt(p.discountAmount!)}</Text>
         </View>
-      )}
-      {(p.tipAmount ?? 0) > 0 && (
+      ) : <View />}
+      {(p.tipAmount ?? 0) > 0 ? (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Tip</Text>
           <Text style={s.totalsVal}>{fmt(p.tipAmount!)}</Text>
         </View>
-      )}
+      ) : <View />}
       <View style={s.totalsDivider} />
       <View style={[s.grandTotal, p.primaryColor ? { backgroundColor: p.primaryColor } : {}]}>
         <Text style={s.grandTotalText}>{p.totalLabel}</Text>
         <Text style={s.grandTotalText}>{fmt(p.totalAmount)}</Text>
       </View>
-      {(p.depositAmount ?? 0) > 0 && (
+      {(p.depositAmount ?? 0) > 0 ? (
         <View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(p.depositAmount! * 100))}</Text>
           </View>
-          {(p.balanceAmount ?? 0) > 0 && (
+          {(p.balanceAmount ?? 0) > 0 ? (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 4, marginTop: 2 }}>
               <Text style={{ fontSize: 9, color: '#4A5568' }}>Remaining Balance</Text>
               <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(p.balanceAmount! * 100))}</Text>
             </View>
-          )}
+          ) : <View />}
         </View>
-      )}
+      ) : <View />}
     </View>
   </View>
 );
