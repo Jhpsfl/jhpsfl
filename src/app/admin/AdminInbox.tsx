@@ -360,7 +360,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
   // ── Multi-select ──
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const longPressTimer = useRef<NodeJS.Timeout>();
+  const longPressTimer = useRef<NodeJS.Timeout>(null);
   const longPressTriggered = useRef(false);
 
   // ── Dropdown menus ──
