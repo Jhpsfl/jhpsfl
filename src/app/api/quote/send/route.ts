@@ -158,6 +158,9 @@ export async function POST(req: NextRequest) {
   // Line items summary for commercial email (no prices)
   const scopeList = (quote.line_items || []).map((item: { description: string }) => item.description).join(', ');
 
+  // Build estimate view link for residential emails
+  const estimateViewUrl = quote.public_token ? `https://jhpsfl.com/estimate/${quote.public_token}` : '';
+
   const html = isCommercial ? `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
       <div style="background:linear-gradient(135deg,#1565C0,#0D47A1);padding:28px 32px;border-radius:12px 12px 0 0;">
@@ -214,16 +217,17 @@ export async function POST(req: NextRequest) {
       <div style="background:#fff;padding:32px;border:1px solid #e0e0e0;border-top:none;">
         <p style="margin:0 0 16px;font-size:15px;">Hi ${estimateData.customerName},</p>
         <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
-          Thank you for your interest! Please find your estimate for <strong>${fmt(totalCents)}</strong> attached to this email as a PDF.
+          Thank you for your interest! Your estimate is included as a PDF attachment. You can also view full details, pricing, and accept online using the link below.
         </p>
         <div style="background:#E3F2FD;border:1px solid #1565C0;border-radius:8px;padding:16px;margin-bottom:24px;">
           <p style="margin:4px 0;font-size:14px;"><strong>Estimate #:</strong> ${estimateData.quoteNumber}</p>
-          <p style="margin:4px 0;font-size:14px;"><strong>Estimated Total:</strong> ${fmt(totalCents)}</p>
           ${expirationHtml}
         </div>
-        ${paymentScheduleHtml}
+        ${estimateViewUrl ? `<div style="text-align:center;margin:28px 0;">
+          <a href="${estimateViewUrl}" style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#2E7D32,#4CAF50);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">View Your Estimate →</a>
+        </div>` : ''}
         ${financingHtml}
-        <p style="margin:24px 0 0;font-size:15px;">If you&apos;d like to proceed or have any questions, please don&apos;t hesitate to reach out.</p>
+        <p style="margin:24px 0 0;font-size:15px;">If you have any questions, please don&apos;t hesitate to reach out.</p>
         <p style="margin:16px 0 0;font-size:15px;">
           Best regards,<br/>
           <strong style="color:#2E7D32;">Jenkins Home &amp; Property Solutions</strong>
@@ -242,7 +246,7 @@ export async function POST(req: NextRequest) {
 
   const emailSubject = isCommercial
     ? `Commercial Proposal ${estimateData.quoteNumber} — Jenkins Home & Property Solutions`
-    : `Estimate ${estimateData.quoteNumber} — ${fmt(totalCents)} — Jenkins Home & Property Solutions`;
+    : `Your Estimate ${estimateData.quoteNumber} — Jenkins Home & Property Solutions`;
 
   // ─── Send via Resend ───
   const thread_id = randomUUID();
