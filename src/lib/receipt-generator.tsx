@@ -1073,7 +1073,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
         ) : null}
 
         {data.termsText && data.termsText.length > 0 ? (
-          <View style={{ marginTop: 16 }}>
+          <View style={{ marginTop: 16 }} break>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 8 }}>TERMS & CONDITIONS</Text>
             {data.termsText.map((term, i) => (
               <View key={i} style={{ marginBottom: 6 }} wrap={false}>
