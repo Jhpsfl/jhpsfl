@@ -80,8 +80,8 @@ async function smartSearch(query: string): Promise<string> {
 const READ_TOOLS = [
   {
     name: "search_customers",
-    description: "Search customers by name, email, phone, or company. Returns matching customer records.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search customers by name, email, phone, or company. Pass empty query or omit it to list all customers.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string", description: "Search term. Omit or pass empty string to list all." }, limit: { type: "number" } } },
   },
   {
     name: "search_quotes",
@@ -606,16 +606,20 @@ async function executeTool(
   switch (name) {
     // ── READ TOOLS ──
     case "search_customers": {
-      const q = input.query?.toLowerCase() || "";
-      const limit = input.limit || 15;
-      const { data } = await supabase
+      const q = (input.query || "").trim().toLowerCase();
+      const limit = input.limit || 25;
+      let query = supabase
         .from("customers")
-        .select("id, name, email, phone, address, city, zip, customer_type, company_name, created_at")
-        .or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,company_name.ilike.%${q}%`)
+        .select("id, name, email, phone, address, city, zip, customer_type, company_name, nickname, billing_address, billing_city, billing_zip, created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
-      if (!data?.length) return { result: `No customers found matching "${input.query}".` };
-      return { result: JSON.stringify(data, null, 2) };
+      if (q) {
+        query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,company_name.ilike.%${q}%,nickname.ilike.%${q}%`);
+      }
+      const { data, error } = await query;
+      if (error) return { result: `Database error: ${error.message}` };
+      if (!data?.length) return { result: q ? `No customers found matching "${input.query}".` : "No customers in the system yet." };
+      return { result: `Found ${data.length} customer${data.length !== 1 ? 's' : ''}:\n${JSON.stringify(data, null, 2)}` };
     }
 
     case "search_quotes": {
