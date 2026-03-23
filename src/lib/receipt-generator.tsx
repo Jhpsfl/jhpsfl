@@ -684,7 +684,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
               </View>
-            ) : null}
+            ) : <View />}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             {data.customerEmail ? <Text style={s.metaVal}>{data.customerEmail}</Text> : null}
             {data.customerPhone ? <Text style={s.metaVal}>{data.customerPhone}</Text> : null}
@@ -729,16 +729,16 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </View>
           {data.taxAmount > 0 ? (
             <View style={s.totalsRow}>
-              <Text style={s.totalsLabel}>Tax</Text>
+              <Text style={s.totalsLabel}>4% Surcharge</Text>
               <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
             </View>
-          ) : null}
+          ) : <View />}
           {(data.discountAmount ?? 0) > 0 ? (
             <View style={s.totalsRow}>
               <Text style={s.totalsLabel}>Discount</Text>
               <Text style={[s.totalsVal, { color: C.paidGreen }]}>{'\u2212'}{fmt(data.discountAmount!)}</Text>
             </View>
-          ) : null}
+          ) : <View />}
           <View style={s.totalsDivider} />
           <View style={[s.grandTotal, { backgroundColor: docColors.primary }]}>
             <Text style={s.grandTotalText}>Amount Due</Text>
