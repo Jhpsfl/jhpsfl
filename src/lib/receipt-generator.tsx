@@ -727,18 +727,10 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             <Text style={s.totalsLabel}>Subtotal</Text>
             <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
           </View>
-          {data.taxAmount > 0 ? (
-            <View style={s.totalsRow}>
-              <Text style={s.totalsLabel}>4% Surcharge</Text>
-              <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
-            </View>
-          ) : <View />}
-          {(data.discountAmount ?? 0) > 0 ? (
-            <View style={s.totalsRow}>
-              <Text style={s.totalsLabel}>Discount</Text>
-              <Text style={[s.totalsVal, { color: C.paidGreen }]}>{'\u2212'}{fmt(data.discountAmount!)}</Text>
-            </View>
-          ) : <View />}
+          <View style={s.totalsRow}>
+            <Text style={s.totalsLabel}>4% Surcharge</Text>
+            <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
+          </View>
           <View style={s.totalsDivider} />
           <View style={[s.grandTotal, { backgroundColor: docColors.primary }]}>
             <Text style={s.grandTotalText}>Amount Due</Text>
