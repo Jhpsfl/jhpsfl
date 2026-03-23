@@ -833,133 +833,188 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
     <Document title={`JHPS Estimate - ${data.quoteNumber}`} author={BRAND.name} subject="Service Estimate">
       <Page size="LETTER" style={s.page}>
         <ContinuationHeader docType="ESTIMATE" docNumber={data.quoteNumber} />
+
         <View style={s.header}>
-          <CompanyHeader logoUrl={logoUrl} />
+          <View style={s.headerLeft}>
+            {logoUrl ? (
+              <Image src={logoUrl} style={s.logo} />
+            ) : (
+              <View>
+                <Text style={s.logoText}>{BRAND.shortName}</Text>
+                <Text style={s.logoSubtext}>{BRAND.name}</Text>
+              </View>
+            )}
+            <Text style={s.companyLine}>{BRAND.serviceArea}</Text>
+            <Text style={s.companyLine}>Phone: {BRAND.phone} · Email: {BRAND.email}</Text>
+            <Text style={s.companyLine}>{BRAND.website}</Text>
+          </View>
           <View style={s.headerRight}>
             <Text style={s.docTitle}>ESTIMATE</Text>
             <View style={badge}><Text style={badgeText}>{label}</Text></View>
           </View>
         </View>
+
         <View style={s.metaRow}>
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Prepared For</Text>
-            {data.companyName && (
-              <>
+            {data.companyName ? (
+              <View>
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: C.primary, marginBottom: 4, borderRadius: 1 }} />
-              </>
-            )}
+              </View>
+            ) : null}
             <Text style={s.metaValBold}>{data.customerName}</Text>
-            {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
-            {data.serviceAddress && (
+            {data.customerPhone ? <Text style={s.metaVal}>{data.customerPhone}</Text> : null}
+            {data.serviceAddress ? (
               <View style={{ marginTop: 6, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: '#E2E8F0' }}>
                 <Text style={{ fontSize: 8, color: '#718096', fontFamily: 'Helvetica-Bold', letterSpacing: 0.5, marginBottom: 2 }}>SERVICE LOCATION</Text>
                 <Text style={s.metaVal}>{data.serviceAddress}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
             <Text style={s.metaLabel}>Estimate Details</Text>
             <Text style={s.metaVal}>Estimate #: {data.quoteNumber}</Text>
             <Text style={s.metaVal}>Date: {formatDateShort(data.quoteDate)}</Text>
-            {data.expirationDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Valid Until: {formatDateShort(data.expirationDate)}</Text>}
-            {data.dueDate && <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Due Date: {formatDateShort(data.dueDate)}</Text>}
+            {data.expirationDate ? <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Valid Until: {formatDateShort(data.expirationDate)}</Text> : null}
+            {data.dueDate ? <Text style={[s.metaValBold, { color: C.dueBlue, marginTop: 4 }]}>Due Date: {formatDateShort(data.dueDate)}</Text> : null}
           </View>
         </View>
-        {/* ─── AI Project Notes (with auto bold subheadings) ─── */}
-        {data.aiProjectNotes && (
+
+        {data.aiProjectNotes ? (
           <View style={{ marginTop: 16, padding: 14, backgroundColor: '#F0FFF4', borderRadius: 6, borderLeftWidth: 3, borderLeftColor: '#48BB78' }}>
             <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 6, letterSpacing: 0.5 }}>ABOUT YOUR PROJECT</Text>
             {parseProjectNotes(data.aiProjectNotes).map((block, i) => (
               <View key={i} style={{ marginBottom: 6 }}>
-                {block.heading && (
+                {block.heading ? (
                   <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#276749', marginBottom: 3 }}>{block.heading}</Text>
-                )}
+                ) : null}
                 <Text style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.6 }}>{block.body}</Text>
               </View>
             ))}
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Page break after About Your Project if present ─── */}
-        {data.aiProjectNotes && <View break />}
+        {data.aiProjectNotes ? <View break /> : null}
 
-        {/* ─── Scope Summary ─── */}
-        {data.scopeSummary && (
+        {data.scopeSummary ? (
           <View style={{ marginTop: 14 }} wrap={false}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 6 }}>SCOPE OF WORK</Text>
             <Text style={{ fontSize: 9.5, color: '#4A5568', lineHeight: 1.6 }}>{data.scopeSummary}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Timeline ─── */}
-        {(data.startDate || data.completionDate) && (
+        {(data.startDate || data.completionDate) ? (
           <View style={{ marginTop: 14, flexDirection: 'row', gap: 20 }} wrap={false}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5 }}>TIMELINE:</Text>
-            {data.startDate && <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Start: {data.startDate}</Text>}
-            {data.completionDate && <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Completion: {data.completionDate}</Text>}
+            {data.startDate ? <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Start: {data.startDate}</Text> : null}
+            {data.completionDate ? <Text style={{ fontSize: 9.5, color: '#4A5568' }}>Completion: {data.completionDate}</Text> : null}
+          </View>
+        ) : null}
+
+        {hasSections ? (
+          <View>
+            {sections.map((section, si) => (
+              <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }} wrap={section.items.length > 15 ? true : false}>
+                {section.label ? (
+                  <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 6, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>{section.label.toUpperCase()}</Text>
+                  </View>
+                ) : null}
+                <View style={s.tHead}>
+                  <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
+                  <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
+                  <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
+                  <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
+                </View>
+                {section.items.map((item, i) => (
+                  <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
+                    <View style={s.colSvc}><Text style={s.cellBold}>{item.name}</Text></View>
+                    <Text style={[s.cell, s.colQty]}>{item.quantity}{item.unit ? ' ' + item.unit : ''}</Text>
+                    <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
+                    <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
+                  </View>
+                ))}
+                <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F7', paddingVertical: 5, paddingHorizontal: 12, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
+                  <Text style={{ flex: 1, fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#4A5568', textAlign: 'right' }}>{section.label ? section.label + ' Subtotal' : 'Subtotal'}</Text>
+                  <Text style={{ width: 80, fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#2D3748', textAlign: 'right' }}>{fmt(section.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={{ marginTop: 8 }}>
+            <View style={s.tHead}>
+              <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
+              <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
+              <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
+              <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
+            </View>
+            {data.lineItems.map((item, i) => (
+              <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
+                <View style={s.colSvc}><Text style={s.cellBold}>{item.name}</Text></View>
+                <Text style={[s.cell, s.colQty]}>{item.quantity}{item.unit ? ' ' + item.unit : ''}</Text>
+                <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
+                <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
+              </View>
+            ))}
           </View>
         )}
+        <View style={{ marginBottom: 20 }} />
 
-        {/* ─── Line Items (sections wrapped with wrap={false} for integrity) ─── */}
-        <ItemsTable items={data.lineItems} />
-
-        {/* ─── Totals + Payment Schedule (kept together) ─── */}
         <View wrap={false}>
-          {/* Totals block — show section subtotals if sectioned */}
           <View style={s.totalsWrap}>
             <View style={s.totalsBlock}>
               {hasSections ? (
-                <>
+                <View>
                   {sections.filter(sec => sec.label).map((sec, i) => (
                     <View key={i} style={s.totalsRow}>
                       <Text style={s.totalsLabel}>{sec.label} Subtotal</Text>
                       <Text style={s.totalsVal}>{fmt(sec.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
                     </View>
                   ))}
-                </>
+                </View>
               ) : (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Subtotal</Text>
                   <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
                 </View>
               )}
-              {data.taxAmount > 0 && (
+              {data.taxAmount > 0 ? (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Tax</Text>
                   <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
                 </View>
-              )}
-              {(data.discountAmount ?? 0) > 0 && (
+              ) : null}
+              {(data.discountAmount ?? 0) > 0 ? (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Discount</Text>
                   <Text style={[s.totalsVal, { color: C.paidGreen }]}>-{fmt(data.discountAmount!)}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={s.totalsDivider} />
               <View style={s.grandTotal}>
                 <Text style={s.grandTotalText}>Total</Text>
                 <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
               </View>
-              {data.paymentTerms?.schedule?.[0]?.amount != null && data.paymentTerms.schedule[0].amount > 0 && (
-                <>
+              {data.paymentTerms?.schedule?.[0]?.amount != null && data.paymentTerms.schedule[0].amount > 0 ? (
+                <View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(data.paymentTerms!.schedule[0].amount * 100))}</Text>
                   </View>
-                  {data.paymentTerms!.schedule.length > 1 && (
+                  {data.paymentTerms!.schedule.length > 1 ? (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 4, marginTop: 2 }}>
                       <Text style={{ fontSize: 9, color: '#4A5568' }}>Remaining Balance</Text>
-                      <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(data.paymentTerms!.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0) * 100))}</Text>
+                      <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(data.paymentTerms!.schedule.slice(1).reduce((sum, ps) => sum + ps.amount, 0) * 100))}</Text>
                     </View>
-                  )}
-                </>
-              )}
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           </View>
 
-          {/* Payment Schedule table — stays with totals */}
-          {data.paymentTerms && data.paymentTerms.schedule && data.paymentTerms.schedule.length > 0 && (
+          {data.paymentTerms?.schedule && data.paymentTerms.schedule.length > 0 ? (
             <View style={{ marginTop: 20 }}>
               <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 8, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>PAYMENT SCHEDULE</Text>
@@ -979,27 +1034,25 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                 ))}
               </View>
             </View>
-          )}
+          ) : null}
         </View>
 
-        {data.showFinancing && (
+        {data.showFinancing ? (
           <View style={{ marginTop: 20, padding: 14, borderRadius: 6, borderWidth: 1.5, borderColor: '#26A69A', backgroundColor: '#E0F2F1' }} wrap={false}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#00695C', marginBottom: 6 }}>$ FLEXIBLE PAYMENT OPTIONS AVAILABLE</Text>
             <Text style={{ fontSize: 9, color: '#004D40', lineHeight: 1.5 }}>{FINANCING_MESSAGE}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Closing Statement (phone stripped — footer has it) ─── */}
-        {data.closingStatement && (
+        {data.closingStatement ? (
           <View style={{ marginTop: 20, padding: 16, backgroundColor: '#F0FFF4', borderRadius: 6, borderWidth: 1, borderColor: '#C6F6D5' }} wrap={false}>
             {sanitizeClosingStatement(data.closingStatement).split('\n\n').map((para, i) => (
               <Text key={i} style={{ fontSize: 9.5, color: '#2D3748', lineHeight: 1.7, marginBottom: 6 }}>{para.trim()}</Text>
             ))}
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Exclusions ─── */}
-        {data.exclusions && (
+        {data.exclusions ? (
           <View style={{ marginTop: 16 }} wrap={false}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 6 }}>EXCLUSIONS</Text>
             <Text style={{ fontSize: 8.5, color: '#718096', fontStyle: 'italic', marginBottom: 4 }}>The following items are NOT included in this estimate:</Text>
@@ -1010,18 +1063,16 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
               </View>
             ))}
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Warranty ─── */}
-        {data.warranty && (
+        {data.warranty ? (
           <View style={{ marginTop: 12, padding: 10, backgroundColor: '#EBF8FF', borderRadius: 4, borderLeftWidth: 3, borderLeftColor: '#3182CE' }} wrap={false}>
             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#2B6CB0', marginBottom: 3 }}>WARRANTY</Text>
             <Text style={{ fontSize: 9, color: '#2D3748', lineHeight: 1.5 }}>{data.warranty}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* ─── Terms & Conditions (each clause wrap={false}) ─── */}
-        {data.termsText && data.termsText.length > 0 && (
+        {data.termsText && data.termsText.length > 0 ? (
           <View style={{ marginTop: 16 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A365D', letterSpacing: 0.5, marginBottom: 8 }}>TERMS & CONDITIONS</Text>
             {data.termsText.map((term, i) => (
@@ -1033,16 +1084,16 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
               </View>
             ))}
           </View>
-        )}
+        ) : null}
 
         <View style={s.infoBox} wrap={false}>
           <Text style={s.infoTitle}>Estimate Information</Text>
           <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color: isAccepted ? C.paidGreen : C.dueBlue, fontFamily: 'Helvetica-Bold' }]}>{data.quoteStatus}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Estimate Number</Text><Text style={s.infoVal}>{data.quoteNumber}</Text></View>
           <View style={s.infoRow}><Text style={s.infoLabel}>Date Prepared</Text><Text style={s.infoVal}>{formatDateShort(data.quoteDate)}</Text></View>
-          {data.expirationDate && <View style={s.infoRow}><Text style={s.infoLabel}>Valid Until</Text><Text style={[s.infoVal, { color: C.dueBlue, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.expirationDate)}</Text></View>}
+          {data.expirationDate ? <View style={s.infoRow}><Text style={s.infoLabel}>Valid Until</Text><Text style={[s.infoVal, { color: C.dueBlue, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.expirationDate)}</Text></View> : null}
         </View>
-        {data.notes && <NotesSection text={data.notes} />}
+        {data.notes ? <NotesSection text={data.notes} /> : null}
         <Footer />
       </Page>
     </Document>
