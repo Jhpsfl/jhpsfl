@@ -264,10 +264,10 @@ const CompanyHeader: React.FC<{ logoUrl?: string }> = ({ logoUrl }) => (
     {logoUrl ? (
       <Image src={logoUrl} style={s.logo} />
     ) : (
-      <>
+      <View>
         <Text style={s.logoText}>{BRAND.shortName}</Text>
         <Text style={s.logoSubtext}>{BRAND.name}</Text>
-      </>
+      </View>
     )}
     <Text style={s.companyLine}>{BRAND.serviceArea}</Text>
     <Text style={s.companyLine}>Phone: {BRAND.phone} · Email: {BRAND.email}</Text>
@@ -323,7 +323,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].label);
 
   return (
-    <>
+    <View>
       {hasSections ? (
         // Render with section headers — each section wrapped for page-break integrity
         sections.map((section, si) => (
@@ -353,7 +353,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
         ))
       ) : (
         // Flat list (no sections)
-        <>
+        <View>
           <View style={{ marginTop: 8 }}>
             <TableColumnHeaders primaryColor={primaryColor} />
           </View>
@@ -367,10 +367,10 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
               <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
             </View>
           ))}
-        </>
+        </View>
       )}
       <View style={{ marginBottom: 20 }} />
-    </>
+    </View>
   );
 };
 
@@ -409,7 +409,7 @@ const TotalsBlock: React.FC<{
         <Text style={s.grandTotalText}>{fmt(p.totalAmount)}</Text>
       </View>
       {(p.depositAmount ?? 0) > 0 && (
-        <>
+        <View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(p.depositAmount! * 100))}</Text>
@@ -420,7 +420,7 @@ const TotalsBlock: React.FC<{
               <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(p.balanceAmount! * 100))}</Text>
             </View>
           )}
-        </>
+        </View>
       )}
     </View>
   </View>
@@ -485,10 +485,10 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
         <View style={s.metaBlock}>
           <Text style={s.metaLabel}>Bill To</Text>
           {data.companyName && (
-            <>
+            <View>
               <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
               <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
-            </>
+            </View>
           )}
           <Text style={s.metaValBold}>{data.customerName}</Text>
           <Text style={s.metaVal}>{data.customerEmail}</Text>
@@ -817,10 +817,10 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Prepared For</Text>
             {data.companyName && (
-              <>
+              <View>
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: C.primary, marginBottom: 4, borderRadius: 1 }} />
-              </>
+              </View>
             )}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
@@ -883,14 +883,14 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           <View style={s.totalsWrap}>
             <View style={s.totalsBlock}>
               {hasSections ? (
-                <>
+                <View>
                   {sections.filter(sec => sec.label).map((sec, i) => (
                     <View key={i} style={s.totalsRow}>
                       <Text style={s.totalsLabel}>{sec.label} Subtotal</Text>
                       <Text style={s.totalsVal}>{fmt(sec.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
                     </View>
                   ))}
-                </>
+                </View>
               ) : (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Subtotal</Text>
@@ -915,7 +915,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                 <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
               </View>
               {data.paymentTerms?.schedule?.[0]?.amount != null && data.paymentTerms.schedule[0].amount > 0 && (
-                <>
+                <View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(data.paymentTerms!.schedule[0].amount * 100))}</Text>
@@ -926,7 +926,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                       <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(data.paymentTerms!.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0) * 100))}</Text>
                     </View>
                   )}
-                </>
+                </View>
               )}
             </View>
           </View>
