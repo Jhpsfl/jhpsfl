@@ -4,8 +4,6 @@ import { generateInvoicePDF, generateEstimatePDF } from '@/lib/receipt-generator
 import type { InvoiceData, EstimateData } from '@/lib/receipt-generator';
 import { auth } from '@clerk/nextjs/server';
 
-export const maxDuration = 30;
-
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -34,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (type === 'invoice') {
       const invoiceData: InvoiceData = {
         invoiceNumber: data.invoice_number || 'PREVIEW',
-        invoiceDate: data.created_at ? new Date(data.created_at) : new Date(),
+        invoiceDate: new Date(data.created_at || Date.now()),
         dueDate: data.due_date ? new Date(data.due_date) : undefined,
         invoiceStatus: data.status === 'overdue' ? 'OVERDUE' : 'DUE',
         customerName: data.customer_name || 'Customer',
@@ -42,7 +40,7 @@ export async function POST(req: NextRequest) {
         customerPhone: data.customer_phone || undefined,
         companyName: data.company_name || undefined,
         lineItems: (data.line_items || []).map((item: { description: string; quantity: number; unit_price: number; amount: number }) => ({
-          name: item.description || 'Service',
+          name: item.description,
           quantity: item.quantity || 1,
           unitPrice: Math.round((item.unit_price || item.amount || 0) * 100),
           totalPrice: Math.round((item.amount || 0) * 100),
@@ -52,7 +50,8 @@ export async function POST(req: NextRequest) {
         totalAmount: Math.round((data.total || 0) * 100),
         paymentLink: data.payment_link || undefined,
         notes: data.notes || undefined,
-        brandKey: (data.brand || 'jhps') as any,
+        paymentTerms: data.payment_terms || undefined,
+        brandKey: data.brand || 'jhps',
       };
       pdfBuffer = await generateInvoicePDF(invoiceData);
     } else if (type === 'estimate') {
@@ -113,10 +112,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error('PDF_PREVIEW_ERROR:', err);
-    console.error('PDF_PREVIEW_DATA:', JSON.stringify(body?.data || {}, null, 2).substring(0, 1000));
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    const stack = err instanceof Error ? err.stack?.split('\n').slice(0, 8).join('\n') : '';
-    return NextResponse.json({ error: 'PDF generation failed', detail: message, stack, dataReceived: body?.data ? Object.keys(body.data) : [] }, { status: 500 });
+    return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 });
   }
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

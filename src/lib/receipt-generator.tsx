@@ -264,10 +264,10 @@ const CompanyHeader: React.FC<{ logoUrl?: string }> = ({ logoUrl }) => (
     {logoUrl ? (
       <Image src={logoUrl} style={s.logo} />
     ) : (
-      <View>
+      <>
         <Text style={s.logoText}>{BRAND.shortName}</Text>
         <Text style={s.logoSubtext}>{BRAND.name}</Text>
-      </View>
+      </>
     )}
     <Text style={s.companyLine}>{BRAND.serviceArea}</Text>
     <Text style={s.companyLine}>Phone: {BRAND.phone} · Email: {BRAND.email}</Text>
@@ -323,16 +323,16 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].label);
 
   return (
-    <View>
+    <>
       {hasSections ? (
         // Render with section headers — each section wrapped for page-break integrity
         sections.map((section, si) => (
           <View key={si} style={{ marginTop: si === 0 ? 8 : 16 }} wrap={section.items.length > 15 ? true : false}>
-            {section.label ? (
+            {section.label && (
               <View style={{ backgroundColor: '#1E3A5F', paddingVertical: 6, paddingHorizontal: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>{section.label.toUpperCase()}</Text>
               </View>
-            ) : <View />}
+            )}
             <TableColumnHeaders primaryColor={primaryColor} />
             {section.items.map((item, i) => (
               <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
@@ -353,7 +353,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
         ))
       ) : (
         // Flat list (no sections)
-        <View>
+        <>
           <View style={{ marginTop: 8 }}>
             <TableColumnHeaders primaryColor={primaryColor} />
           </View>
@@ -367,10 +367,10 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
               <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
             </View>
           ))}
-        </View>
+        </>
       )}
       <View style={{ marginBottom: 20 }} />
-    </View>
+    </>
   );
 };
 
@@ -385,43 +385,43 @@ const TotalsBlock: React.FC<{
         <Text style={s.totalsLabel}>Subtotal</Text>
         <Text style={s.totalsVal}>{fmt(p.subtotal)}</Text>
       </View>
-      {p.taxAmount > 0 ? (
+      {p.taxAmount > 0 && (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Tax</Text>
           <Text style={s.totalsVal}>{fmt(p.taxAmount)}</Text>
         </View>
-      ) : <View />}
-      {(p.discountAmount ?? 0) > 0 ? (
+      )}
+      {(p.discountAmount ?? 0) > 0 && (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Discount</Text>
           <Text style={[s.totalsVal, { color: C.paidGreen }]}>−{fmt(p.discountAmount!)}</Text>
         </View>
-      ) : <View />}
-      {(p.tipAmount ?? 0) > 0 ? (
+      )}
+      {(p.tipAmount ?? 0) > 0 && (
         <View style={s.totalsRow}>
           <Text style={s.totalsLabel}>Tip</Text>
           <Text style={s.totalsVal}>{fmt(p.tipAmount!)}</Text>
         </View>
-      ) : <View />}
+      )}
       <View style={s.totalsDivider} />
       <View style={[s.grandTotal, p.primaryColor ? { backgroundColor: p.primaryColor } : {}]}>
         <Text style={s.grandTotalText}>{p.totalLabel}</Text>
         <Text style={s.grandTotalText}>{fmt(p.totalAmount)}</Text>
       </View>
-      {(p.depositAmount ?? 0) > 0 ? (
-        <View>
+      {(p.depositAmount ?? 0) > 0 && (
+        <>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(p.depositAmount! * 100))}</Text>
           </View>
-          {(p.balanceAmount ?? 0) > 0 ? (
+          {(p.balanceAmount ?? 0) > 0 && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 4, marginTop: 2 }}>
               <Text style={{ fontSize: 9, color: '#4A5568' }}>Remaining Balance</Text>
               <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(p.balanceAmount! * 100))}</Text>
             </View>
-          ) : <View />}
-        </View>
-      ) : <View />}
+          )}
+        </>
+      )}
     </View>
   </View>
 );
@@ -485,10 +485,10 @@ const ReceiptDoc: React.FC<{ data: ReceiptData; logoUrl?: string }> = ({ data, l
         <View style={s.metaBlock}>
           <Text style={s.metaLabel}>Bill To</Text>
           {data.companyName && (
-            <View>
+            <>
               <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
               <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
-            </View>
+            </>
           )}
           <Text style={s.metaValBold}>{data.customerName}</Text>
           <Text style={s.metaVal}>{data.customerEmail}</Text>
@@ -642,26 +642,148 @@ const LegalTermsPages: React.FC<{ docNumber: string }> = ({ docNumber }) => (
 // INVOICE / SERVICE CONTRACT DOCUMENT
 // ═══════════════════════════════════════════════════════════════
 
-const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data }) => {
+const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, logoUrl }) => {
+  const docBrand = resolveBrand(data.brandKey);
+  const docColors = resolveColors(data.brandKey);
+  const isOverdue = data.invoiceStatus === 'OVERDUE';
+  const badge = isOverdue ? s.badgeOverdue : s.badgeDue;
+  const badgeText = isOverdue ? s.badgeOverdueText : s.badgeDueText;
+  const label = isOverdue ? 'OVERDUE' : 'DUE';
+  const color = isOverdue ? C.overdueRed : C.dueBlue;
+
+  // Shared header block used by both simple invoices and contracts
+  const headerBlock = (
+    <View style={[s.header, { borderBottomColor: docColors.primary }]}>
+      <View style={s.headerLeft}>
+        {logoUrl ? (
+          <Image src={logoUrl} style={s.logo} />
+        ) : (
+          <Text style={[s.logoText, { color: docColors.primary }]}>{docBrand.shortName}</Text>
+        )}
+        <Text style={s.logoSubtext}>{docBrand.tagline}</Text>
+        <View>
+          <Text style={s.companyLine}>{docBrand.phone} · {docBrand.email}</Text>
+          <Text style={s.companyLine}>{docBrand.website}</Text>
+          <Text style={s.companyLine}>{docBrand.serviceArea}</Text>
+        </View>
+      </View>
+      <View style={s.headerRight}>
+        <Text style={[s.docTitle, { color: docColors.primary }]}>INVOICE</Text>
+        <View style={badge}><Text style={badgeText}>{label}</Text></View>
+      </View>
+    </View>
+  );
+
+  // Shared meta block
+  const metaBlock = (
+    <View style={s.metaRow}>
+      <View style={s.metaBlock}>
+        <Text style={s.metaLabel}>Bill To</Text>
+        {data.companyName ? (
+          <View>
+            <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: docColors.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
+            <View style={{ width: 40, height: 1.5, backgroundColor: docColors.primary, marginBottom: 4, borderRadius: 1 }} />
+          </View>
+        ) : null}
+        <Text style={s.metaValBold}>{data.customerName}</Text>
+        {data.customerEmail ? <Text style={s.metaVal}>{data.customerEmail}</Text> : null}
+        {data.customerPhone ? <Text style={s.metaVal}>{data.customerPhone}</Text> : null}
+        {data.customerAddress ? <Text style={s.metaVal}>{data.customerAddress}</Text> : null}
+        {data.jobAddress ? (
+          <View>
+            <Text style={[s.metaLabel, { marginTop: 8 }]}>Service Location</Text>
+            <Text style={s.metaVal}>{data.jobAddress}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={[s.metaBlock, { alignItems: 'flex-end' }]}>
+        <Text style={s.metaLabel}>Invoice Details</Text>
+        <Text style={s.metaVal}>Invoice #: {data.invoiceNumber}</Text>
+        <Text style={s.metaVal}>Issued: {formatDateShort(data.invoiceDate)}</Text>
+        {data.dueDate ? <Text style={[s.metaValBold, { color, marginTop: 4 }]}>Due: {formatDateShort(data.dueDate)}</Text> : null}
+      </View>
+    </View>
+  );
+
+  // Inline items table (avoids shared ItemsTable which uses fragments)
+  const itemsBlock = (
+    <View style={{ marginTop: 8 }}>
+      <View style={[s.tHead, { backgroundColor: docColors.primary }]}>
+        <Text style={[s.tHeadText, s.colSvc]}>Service / Description</Text>
+        <Text style={[s.tHeadText, s.colQty]}>Qty</Text>
+        <Text style={[s.tHeadText, s.colRate]}>Rate</Text>
+        <Text style={[s.tHeadText, s.colTotal]}>Amount</Text>
+      </View>
+      {data.lineItems.map((item, i) => (
+        <View key={i} style={i % 2 === 1 ? [s.tRow, s.tRowAlt] : s.tRow} wrap={false}>
+          <View style={s.colSvc}><Text style={s.cellBold}>{item.name}</Text></View>
+          <Text style={[s.cell, s.colQty]}>{item.quantity}{item.unit ? ' ' + item.unit : ''}</Text>
+          <Text style={[s.cell, s.colRate]}>{fmt(item.unitPrice)}</Text>
+          <Text style={[s.cellBold, s.colTotal]}>{fmt(item.totalPrice)}</Text>
+        </View>
+      ))}
+      <View style={{ marginBottom: 20 }} />
+    </View>
+  );
+
+  // Inline totals block (avoids shared TotalsBlock which uses fragments)
+  const totalsBlock = (
+    <View style={s.totalsWrap} wrap={false}>
+      <View style={s.totalsRow}>
+        <Text style={s.totalsLabel}>Subtotal</Text>
+        <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
+      </View>
+      {data.taxAmount > 0 ? (
+        <View style={s.totalsRow}>
+          <Text style={s.totalsLabel}>Tax</Text>
+          <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
+        </View>
+      ) : null}
+      {(data.discountAmount ?? 0) > 0 ? (
+        <View style={s.totalsRow}>
+          <Text style={s.totalsLabel}>Discount</Text>
+          <Text style={[s.totalsVal, { color: C.paidGreen }]}>{'\u2212'}{fmt(data.discountAmount!)}</Text>
+        </View>
+      ) : null}
+      <View style={s.totalsDivider} />
+      <View style={[s.grandTotal, { backgroundColor: docColors.primary }]}>
+        <Text style={s.grandTotalText}>Amount Due</Text>
+        <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
+      </View>
+    </View>
+  );
+
+  // Simple single-page invoice (no payment terms)
   return (
-    <Document title={`Invoice - ${data.invoiceNumber}`}>
-      <Page size="LETTER" style={{ padding: 50 }}>
-        <View>
-          <Text style={{ fontSize: 20, fontFamily: 'Helvetica-Bold', marginBottom: 10 }}>INVOICE</Text>
-          <Text style={{ fontSize: 12, marginBottom: 5 }}>{data.invoiceNumber}</Text>
-          <Text style={{ fontSize: 10, marginBottom: 5 }}>Customer: {data.customerName}</Text>
-          <Text style={{ fontSize: 10, marginBottom: 5 }}>Date: {String(data.invoiceDate)}</Text>
-          <Text style={{ fontSize: 10, marginBottom: 15 }}>Total: {fmt(data.totalAmount)}</Text>
+    <Document title={`${docBrand.shortName} Invoice - ${data.invoiceNumber}`} author={docBrand.name} subject="Invoice">
+      <Page size="LETTER" style={s.page}>
+        <ContinuationHeader docType="INVOICE" docNumber={data.invoiceNumber} primaryColor={docColors.primary} brandShort={docBrand.shortName} />
+        {headerBlock}
+        {metaBlock}
+        {itemsBlock}
+        {totalsBlock}
+
+        <View style={s.infoBox} wrap={false}>
+          <Text style={s.infoTitle}>Invoice Information</Text>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Status</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{data.invoiceStatus}</Text></View>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Invoice Number</Text><Text style={s.infoVal}>{data.invoiceNumber}</Text></View>
+          <View style={s.infoRow}><Text style={s.infoLabel}>Date Issued</Text><Text style={s.infoVal}>{formatDateShort(data.invoiceDate)}</Text></View>
+          {data.dueDate ? (
+            <View style={s.infoRow}><Text style={s.infoLabel}>Payment Due</Text><Text style={[s.infoVal, { color, fontFamily: 'Helvetica-Bold' }]}>{formatDateShort(data.dueDate)}</Text></View>
+          ) : null}
         </View>
-        <View>
-          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', marginBottom: 5 }}>LINE ITEMS</Text>
-          {data.lineItems.map((item, i) => (
-            <View key={i} style={{ flexDirection: 'row', marginBottom: 3 }}>
-              <Text style={{ fontSize: 9, flex: 3 }}>{item.name}</Text>
-              <Text style={{ fontSize: 9, flex: 1, textAlign: 'right' }}>{fmt(item.totalPrice)}</Text>
-            </View>
-          ))}
-        </View>
+
+        {data.paymentLink ? (
+          <View style={s.payLinkBox} wrap={false}>
+            <Text style={[s.payLinkTitle, { color: docColors.primary }]}>Pay Online</Text>
+            <Text style={[s.payLinkUrl, { color: docColors.primaryLight }]}>{data.paymentLink}</Text>
+            <Text style={s.payLinkNote}>Click or copy the link above to make a secure payment.</Text>
+          </View>
+        ) : null}
+
+        {data.notes ? <NotesSection text={data.notes} /> : null}
+
+        <Footer brandName={docBrand.name} brandPhone={docBrand.phone} brandEmail={docBrand.email} brandShort={docBrand.shortName} brandTagline={docBrand.tagline} primaryColor={docColors.primary} />
       </Page>
     </Document>
   );
@@ -755,10 +877,10 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>Prepared For</Text>
             {data.companyName && (
-              <View>
+              <>
                 <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.primary, letterSpacing: 0.5, marginBottom: 2 }}>{data.companyName}</Text>
                 <View style={{ width: 40, height: 1.5, backgroundColor: C.primary, marginBottom: 4, borderRadius: 1 }} />
-              </View>
+              </>
             )}
             <Text style={s.metaValBold}>{data.customerName}</Text>
             {data.customerPhone && <Text style={s.metaVal}>{data.customerPhone}</Text>}
@@ -821,14 +943,14 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
           <View style={s.totalsWrap}>
             <View style={s.totalsBlock}>
               {hasSections ? (
-                <View>
+                <>
                   {sections.filter(sec => sec.label).map((sec, i) => (
                     <View key={i} style={s.totalsRow}>
                       <Text style={s.totalsLabel}>{sec.label} Subtotal</Text>
                       <Text style={s.totalsVal}>{fmt(sec.items.reduce((sum, it) => sum + it.totalPrice, 0))}</Text>
                     </View>
                   ))}
-                </View>
+                </>
               ) : (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Subtotal</Text>
@@ -853,7 +975,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                 <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
               </View>
               {data.paymentTerms?.schedule?.[0]?.amount != null && data.paymentTerms.schedule[0].amount > 0 && (
-                <View>
+                <>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 3, marginTop: 6 }}>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>Deposit Due</Text>
                     <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#2E7D32' }}>{fmt(Math.round(data.paymentTerms!.schedule[0].amount * 100))}</Text>
@@ -864,7 +986,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                       <Text style={{ fontSize: 9, color: '#4A5568' }}>{fmt(Math.round(data.paymentTerms!.schedule.slice(1).reduce((sum, s) => sum + s.amount, 0) * 100))}</Text>
                     </View>
                   )}
-                </View>
+                </>
               )}
             </View>
           </View>
