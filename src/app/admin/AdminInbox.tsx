@@ -1003,7 +1003,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
           </span>
         </div>
 
-        <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+        <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
           {loadingThread ? (
             <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
           ) : messages.map(msg => {
@@ -1026,7 +1026,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             }
 
             return (
-              <div key={msg.id} style={{ background: "#0a140a", borderRadius: 16, padding: 20, marginBottom: 12, border: "1px solid #1a2a1a" }}>
+              <div key={msg.id} style={{ background: "#0a140a", borderRadius: 12, padding: "16px 12px", marginBottom: 8, border: "1px solid #1a2a1a", overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                   <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, flexShrink: 0, background: isOutbound ? "linear-gradient(135deg, #2E7D32, #1a4a1a)" : avatarColor(msg.from_email) + "30", color: isOutbound ? "#4CAF50" : avatarColor(msg.from_email) }}>
                     {initials}
@@ -1075,15 +1075,22 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                   </div>
                 </div>
                 {msg.body_html ? (
-                  <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;overflow-x:hidden;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;table-layout:fixed!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
-                    sandbox="allow-same-origin"
-                    style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a", overflow: "hidden" }}
-                    onLoad={e => {
-                      const iframe = e.target as HTMLIFrameElement;
-                      if (iframe.contentDocument?.body) iframe.style.height = Math.max(120, iframe.contentDocument.body.scrollHeight + 20) + "px";
-                    }}
-                  />
+                  <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "0 -12px", padding: "0 12px" }}>
+                    <iframe
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#4CAF50;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
+                      sandbox="allow-same-origin"
+                      style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a" }}
+                      onLoad={e => {
+                        const iframe = e.target as HTMLIFrameElement;
+                        if (iframe.contentDocument?.body) {
+                          const h = Math.max(120, iframe.contentDocument.body.scrollHeight + 20);
+                          iframe.style.height = h + "px";
+                          const w = iframe.contentDocument.body.scrollWidth;
+                          if (w > iframe.clientWidth) iframe.style.width = w + "px";
+                        }
+                      }}
+                    />
+                  </div>
                 ) : (
                   <pre style={{ fontSize: 15, color: "#c8dcc8", whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.6, margin: 0 }}>{bodyText}</pre>
                 )}
@@ -1325,7 +1332,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             /* Thread detail */
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto" }}>
-                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 24px" }}>
+                <div style={{ padding: "16px 24px" }}>
                   {loadingThread ? (
                     <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
                   ) : messages.map(msg => {
@@ -1372,15 +1379,22 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                         </div>
                         {isOutbound && msg.resend_message_id && <div style={{ fontSize: 11, color: "#2E7D32", marginBottom: 8 }}>{"\u2713"} Delivered</div>}
                         {msg.body_html ? (
-                          <iframe
-                            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;overflow-x:hidden;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;table-layout:fixed!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
-                            sandbox="allow-same-origin"
-                            style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a", overflow: "hidden" }}
-                            onLoad={e => {
-                              const iframe = e.target as HTMLIFrameElement;
-                              if (iframe.contentDocument?.body) iframe.style.height = Math.max(120, iframe.contentDocument.body.scrollHeight + 20) + "px";
-                            }}
-                          />
+                          <div style={{ overflowX: "auto" }}>
+                            <iframe
+                              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#4CAF50;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
+                              sandbox="allow-same-origin"
+                              style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a" }}
+                              onLoad={e => {
+                                const iframe = e.target as HTMLIFrameElement;
+                                if (iframe.contentDocument?.body) {
+                                  const h = Math.max(120, iframe.contentDocument.body.scrollHeight + 20);
+                                  iframe.style.height = h + "px";
+                                  const w = iframe.contentDocument.body.scrollWidth;
+                                  if (w > iframe.clientWidth) iframe.style.width = w + "px";
+                                }
+                              }}
+                            />
+                          </div>
                         ) : (
                           <pre style={{ fontSize: 14, color: "#c8dcc8", whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.6, margin: 0 }}>{bodyText}</pre>
                         )}
