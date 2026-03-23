@@ -16,6 +16,7 @@ import AdminInvoices from "./AdminInvoices";
 import AdminQuotes from "./AdminQuotes";
 import AdminAnalytics from "./AdminAnalytics";
 import AdminYelpLeads from "./AdminYelpLeads";
+import AdminSettings from "./AdminSettings";
 import FeedbackModal from "./components/FeedbackModal";
 
 // ─── Sub-components ───
@@ -178,7 +179,7 @@ interface CustomerDetail {
   feedbackRequests: FeedbackRequest[];
 }
 
-export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "yelp_leads" | "messages" | "invoices" | "quotes" | "analytics";
+export type Tab = "overview" | "customers" | "jobs" | "payments" | "subscriptions" | "customer_detail" | "video_leads" | "yelp_leads" | "messages" | "invoices" | "quotes" | "analytics" | "settings";
 
 // ─── Main Admin Dashboard ───
 export default function AdminDashboard() {
@@ -1037,6 +1038,8 @@ export default function AdminDashboard() {
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
                   <NavItem icon="📈" label="Analytics" active={activeTab === "analytics"} onClick={() => switchTab("analytics")} />
+                  <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "16px 16px 8px", fontWeight: 700 }}>SYSTEM</div>
+                  <NavItem icon="⚙️" label="Settings" active={activeTab === "settings"} onClick={() => switchTab("settings")} />
                 </nav>
 
                 {/* Install App button */}
@@ -1967,6 +1970,10 @@ export default function AdminDashboard() {
 
                     {activeTab === "analytics" && (
                       <AdminAnalytics />
+                    )}
+
+                    {activeTab === "settings" && (
+                      <AdminSettings />
                     )}
                   </div>
                 )}

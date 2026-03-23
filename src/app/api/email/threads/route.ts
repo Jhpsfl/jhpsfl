@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const folder = searchParams.get('folder'); // inbox, sent, starred, drafts, trash, spam
+  const account = searchParams.get('account'); // optional: filter by email account
 
   const supabase = createSupabaseAdmin();
   const { data: admin } = await supabase
@@ -23,13 +24,14 @@ export async function GET(req: NextRequest) {
   }
 
   // Build thread query with folder filtering
-  const { threads, folderCounts } = await buildThreadQuery(supabase, folder);
+  const { threads, folderCounts } = await buildThreadQuery(supabase, folder, account);
   return NextResponse.json({ threads, folderCounts });
 }
 
 async function buildThreadQuery(
   supabase: ReturnType<typeof createSupabaseAdmin>,
-  folder: string | null
+  folder: string | null,
+  account?: string | null
 ) {
   // Get all non-draft messages (or drafts if folder=drafts)
   let query = supabase
@@ -53,6 +55,11 @@ async function buildThreadQuery(
   } else {
     // Default: inbox — show all non-draft, non-trash/spam/yelp messages
     query = query.eq('is_draft', false).not('folder', 'in', '("trash","spam","yelp")');
+  }
+
+  // Filter by account if specified
+  if (account) {
+    query = query.or(`from_email.eq.${account},to_email.eq.${account}`);
   }
 
   const isInbox = !folder || folder === 'inbox';

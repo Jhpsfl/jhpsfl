@@ -22,7 +22,10 @@ export async function POST(req: NextRequest) {
     reply_html,
     lead_id,
     attachments,
+    from_email: fromEmail,
   } = body;
+
+  const senderEmail = fromEmail || 'info@jhpsfl.com';
 
   if (!thread_id || !to_email || (!reply_body && !reply_html)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
   try {
     const r = getResend();
     const sendParams: Parameters<typeof r.emails.send>[0] = {
-      from: 'JHPS Florida <info@jhpsfl.com>',
+      from: `JHPS Florida <${senderEmail}>`,
       to: [to_email],
       subject: replySubject,
       html,
@@ -105,7 +108,7 @@ export async function POST(req: NextRequest) {
     thread_id,
     lead_id: lead_id || null,
     direction: 'outbound',
-    from_email: 'info@jhpsfl.com',
+    from_email: senderEmail,
     to_email,
     subject: replySubject,
     body_html: html,
