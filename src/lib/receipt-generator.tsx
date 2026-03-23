@@ -817,10 +817,10 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
 
   // Compute section subtotals for the totals block
   const sections: { label: string; items: DocumentLineItem[] }[] = [];
-  let currentSection = '';
+  let currentSection: string | null = null;
   for (const item of data.lineItems) {
     const section = item.description || '';
-    if (section !== currentSection) {
+    if (sections.length === 0 || section !== currentSection) {
       sections.push({ label: section, items: [item] });
       currentSection = section;
     } else {
