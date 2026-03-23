@@ -1076,9 +1076,9 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 </div>
                 {msg.body_html ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#4CAF50;}*{max-width:100%!important;box-sizing:border-box!important;}</style></head><body>${msg.body_html}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;overflow-x:hidden;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;table-layout:fixed!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
                     sandbox="allow-same-origin"
-                    style={{ width: "100%", minHeight: 120, border: "1px solid #1a3a1a", borderRadius: 8, background: "#0a160a" }}
+                    style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a", overflow: "hidden" }}
                     onLoad={e => {
                       const iframe = e.target as HTMLIFrameElement;
                       if (iframe.contentDocument?.body) iframe.style.height = Math.max(120, iframe.contentDocument.body.scrollHeight + 20) + "px";
@@ -1325,7 +1325,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             /* Thread detail */
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto" }}>
-                <div style={{ maxWidth: 768, margin: "0 auto", padding: "16px 24px" }}>
+                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 24px" }}>
                   {loadingThread ? (
                     <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
                   ) : messages.map(msg => {
@@ -1373,9 +1373,9 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                         {isOutbound && msg.resend_message_id && <div style={{ fontSize: 11, color: "#2E7D32", marginBottom: 8 }}>{"\u2713"} Delivered</div>}
                         {msg.body_html ? (
                           <iframe
-                            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#4CAF50;}*{max-width:100%!important;box-sizing:border-box!important;}</style></head><body>${msg.body_html}</body></html>`}
+                            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow-wrap:break-word;word-break:break-word;overflow-x:hidden;}img{max-width:100%;height:auto;}a{color:#4CAF50;}table{max-width:100%!important;table-layout:fixed!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}</style></head><body>${msg.body_html}</body></html>`}
                             sandbox="allow-same-origin"
-                            style={{ width: "100%", minHeight: 120, border: "1px solid #1a3a1a", borderRadius: 8, background: "#0a160a" }}
+                            style={{ width: "100%", minHeight: 120, border: "none", borderRadius: 8, background: "#0a160a", overflow: "hidden" }}
                             onLoad={e => {
                               const iframe = e.target as HTMLIFrameElement;
                               if (iframe.contentDocument?.body) iframe.style.height = Math.max(120, iframe.contentDocument.body.scrollHeight + 20) + "px";
