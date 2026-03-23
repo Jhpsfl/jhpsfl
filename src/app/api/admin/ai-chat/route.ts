@@ -84,6 +84,11 @@ const READ_TOOLS = [
     input_schema: { type: "object" as const, properties: { query: { type: "string", description: "Search term. Omit or pass empty string to list all." }, limit: { type: "number" } } },
   },
   {
+    name: "get_customer_details",
+    description: "Get full details for a specific customer by ID or name. Returns all fields including address, billing, notes, and related quote/job counts.",
+    input_schema: { type: "object" as const, properties: { customer_id: { type: "string" }, customer_name: { type: "string" } } },
+  },
+  {
     name: "search_quotes",
     description: "Search quotes/estimates by customer name, quote number, or status. Omit query to list all. Returns list with totals and line item summaries.",
     input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|accepted|declined|expired|converted" }, limit: { type: "number" } } },
@@ -249,6 +254,20 @@ const WRITE_TOOLS = [
           description: "Payment structure: {type: 'full'|'deposit_balance'|'deposit_installments', deposit_amount?, deposit_percentage?, num_installments?}",
         },
       },
+    },
+  },
+  {
+    name: "copy_quote",
+    description: "Copy/duplicate an existing quote to a new or different customer. Copies all line items, scope, exclusions, warranty, closing statement, terms, and payment terms. Creates a new quote number. Use when user says 'copy estimate to X' or 'duplicate this quote for Y'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        source_quote_number: { type: "string", description: "Quote number to copy FROM (required)" },
+        target_customer_id: { type: "string", description: "Customer UUID to copy TO (if known)" },
+        target_customer_name: { type: "string", description: "Customer name to copy TO (will search/create)" },
+        adjust_prices: { type: "number", description: "Optional: multiply all prices by this factor (e.g. 1.1 for 10% increase)" },
+      },
+      required: ["source_quote_number"],
     },
   },
   {
@@ -643,6 +662,22 @@ async function executeTool(
       }
       if (!data?.length) return { result: q ? `No quotes found matching "${input.query}".` : "No quotes yet." };
       return { result: `Found ${data.length} quote(s):\n${JSON.stringify(data, null, 2)}` };
+    }
+
+    case "get_customer_details": {
+      let cQuery = supabase.from("customers").select("*");
+      if (input.customer_id) cQuery = cQuery.eq("id", input.customer_id);
+      else if (input.customer_name) cQuery = cQuery.ilike("name", `%${input.customer_name}%`);
+      else return { result: "Please provide a customer_id or customer_name." };
+      const { data: cust } = await cQuery.single();
+      if (!cust) return { result: "Customer not found." };
+      // Count related records
+      const { count: quoteCount } = await supabase.from("quotes").select("id", { count: "exact", head: true }).eq("customer_id", cust.id);
+      const { count: jobCount } = await supabase.from("jobs").select("id", { count: "exact", head: true }).eq("customer_id", cust.id);
+      const { count: invoiceCount } = await supabase.from("invoices").select("id", { count: "exact", head: true }).eq("customer_id", cust.id);
+      return {
+        result: `CUSTOMER: ${cust.name}\nID: ${cust.id}\nEmail: ${cust.email || "Not set"}\nPhone: ${cust.phone || "Not set"}\nType: ${cust.customer_type || "residential"}\nCompany: ${cust.company_name || "None"}\nNickname: ${cust.nickname || "None"}\nAddress: ${cust.address || "Not set"}\nCity: ${cust.city || "Not set"}\nZip: ${cust.zip || "Not set"}\nBilling Address: ${cust.billing_address || "Same as above"}\nBilling City: ${cust.billing_city || ""}\nBilling Zip: ${cust.billing_zip || ""}\nCreated: ${cust.created_at}\n\nRelated Records:\n- Quotes: ${quoteCount || 0}\n- Jobs: ${jobCount || 0}\n- Invoices: ${invoiceCount || 0}`,
+      };
     }
 
     case "get_quote_details": {
@@ -1068,6 +1103,69 @@ async function executeTool(
       return {
         result: `Quote ${quoteNumber} created — $${totals.total.toFixed(2)} total`,
         action: { type: "create_quote", tab: "quotes", created_id: data.id },
+      };
+    }
+
+    case "copy_quote": {
+      if (!input.source_quote_number) return { result: "Error: source_quote_number required." };
+      // Get the source quote with all details
+      const { data: src } = await supabase.from("quotes").select("*").eq("quote_number", input.source_quote_number).single();
+      if (!src) return { result: `Source quote ${input.source_quote_number} not found.` };
+
+      // Determine target customer
+      let targetCustomerId = src.customer_id; // default: same customer
+      if (input.target_customer_name || input.target_customer_id) {
+        targetCustomerId = await findOrCreateCustomer(supabase, input.target_customer_name, input.target_customer_id);
+      }
+
+      // Copy line items, optionally adjust prices
+      const factor = input.adjust_prices || 1;
+      const newItems = (src.line_items || []).map((li: any) => ({
+        id: "cp_" + Math.random().toString(36).slice(2, 8),
+        description: li.description,
+        quantity: li.quantity,
+        unit: li.unit,
+        unit_price: Math.round((li.unit_price || 0) * factor * 100) / 100,
+        amount: Math.round((li.quantity || 1) * (li.unit_price || 0) * factor * 100) / 100,
+        section: li.section,
+      }));
+
+      const newNumber = await generateNumber(supabase, "quotes", "quote_number", "QTE");
+      const taxRate = src.tax_rate || 0;
+      const totals = recalcQuoteTotals(newItems, taxRate);
+      const expDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+
+      const { data: newQuote, error } = await supabase.from("quotes").insert({
+        quote_number: newNumber,
+        customer_id: targetCustomerId,
+        status: "draft",
+        line_items: newItems,
+        ...totals,
+        tax_rate: taxRate,
+        service_address: src.service_address,
+        scope_summary: src.scope_summary,
+        ai_project_notes: src.ai_project_notes,
+        exclusions: src.exclusions,
+        warranty: src.warranty,
+        closing_statement: src.closing_statement,
+        notes: src.notes ? `Copied from ${input.source_quote_number}. ${src.notes}` : `Copied from ${input.source_quote_number}`,
+        expiration_date: expDate,
+        start_date: src.start_date,
+        completion_date: src.completion_date,
+        is_commercial: src.is_commercial,
+        show_financing: src.show_financing,
+        payment_terms: src.payment_terms,
+        terms_conditions: src.terms_conditions,
+      }).select().single();
+
+      if (error) return { result: `Error copying quote: ${error.message}` };
+
+      const { data: srcCust } = await supabase.from("customers").select("name").eq("id", src.customer_id).single();
+      const { data: tgtCust } = await supabase.from("customers").select("name").eq("id", targetCustomerId).single();
+
+      return {
+        result: `Quote copied! ${input.source_quote_number} (${srcCust?.name}) → ${newNumber} (${tgtCust?.name}) — $${totals.total.toFixed(2)}${factor !== 1 ? ` (prices adjusted ${factor > 1 ? '+' : ''}${Math.round((factor - 1) * 100)}%)` : ''}`,
+        action: { type: "create_quote", tab: "quotes", created_id: newQuote.id },
       };
     }
 
@@ -1553,9 +1651,12 @@ When asked to send a Yelp message/reply to a customer:
 - Appropriate units: visit, sqft, cuyd, each, lot, hour, lnft, flat
 - ALWAYS fill: scope_summary, exclusions (3-5), warranty (default 30-day), closing_statement (with phone 407-686-9817)
 - Calculate amounts correctly (qty × unit_price)
+- To COPY a quote to another customer: use copy_quote with source_quote_number + target_customer_name
+- To view full quote details: use get_quote_details (returns all fields, line items, terms)
+- To view full customer details: use get_customer_details (returns all fields + quote/job/invoice counts)
 
 ## NATURAL LANGUAGE TRANSLATION
-"add 50% deposit" → set_payment_terms deposit_balance 50%, "make it 3 payments" → deposit_installments, "turn on warranty" → toggle_quote_terms add, "make it commercial" → is_commercial:true, "add financing" → show_financing:true, "set tax 7%" → tax_rate:7, "expires in 2 weeks" → calculate expiration_date
+"copy estimate to X" → copy_quote, "duplicate this for Y" → copy_quote, "add 50% deposit" → set_payment_terms deposit_balance 50%, "make it 3 payments" → deposit_installments, "turn on warranty" → toggle_quote_terms add, "make it commercial" → is_commercial:true, "add financing" → show_financing:true, "set tax 7%" → tax_rate:7, "expires in 2 weeks" → calculate expiration_date
 
 ## PRICING (Central FL 2025-26)
 Mow: std $45, lg $75, XL $120. Edge $25, hedge $50, full pkg $95. Pressure wash: driveway $150, house $250, patio $125, fence $100, roof $350, full $450. Junk: sm $150, half $275, full $450. Land clear: brush $500/qtr-acre, tree $150-350. Cleanup: general $200, post-construction $400, estate $600. Mulch $50-75/cuyd, rubber $100-150/cuyd. Sod $1.50-3/sqft, rock $75-125/cuyd, border $8-15/lnft, irrigation $75-150/hr.
