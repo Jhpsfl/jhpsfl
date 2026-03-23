@@ -85,8 +85,8 @@ const READ_TOOLS = [
   },
   {
     name: "search_quotes",
-    description: "Search quotes/estimates by customer name, quote number, or status. Returns list with totals and line item summaries.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|accepted|declined|expired|converted" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search quotes/estimates by customer name, quote number, or status. Omit query to list all. Returns list with totals and line item summaries.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|accepted|declined|expired|converted" }, limit: { type: "number" } } },
   },
   {
     name: "get_quote_details",
@@ -95,23 +95,23 @@ const READ_TOOLS = [
   },
   {
     name: "search_invoices",
-    description: "Search invoices by customer name, invoice number, or status.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|paid|overdue|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search invoices by customer name, invoice number, or status. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "draft|sent|paid|overdue|cancelled" }, limit: { type: "number" } } },
   },
   {
     name: "search_jobs",
-    description: "Search jobs by customer name, service type, or status.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "scheduled|in_progress|completed|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search jobs by customer name, service type, or status. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "scheduled|in_progress|completed|cancelled" }, limit: { type: "number" } } },
   },
   {
     name: "search_subscriptions",
-    description: "Search recurring service subscriptions by customer name, service type, or frequency.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "active|paused|cancelled" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search recurring service subscriptions by customer name, service type, or frequency. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "active|paused|cancelled" }, limit: { type: "number" } } },
   },
   {
     name: "search_yelp_conversations",
-    description: "Search Yelp lead conversations by customer name, service, status, or urgency. Returns conversation list with latest message preview.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "ai_active|needs_attention|taken_over|completed" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search Yelp lead conversations by customer name, service, status, or urgency. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string", description: "ai_active|needs_attention|taken_over|completed" }, limit: { type: "number" } } },
   },
   {
     name: "get_yelp_conversation",
@@ -120,18 +120,18 @@ const READ_TOOLS = [
   },
   {
     name: "search_video_leads",
-    description: "Search video quote leads by name, email, service requested, or status.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search video quote leads by name, email, service requested, or status. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } } },
   },
   {
     name: "search_email_threads",
-    description: "Search email messages/threads by contact name, email address, or subject line.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, folder: { type: "string", description: "inbox|sent|drafts|trash|spam|starred|yelp" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search email messages/threads by contact name, email address, or subject line. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, folder: { type: "string", description: "inbox|sent|drafts|trash|spam|starred|yelp" }, limit: { type: "number" } } },
   },
   {
     name: "search_payments",
-    description: "Search payment records by customer name, payment method, or status.",
-    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+    description: "Search payment records by customer name, payment method, or status. Omit query to list all.",
+    input_schema: { type: "object" as const, properties: { query: { type: "string" }, status: { type: "string" }, limit: { type: "number" } } },
   },
   {
     name: "get_dashboard_stats",
@@ -623,16 +623,15 @@ async function executeTool(
     }
 
     case "search_quotes": {
-      const q = input.query?.toLowerCase() || "";
-      const limit = input.limit || 10;
+      const q = (input.query || "").trim().toLowerCase();
+      const limit = input.limit || 15;
       let query = supabase
         .from("quotes")
-        .select("id, quote_number, status, total, service_address, scope_summary, created_at, customer:customers(name, email, phone)")
-        .or(`quote_number.ilike.%${q}%,scope_summary.ilike.%${q}%,service_address.ilike.%${q}%`);
+        .select("id, quote_number, status, total, service_address, scope_summary, created_at, customer:customers(name, email, phone)");
+      if (q) query = query.or(`quote_number.ilike.%${q}%,scope_summary.ilike.%${q}%,service_address.ilike.%${q}%`);
       if (input.status) query = query.eq("status", input.status);
       const { data } = await query.order("created_at", { ascending: false }).limit(limit);
-      if (!data?.length) {
-        // Try by customer name
+      if (!data?.length && q) {
         const { data: byCustomer } = await supabase
           .from("quotes")
           .select("id, quote_number, status, total, service_address, scope_summary, created_at, customer:customers!inner(name, email, phone)")
@@ -640,9 +639,10 @@ async function executeTool(
           .order("created_at", { ascending: false })
           .limit(limit);
         if (!byCustomer?.length) return { result: `No quotes found matching "${input.query}".` };
-        return { result: JSON.stringify(byCustomer, null, 2) };
+        return { result: `Found ${byCustomer.length} quote(s):\n${JSON.stringify(byCustomer, null, 2)}` };
       }
-      return { result: JSON.stringify(data, null, 2) };
+      if (!data?.length) return { result: q ? `No quotes found matching "${input.query}".` : "No quotes yet." };
+      return { result: `Found ${data.length} quote(s):\n${JSON.stringify(data, null, 2)}` };
     }
 
     case "get_quote_details": {
@@ -670,15 +670,15 @@ async function executeTool(
     }
 
     case "search_invoices": {
-      const q = input.query?.toLowerCase() || "";
-      const limit = input.limit || 10;
+      const q = (input.query || "").trim().toLowerCase();
+      const limit = input.limit || 15;
       let query = supabase
         .from("invoices")
-        .select("id, invoice_number, status, total, amount_paid, due_date, created_at, customer:customers(name, email, phone)")
-        .or(`invoice_number.ilike.%${q}%`);
+        .select("id, invoice_number, status, total, amount_paid, due_date, created_at, customer:customers(name, email, phone)");
+      if (q) query = query.or(`invoice_number.ilike.%${q}%`);
       if (input.status) query = query.eq("status", input.status);
       const { data } = await query.order("created_at", { ascending: false }).limit(limit);
-      if (!data?.length) {
+      if (!data?.length && q) {
         const { data: byCustomer } = await supabase
           .from("invoices")
           .select("id, invoice_number, status, total, amount_paid, due_date, created_at, customer:customers!inner(name, email, phone)")
@@ -686,21 +686,22 @@ async function executeTool(
           .order("created_at", { ascending: false })
           .limit(limit);
         if (!byCustomer?.length) return { result: `No invoices found matching "${input.query}".` };
-        return { result: JSON.stringify(byCustomer, null, 2) };
+        return { result: `Found ${byCustomer.length} invoice(s):\n${JSON.stringify(byCustomer, null, 2)}` };
       }
-      return { result: JSON.stringify(data, null, 2) };
+      if (!data?.length) return { result: q ? `No invoices found matching "${input.query}".` : "No invoices yet." };
+      return { result: `Found ${data.length} invoice(s):\n${JSON.stringify(data, null, 2)}` };
     }
 
     case "search_jobs": {
-      const q = input.query?.toLowerCase() || "";
-      const limit = input.limit || 15;
+      const q = (input.query || "").trim().toLowerCase();
+      const limit = input.limit || 20;
       let query = supabase
         .from("jobs")
-        .select("id, service_type, description, status, amount, completed_date, created_at, customer:customers(name)")
-        .or(`service_type.ilike.%${q}%,description.ilike.%${q}%`);
+        .select("id, service_type, description, status, amount, completed_date, created_at, customer:customers(name)");
+      if (q) query = query.or(`service_type.ilike.%${q}%,description.ilike.%${q}%`);
       if (input.status) query = query.eq("status", input.status);
       const { data } = await query.order("created_at", { ascending: false }).limit(limit);
-      if (!data?.length) {
+      if (!data?.length && q) {
         const { data: byCustomer } = await supabase
           .from("jobs")
           .select("id, service_type, description, status, amount, created_at, customer:customers!inner(name)")
@@ -708,22 +709,23 @@ async function executeTool(
           .order("created_at", { ascending: false })
           .limit(limit);
         if (!byCustomer?.length) return { result: `No jobs found matching "${input.query}".` };
-        return { result: JSON.stringify(byCustomer, null, 2) };
+        return { result: `Found ${byCustomer.length} job(s):\n${JSON.stringify(byCustomer, null, 2)}` };
       }
-      return { result: JSON.stringify(data, null, 2) };
+      if (!data?.length) return { result: q ? `No jobs found matching "${input.query}".` : "No jobs yet." };
+      return { result: `Found ${data.length} job(s):\n${JSON.stringify(data, null, 2)}` };
     }
 
     case "search_subscriptions": {
-      const q = input.query?.toLowerCase() || "";
-      const limit = input.limit || 10;
+      const q = (input.query || "").trim().toLowerCase();
+      const limit = input.limit || 15;
       let query = supabase
         .from("subscriptions")
-        .select("id, plan_name, service_type, frequency, amount, status, next_billing_date, created_at, customer:customers(name)")
-        .or(`service_type.ilike.%${q}%,plan_name.ilike.%${q}%`);
+        .select("id, plan_name, service_type, frequency, amount, status, next_billing_date, created_at, customer:customers(name)");
+      if (q) query = query.or(`service_type.ilike.%${q}%,plan_name.ilike.%${q}%`);
       if (input.status) query = query.eq("status", input.status);
       const { data } = await query.order("created_at", { ascending: false }).limit(limit);
-      if (!data?.length) return { result: `No subscriptions found matching "${input.query}".` };
-      return { result: JSON.stringify(data, null, 2) };
+      if (!data?.length) return { result: q ? `No subscriptions found matching "${input.query}".` : "No subscriptions yet." };
+      return { result: `Found ${data.length} subscription(s):\n${JSON.stringify(data, null, 2)}` };
     }
 
     case "search_yelp_conversations": {
