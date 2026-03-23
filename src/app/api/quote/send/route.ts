@@ -6,6 +6,7 @@ import { generateEstimatePDF, getEstimateFilename } from '@/lib/receipt-generato
 import type { EstimateData } from '@/lib/receipt-generator';
 import { randomUUID } from 'crypto';
 import { auth } from '@clerk/nextjs/server';
+import { uploadToS3 } from '@/lib/s3';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -274,7 +275,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── Log to Supabase ───
-  await logEmail({
+  const logged = await logEmail({
     thread_id,
     direction: 'outbound',
     from_email: 'info@jhpsfl.com',
@@ -282,7 +283,26 @@ export async function POST(req: NextRequest) {
     subject: emailSubject,
     body_html: html,
     resend_message_id: resendMessageId,
+    folder: 'sent',
+    has_attachments: !isCommercial,
   });
+
+  // Save the PDF attachment reference so it shows in the sent thread
+  if (logged && !isCommercial) {
+    try {
+      const { s3_key, s3_url } = await uploadToS3(pdfBuffer, pdfFilename, 'application/pdf');
+      await supabase.from('email_attachments').insert({
+        message_id: logged.id,
+        filename: pdfFilename,
+        content_type: 'application/pdf',
+        size_bytes: pdfBuffer.length,
+        s3_key,
+        s3_url,
+      });
+    } catch (err) {
+      console.error('Failed to save PDF attachment reference:', err);
+    }
+  }
 
   return NextResponse.json({ success: true, thread_id, resend_id: resendMessageId });
 }

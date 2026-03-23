@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
+import { uploadToS3 } from '@/lib/s3';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -317,6 +318,7 @@ export async function POST(req: NextRequest) {
   let body_text: string | null = null;
   let in_reply_to: string | null = null;
   let original_message_id: string | null = null;
+  let inboundAttachments: Array<{ filename: string; content_type: string; content: string }> = [];
 
   try {
     const resp = await fetch(`https://api.resend.com/emails/receiving/${email_id}`, {
@@ -333,6 +335,10 @@ export async function POST(req: NextRequest) {
       if (in_reply_to) in_reply_to = in_reply_to.replace(/[<>]/g, '').trim();
       // Capture original Message-ID for reply threading (needed for Yelp reply-by-email)
       original_message_id = headers['message-id'] || headers['Message-ID'] || headers['Message-Id'] || null;
+      // Extract attachments if present
+      if (full.attachments && Array.isArray(full.attachments)) {
+        inboundAttachments = full.attachments;
+      }
     }
   } catch (err) {
     console.error('Failed to fetch full email from Resend:', err);
@@ -411,7 +417,28 @@ export async function POST(req: NextRequest) {
     body_text: body_text ?? undefined,
     folder: isYelp ? 'yelp' : undefined,
     read: isYelp ? true : undefined,
+    has_attachments: inboundAttachments.length > 0,
   });
+
+  // Save inbound attachments to S3 + database
+  if (logged && inboundAttachments.length > 0) {
+    for (const att of inboundAttachments) {
+      try {
+        const buf = Buffer.from(att.content, 'base64');
+        const { s3_key, s3_url } = await uploadToS3(buf, att.filename, att.content_type || 'application/octet-stream');
+        await supabase.from('email_attachments').insert({
+          message_id: logged.id,
+          filename: att.filename,
+          content_type: att.content_type || 'application/octet-stream',
+          size_bytes: buf.length,
+          s3_key,
+          s3_url,
+        });
+      } catch (err) {
+        console.error('Failed to save inbound attachment:', att.filename, err);
+      }
+    }
+  }
 
   // Send push notification to all admins
   if (isYelp) {

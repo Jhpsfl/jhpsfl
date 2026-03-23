@@ -1001,6 +1001,19 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                         <span style={{ fontSize: 12, color: "#3a5a3a" }}>{formatDate(msg.created_at)}</span>
                         <div style={{ display: "flex", gap: 2 }}>
+                          <button title="Forward" onClick={() => {
+                            const fwdSubject = msg.subject?.startsWith("Fwd:") ? msg.subject : `Fwd: ${msg.subject || "(no subject)"}`;
+                            const fwdBody = `<br/><br/><div style="border-left:2px solid #ccc;padding-left:12px;margin-left:4px;color:#666;"><p style="font-size:12px;color:#888;">---------- Forwarded message ----------<br/>From: ${msg.from_email}<br/>Date: ${new Date(msg.created_at).toLocaleString()}<br/>Subject: ${msg.subject || ""}<br/>To: ${msg.to_email}</p>${msg.body_html || msg.body_text || ""}</div>`;
+                            const fwdAtts: PendingAttachment[] = (msg.attachments || []).map((a: EmailAttachment) => ({ filename: a.filename, content_type: a.content_type, size_bytes: a.size_bytes, s3_key: a.s3_key, s3_url: a.s3_url }));
+                            setComposeTo("");
+                            setComposeSubject(fwdSubject);
+                            composeEditor?.commands.setContent(fwdBody);
+                            setComposeAttachments(fwdAtts);
+                            setComposeOpen(true);
+                          }}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 50, border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a", fontSize: 12 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11l-7-7v4C7 8 4 14 3 19c2.5-3.5 6-5.1 11-5.1V18l7-7z"/></svg>
+                          </button>
                           <button onClick={() => setCollapsedMsgs(prev => { const n = new Set(prev); n.add(msg.id); return n; })}
                             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 50, border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a", fontSize: 12 }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>
