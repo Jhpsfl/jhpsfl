@@ -71,6 +71,8 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
 
+      console.log('[PDF_PREVIEW] discount data received:', JSON.stringify({ discount_amount: data.discount_amount, discount_reason: data.discount_reason, discount_percent: data.discount_percent, subtotal: data.subtotal, total: data.total }));
+
       const estimateData: EstimateData = {
         quoteNumber: data.quote_number || 'PREVIEW',
         quoteDate: new Date(data.created_at || Date.now()),
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
         termsText,
         customerAddress: data.customer_address || undefined,
       };
+      console.log('[PDF_PREVIEW] estimateData discount:', JSON.stringify({ discountAmount: estimateData.discountAmount, discountReason: estimateData.discountReason, discountPercent: estimateData.discountPercent }));
       pdfBuffer = await generateEstimatePDF(estimateData);
     } else {
       return NextResponse.json({ error: 'Invalid type. Use "invoice" or "estimate".' }, { status: 400 });
