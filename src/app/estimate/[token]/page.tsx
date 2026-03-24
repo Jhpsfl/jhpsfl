@@ -51,6 +51,9 @@ interface QuoteData {
   warranty: string | null;
   closing_statement: string | null;
   terms_text: string[] | null;
+  discount_type: string | null;
+  discount_value: number | null;
+  discount_reason: string | null;
 }
 
 // ─── PDF.js loader ───
