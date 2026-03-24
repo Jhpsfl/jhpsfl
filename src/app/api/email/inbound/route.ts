@@ -407,7 +407,7 @@ export async function POST(req: NextRequest) {
   const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
 
   // ── Spam filter (rule-based, free, instant) ──
-  let emailFolder: string | undefined = isYelp ? 'yelp' : undefined;
+  let emailFolder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'yelp' | undefined = isYelp ? 'yelp' : undefined;
   let markRead = isYelp ? true : undefined;
 
   if (!isYelp && !threadId) {
