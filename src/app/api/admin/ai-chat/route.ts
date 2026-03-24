@@ -554,11 +554,14 @@ const ALL_TOOLS = [...READ_TOOLS, ...WRITE_TOOLS];
 
 // ── Smart tool selection — only send tools relevant to the user's intent ──
 // Saves ~4000-5000 tokens per request for simple messages
-function selectTools(lastMessage: string): typeof ALL_TOOLS {
+function selectTools(lastMessage: string, messageCount?: number): typeof ALL_TOOLS {
   const msg = lastMessage.toLowerCase();
 
-  // Simple greetings/acknowledgments — no tools
-  if (/^(hi|hey|hello|thanks|thank you|ok|okay|got it|sure|yes|no|yeah|yep|nope|what|how|why|who|when|where)\b/.test(msg) && msg.length < 80 && !/search|find|look|create|make|build|send|update|change|add|quote|estimate|invoice|customer|job|email|navigate|go to|open|show|yelp|lead|payment|subscription/i.test(msg)) {
+  // If conversation has history (>2 messages), always send tools — user is in a workflow
+  if (messageCount && messageCount > 2) return ALL_TOOLS;
+
+  // Simple greetings on FIRST message only — no tools
+  if (/^(hi|hey|hello|thanks|thank you)\b/.test(msg) && msg.length < 40) {
     return [];
   }
 
@@ -1799,7 +1802,7 @@ export async function POST(req: NextRequest) {
 
     // Smart tool selection
     const lastUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
-    const selectedTools = selectTools(typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg));
+    const selectedTools = selectTools(typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg), messages.length);
 
     // Convert tools to OpenAI function-calling format (for Grok)
     const openaiTools = (tools: typeof ALL_TOOLS) => tools.map(t => ({
