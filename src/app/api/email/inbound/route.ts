@@ -59,7 +59,7 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
   let dateHeader: string = '';
   let replyToAddress: string = toEmail;
   
-  if (searchData.messages?.length > 0) {
+  if (searchData.messages && searchData.messages.length > 0) {
     const msgId = searchData.messages[0].id;
     console.log(`Gmail search: FOUND message ${msgId} for subject "${subject}"`);
     
