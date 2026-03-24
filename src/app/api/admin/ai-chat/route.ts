@@ -550,7 +550,84 @@ const WRITE_TOOLS = [
   },
 ];
 
-const TOOLS = [...READ_TOOLS, ...WRITE_TOOLS];
+const ALL_TOOLS = [...READ_TOOLS, ...WRITE_TOOLS];
+
+// ── Smart tool selection — only send tools relevant to the user's intent ──
+// Saves ~4000-5000 tokens per request for simple messages
+function selectTools(lastMessage: string): typeof ALL_TOOLS {
+  const msg = lastMessage.toLowerCase();
+
+  // Simple greetings/acknowledgments — no tools
+  if (/^(hi|hey|hello|thanks|thank you|ok|okay|got it|sure|yes|no|yeah|yep|nope|what|how|why|who|when|where)\b/.test(msg) && msg.length < 80 && !/search|find|look|create|make|build|send|update|change|add|quote|estimate|invoice|customer|job|email|navigate|go to|open|show|yelp|lead|payment|subscription/i.test(msg)) {
+    return [];
+  }
+
+  const tools: typeof ALL_TOOLS = [];
+  const needs = {
+    search: /search|find|look|check|show me|list|get|pull up|who|how many/i.test(msg),
+    quote: /quote|estimate|proposal|bid/i.test(msg),
+    invoice: /invoice|bill|charge/i.test(msg),
+    customer: /customer|client|contact/i.test(msg),
+    job: /job|service|schedule|appointment/i.test(msg),
+    subscription: /subscription|recurring|plan|monthly|weekly/i.test(msg),
+    yelp: /yelp|lead|conversation/i.test(msg),
+    email: /email|send|compose|mail|message|inbox|reply|forward/i.test(msg),
+    payment: /payment|paid|charge|receipt|money|balance/i.test(msg),
+    navigate: /go to|open|navigate|take me|show me.*page|switch to/i.test(msg),
+    memory: /remember|forget|memory|save.*note/i.test(msg),
+    web: /search.*web|google|look.*up|current.*price|property.*look/i.test(msg),
+    video: /video|lead|intake/i.test(msg),
+    terms: /terms|conditions|disclaimer/i.test(msg),
+    stats: /stats|dashboard|overview|analytics|numbers|total/i.test(msg),
+  };
+
+  // Lightweight tools
+  if (needs.memory) tools.push(...READ_TOOLS.filter(t => t.name === "save_memory" || t.name === "forget_memory"));
+  if (needs.web) tools.push(...READ_TOOLS.filter(t => t.name === "web_search" || t.name === "property_lookup"));
+  if (needs.navigate) tools.push(...WRITE_TOOLS.filter(t => t.name === "navigate"));
+  if (needs.stats) tools.push(...READ_TOOLS.filter(t => t.name === "get_dashboard_stats"));
+
+  // Search tools by domain
+  if (needs.search || needs.customer) tools.push(...READ_TOOLS.filter(t => t.name === "search_customers" || t.name === "get_customer_details"));
+  if (needs.search || needs.quote) tools.push(...READ_TOOLS.filter(t => t.name === "search_quotes" || t.name === "get_quote_details" || t.name === "search_quote_terms"));
+  if (needs.search || needs.invoice) tools.push(...READ_TOOLS.filter(t => t.name === "search_invoices"));
+  if (needs.search || needs.job) tools.push(...READ_TOOLS.filter(t => t.name === "search_jobs"));
+  if (needs.search || needs.subscription) tools.push(...READ_TOOLS.filter(t => t.name === "search_subscriptions"));
+  if (needs.search || needs.yelp) tools.push(...READ_TOOLS.filter(t => t.name === "search_yelp_conversations" || t.name === "get_yelp_conversation"));
+  if (needs.search || needs.video) tools.push(...READ_TOOLS.filter(t => t.name === "search_video_leads"));
+  if (needs.search || needs.email) tools.push(...READ_TOOLS.filter(t => t.name === "search_email_threads"));
+  if (needs.search || needs.payment) tools.push(...READ_TOOLS.filter(t => t.name === "search_payments"));
+
+  // Write tools — only with action words
+  const hasCreate = /create|make|build|add|new|start/i.test(msg);
+  const hasUpdate = /update|change|edit|modify|set|mark|convert/i.test(msg);
+  const hasSend = /send|share|email|deliver/i.test(msg);
+
+  if (hasCreate && needs.customer) tools.push(...WRITE_TOOLS.filter(t => t.name === "create_customer"));
+  if (hasUpdate && needs.customer) tools.push(...WRITE_TOOLS.filter(t => t.name === "update_customer"));
+  if (hasCreate && needs.quote) tools.push(...WRITE_TOOLS.filter(t => ["create_quote", "add_quote_items"].includes(t.name)));
+  if (hasUpdate && needs.quote) tools.push(...WRITE_TOOLS.filter(t => ["update_quote", "update_quote_status", "remove_quote_items", "toggle_quote_terms"].includes(t.name)));
+  if (/copy|duplicate/i.test(msg) && needs.quote) tools.push(...WRITE_TOOLS.filter(t => t.name === "copy_quote"));
+  if (hasSend && needs.quote) tools.push(...WRITE_TOOLS.filter(t => t.name === "send_quote"));
+  if (hasCreate && needs.invoice) tools.push(...WRITE_TOOLS.filter(t => t.name === "create_invoice"));
+  if (hasUpdate && needs.invoice) tools.push(...WRITE_TOOLS.filter(t => t.name === "update_invoice"));
+  if (hasSend && needs.invoice) tools.push(...WRITE_TOOLS.filter(t => t.name === "send_invoice"));
+  if (needs.payment) tools.push(...WRITE_TOOLS.filter(t => t.name === "record_payment"));
+  if (hasCreate && needs.job) tools.push(...WRITE_TOOLS.filter(t => t.name === "create_job"));
+  if (hasUpdate && needs.job) tools.push(...WRITE_TOOLS.filter(t => t.name === "update_job"));
+  if (hasCreate && needs.subscription) tools.push(...WRITE_TOOLS.filter(t => t.name === "create_subscription"));
+  if (hasUpdate && needs.subscription) tools.push(...WRITE_TOOLS.filter(t => t.name === "update_subscription"));
+  if (needs.yelp && /reply|respond/i.test(msg)) tools.push(...WRITE_TOOLS.filter(t => t.name === "reply_yelp_conversation"));
+  if (needs.email) tools.push(...WRITE_TOOLS.filter(t => ["compose_email", "reply_email"].includes(t.name)));
+  if (needs.video && hasUpdate) tools.push(...WRITE_TOOLS.filter(t => t.name === "update_video_lead"));
+
+  // Safety net — if nothing matched but message is complex, send all
+  if (tools.length === 0 && msg.length > 80) return ALL_TOOLS;
+
+  // Deduplicate
+  const seen = new Set<string>();
+  return tools.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true; });
+}
 
 // ═══════════════════════════════════════════
 // HELPER: Find or create customer by name
@@ -1732,6 +1809,10 @@ export async function POST(req: NextRequest) {
           systemBlocks.push({ type: "text", text: dynamicContext });
         }
 
+        // Smart tool selection — only send tools relevant to the user's message
+        const lastUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
+        const selectedTools = selectTools(typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg));
+
         let claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
@@ -1740,7 +1821,7 @@ export async function POST(req: NextRequest) {
             max_tokens: 4000,
             system: systemBlocks,
             messages: apiMessages,
-            tools: TOOLS,
+            ...(selectedTools.length > 0 ? { tools: selectedTools } : {}),
           }),
         });
 
@@ -1780,7 +1861,7 @@ export async function POST(req: NextRequest) {
                   { role: "assistant", content: assistantContent },
                   { role: "user", content: toolResults },
                 ],
-                tools: TOOLS,
+                tools: ALL_TOOLS,
               }),
             });
 
