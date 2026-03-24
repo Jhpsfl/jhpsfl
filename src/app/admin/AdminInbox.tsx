@@ -1113,32 +1113,22 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
           })}
         </div>
 
-        {/* Reply bar */}
-        <div style={{ flexShrink: 0, padding: "10px 16px 16px", borderTop: "1px solid #0d1a0d", background: "rgba(5,14,5,0.98)" }}>
-          <div style={{ border: "1px solid #1a3a1a", borderRadius: 10, overflow: "hidden", background: "#0a160a" }}>
-            <EditorToolbar editor={replyEditor} />
-            <div className="tiptap-editor"><EditorContent editor={replyEditor} /></div>
-            {replyAttachments.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "6px 10px", borderTop: "1px solid #0d1a0d" }}>
-                {replyAttachments.map((att, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 6, background: "#0d1a0d", border: "1px solid #1a3a1a", fontSize: 11, color: "#8ab88a" }}>
-                    {fileIcon(att.filename)} {att.filename} ({formatFileSize(att.size_bytes)})
-                    <button onClick={() => setReplyAttachments(prev => prev.filter((_, j) => j !== i))}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#5a4a4a", padding: 2 }}><IconX /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderTop: "1px solid #0d1a0d" }}>
-              <button onClick={() => replyFileInputRef.current?.click()}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a" }}><IconAttach /></button>
-              <button onClick={sendReply} disabled={sending}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 18px", borderRadius: 20, border: "none", background: "#2E7D32", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: sending ? 0.6 : 1 }}>
-                <IconSend />{sending ? "..." : "Send"}
+        {/* Gmail-style action buttons */}
+        {messages.length > 0 && (
+          <div style={{ flexShrink: 0, borderTop: "1px solid #1a3a1a", background: "#050e05" }}>
+            {/* Primary actions row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px" }}>
+              <button onClick={() => { const lastMsg = messages[messages.length - 1]; startCompose("reply", lastMsg); }}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 24, border: "1px solid #1a3a1a", background: "#0a160a", color: "#8ab88a", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                <IconReply /> Reply
+              </button>
+              <button onClick={() => { const lastMsg = messages[messages.length - 1]; startCompose("forward", lastMsg); }}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 24, border: "1px solid #1a3a1a", background: "#0a160a", color: "#8ab88a", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                <IconForward /> Forward
               </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -1443,32 +1433,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                   )}
                 </div>
               </div>
-              {/* Inline reply bar */}
-              <div style={{ flexShrink: 0, padding: "10px 24px 16px", borderTop: "1px solid #0d1a0d", background: "rgba(5,14,5,0.98)" }}>
-                <div style={{ maxWidth: 768, margin: "0 auto", border: "1px solid #1a3a1a", borderRadius: 10, overflow: "hidden", background: "#0a160a" }}>
-                  <EditorToolbar editor={replyEditor} />
-                  <div className="jhps-tiptap"><EditorContent editor={replyEditor} /></div>
-                  {replyAttachments.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "6px 10px", borderTop: "1px solid #0d1a0d" }}>
-                      {replyAttachments.map((att, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 6, background: "#0d1a0d", border: "1px solid #1a3a1a", fontSize: 11, color: "#8ab88a" }}>
-                          {fileIcon(att.filename)} {att.filename} ({formatFileSize(att.size_bytes)})
-                          <button onClick={() => setReplyAttachments(prev => prev.filter((_, j) => j !== i))}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "#5a4a4a", padding: 2 }}><IconX /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderTop: "1px solid #0d1a0d" }}>
-                    <button onClick={() => replyFileInputRef.current?.click()}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", border: "none", background: "transparent", cursor: "pointer", color: "#5a8a5a" }}><IconAttach /></button>
-                    <button onClick={sendReply} disabled={sending}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 18px", borderRadius: 20, border: "none", background: "#2E7D32", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: sending ? 0.6 : 1 }}>
-                      <IconSend />{sending ? "..." : "Send"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* No inline reply bar — reply/forward buttons above open compose view */}
             </div>
           ) : (
             /* Thread list */
