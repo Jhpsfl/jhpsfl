@@ -982,22 +982,27 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                   <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
                 </View>
               )}
-              {(data.discountAmount || 0) > 0 ? (
-                <View style={s.totalsRow}>
-                  <Text style={[s.totalsLabel, { color: '#C62828' }]}>
-                    {'Discount' + (data.discountPercent ? ' (' + data.discountPercent + '%)' : '') + (data.discountReason ? ' \u2014 ' + data.discountReason : '')}
-                  </Text>
-                  <Text style={[s.totalsVal, { color: '#C62828' }]}>
-                    {'-' + fmt(data.discountAmount || 0)}
-                  </Text>
-                </View>
-              ) : null}
-              {(data.taxAmount || 0) > 0 ? (
-                <View style={s.totalsRow}>
-                  <Text style={s.totalsLabel}>Tax</Text>
-                  <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
-                </View>
-              ) : null}
+              {(() => {
+                const rows: React.ReactElement[] = [];
+                if ((data.discountAmount || 0) > 0) {
+                  const pct = data.discountPercent || (data.subtotal > 0 ? Math.round((data.discountAmount || 0) / data.subtotal * 10000) / 100 : 0);
+                  rows.push(
+                    <View key="disc" style={s.totalsRow}>
+                      <Text style={[s.totalsLabel, { color: '#C62828' }]}>{'Discount (' + pct + '%)' + (data.discountReason ? ' \u2014 ' + data.discountReason : '')}</Text>
+                      <Text style={[s.totalsVal, { color: '#C62828' }]}>{'-' + fmt(data.discountAmount || 0)}</Text>
+                    </View>
+                  );
+                }
+                if ((data.taxAmount || 0) > 0) {
+                  rows.push(
+                    <View key="tax" style={s.totalsRow}>
+                      <Text style={s.totalsLabel}>Tax</Text>
+                      <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
+                    </View>
+                  );
+                }
+                return rows;
+              })()}
               <View style={s.totalsDivider} />
               <View style={s.grandTotal}>
                 <Text style={s.grandTotalText}>Total</Text>
