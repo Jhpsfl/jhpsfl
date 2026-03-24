@@ -417,8 +417,13 @@ export default function QuoteForm({
                 </select>
                 {form.discount_type !== "none" && (
                   <input
-                    value={form.discount_value || ""}
-                    onChange={e => setForm(prev => ({ ...prev, discount_value: parseFloat(e.target.value) || 0 }))}
+                    defaultValue={form.discount_value || ""}
+                    key={form.discount_type}
+                    onBlur={e => setForm(prev => ({ ...prev, discount_value: parseFloat(e.target.value) || 0 }))}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setForm(prev => ({ ...prev, discount_value: v }));
+                    }}
                     placeholder={form.discount_type === "percent" ? "10" : "50"}
                     inputMode="decimal"
                     style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
