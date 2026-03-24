@@ -433,10 +433,10 @@ export default function EstimatePage() {
                 <span style={{ color: "#5a8a5a", fontSize: 13 }}>Subtotal</span>
                 <span style={{ color: "#c8e0c8", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(quote.subtotal)}</span>
               </div>
-              {(quote as any).discount_type && (quote as any).discount_type !== "none" && (quote as any).discount_value > 0 && (
+              {quote.discount_type && quote.discount_type !== "none" && quote.discount_value > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", width: 220 }}>
-                  <span style={{ color: "#ef5350", fontSize: 13 }}>Discount{(quote as any).discount_type === "percent" ? ` (${(quote as any).discount_value}%)` : ""}{(quote as any).discount_reason ? ` — ${(quote as any).discount_reason}` : ""}</span>
-                  <span style={{ color: "#ef5350", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>-{fmt((quote as any).discount_type === "percent" ? quote.subtotal * (quote as any).discount_value / 100 : (quote as any).discount_value)}</span>
+                  <span style={{ color: "#ef5350", fontSize: 13 }}>Discount{quote.discount_type === "percent" ? ` (${quote.discount_value}%)` : ""}{quote.discount_reason ? ` — ${quote.discount_reason}` : ""}</span>
+                  <span style={{ color: "#ef5350", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>-{fmt(quote.discount_type === "percent" ? quote.subtotal * quote.discount_value / 100 : quote.discount_value)}</span>
                 </div>
               )}
               {quote.tax_amount > 0 && (

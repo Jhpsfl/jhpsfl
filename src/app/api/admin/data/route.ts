@@ -662,6 +662,9 @@ export async function POST(request: NextRequest) {
                 line_items: payload.line_items || [],
                 show_financing: payload.show_financing || false,
                 is_commercial: payload.is_commercial || false,
+                discount_type: payload.discount_type || "none",
+                discount_value: payload.discount_value || 0,
+                discount_reason: payload.discount_reason || null,
                 payment_terms: payload.payment_terms || null,
                 sent_at: payload.sent_at || null,
                 service_address: payload.service_address || null,
@@ -688,7 +691,8 @@ export async function POST(request: NextRequest) {
               "sent_at", "accepted_at", "declined_at", "converted_invoice_id",
               "service_address", "scope_summary", "ai_project_notes",
               "start_date", "completion_date", "exclusions", "warranty",
-              "closing_statement", "terms_conditions", "decline_reason"
+              "closing_statement", "terms_conditions", "decline_reason",
+              "discount_type", "discount_value", "discount_reason"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];

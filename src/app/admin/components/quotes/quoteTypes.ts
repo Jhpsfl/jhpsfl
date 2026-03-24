@@ -72,6 +72,9 @@ export interface Quote {
   accepted_at: string | null;
   declined_at: string | null;
   decline_reason: string | null;
+  discount_type: "none" | "percent" | "amount" | null;
+  discount_value: number | null;
+  discount_reason: string | null;
   converted_invoice_id: string | null;
   created_at: string;
   updated_at: string;
