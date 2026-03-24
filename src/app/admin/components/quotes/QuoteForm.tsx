@@ -414,8 +414,31 @@ export default function QuoteForm({
                   <option value="none">None</option>
                   <option value="percent">%</option>
                   <option value="amount">$</option>
+                  <option value="target">Target $</option>
                 </select>
-                {form.discount_type !== "none" && (
+                {form.discount_type === "target" ? (
+                  <input
+                    defaultValue=""
+                    key="target"
+                    placeholder="Final total"
+                    inputMode="decimal"
+                    onBlur={e => {
+                      const target = parseFloat(e.target.value);
+                      if (!isNaN(target) && subtotal > 0 && target < subtotal) {
+                        const pct = ((subtotal - target) / subtotal) * 100;
+                        setForm(prev => ({ ...prev, discount_type: "percent" as const, discount_value: Math.round(pct * 100) / 100 }));
+                      }
+                    }}
+                    onChange={e => {
+                      const target = parseFloat(e.target.value);
+                      if (!isNaN(target) && subtotal > 0 && target < subtotal) {
+                        const pct = ((subtotal - target) / subtotal) * 100;
+                        setForm(prev => ({ ...prev, discount_value: Math.round(pct * 100) / 100 }));
+                      }
+                    }}
+                    style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
+                  />
+                ) : form.discount_type !== "none" ? (
                   <input
                     defaultValue={form.discount_value || ""}
                     key={form.discount_type}
@@ -428,7 +451,7 @@ export default function QuoteForm({
                     inputMode="decimal"
                     style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
                   />
-                )}
+                ) : null}
               </div>
             </div>
           </div>
