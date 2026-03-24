@@ -47,6 +47,7 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
   
   if (searchData.messages?.length > 0) {
     const msgId = searchData.messages[0].id;
+    console.log(`Gmail search: FOUND message ${msgId} for subject "${subject}"`);
     
     // Get metadata (threadId, headers)
     const metaResp = await fetch(
@@ -87,7 +88,9 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
     }
     originalBody = getTextBody(fullData.payload);
     
-    console.log(`Gmail: found thread ${threadId}, reply-to: ${replyToAddress}, body: ${originalBody.length} chars`);
+    console.log(`Gmail: found thread ${threadId}, reply-to: ${replyToAddress}, msgId: ${gmailMessageId}, body: ${originalBody.length} chars`);
+  } else {
+    console.log(`Gmail search: NO MATCH found for subject "${subject}" — using Resend token: ${replyToAddress}`);
   }
 
   const inReplyTo = gmailMessageId || originalMessageId || '';
@@ -119,6 +122,7 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
     .replace(/=+$/, '');
 
   // Step 4: Send via Gmail API with threadId
+  console.log(`Gmail send: FROM=${gmailUser}, TO=${replyToAddress}, threadId=${threadId}, inReplyTo=${inReplyTo?.substring(0, 40)}...`);
   const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: {
