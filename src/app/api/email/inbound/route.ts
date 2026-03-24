@@ -5,6 +5,7 @@ import { logEmail } from '@/lib/email';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
 import { uploadToS3 } from '@/lib/s3';
+import { checkSpam, groqSpamCheck } from '@/lib/spam-filter';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -405,6 +406,29 @@ export async function POST(req: NextRequest) {
   // Detect Yelp emails early so we can file them into the yelp folder
   const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
 
+  // ── Spam filter (rule-based, free, instant) ──
+  let emailFolder: string | undefined = isYelp ? 'yelp' : undefined;
+  let markRead = isYelp ? true : undefined;
+
+  if (!isYelp && !threadId) {
+    // Only check new threads from non-Yelp senders (existing threads are trusted)
+    const spam = checkSpam({ from_email, to_email, subject: subjectStr, body_text, body_html });
+    if (spam.isSpam) {
+      emailFolder = 'spam';
+      markRead = true;
+      console.log(`SPAM_FILTERED: score=${spam.score} from=${from_email} subject="${subjectStr}" reasons=[${spam.reasons.join(', ')}]`);
+    } else if (spam.score >= 30) {
+      // Borderline — check with Groq AI (free tier, 1000/day)
+      const bodyPreview = body_text || body_html?.replace(/<[^>]+>/g, '') || '';
+      const aiSpam = await groqSpamCheck({ from_email, subject: subjectStr, body_preview: bodyPreview });
+      if (aiSpam) {
+        emailFolder = 'spam';
+        markRead = true;
+        console.log(`SPAM_AI_FILTERED: score=${spam.score} from=${from_email} subject="${subjectStr}"`);
+      }
+    }
+  }
+
   // Store in DB
   const logged = await logEmail({
     thread_id: threadId,
@@ -415,8 +439,8 @@ export async function POST(req: NextRequest) {
     subject: subjectStr,
     body_html: body_html ?? undefined,
     body_text: body_text ?? undefined,
-    folder: isYelp ? 'yelp' : undefined,
-    read: isYelp ? true : undefined,
+    folder: emailFolder,
+    read: markRead,
     has_attachments: inboundAttachments.length > 0,
   });
 
@@ -440,8 +464,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Send push notification to all admins
-  if (isYelp) {
+  // Send push notification to all admins (skip for spam)
+  if (emailFolder === 'spam') {
+    // Silent — no notification for spam
+  } else if (isYelp) {
     const isNewLead = subjectStr.includes('new lead on Yelp');
     await sendPushToAllAdmins({
       title: isNewLead ? '🟡 New Yelp Lead' : '🟡 Yelp Message',
@@ -578,7 +604,10 @@ export async function POST(req: NextRequest) {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Forward a copy to Gmail so it's readable from any device
+  // Forward a copy to Gmail so it's readable from any device (skip spam)
+  if (emailFolder === 'spam') {
+    return NextResponse.json({ success: true, message_id: logged?.id, thread_id: logged?.thread_id, spam: true });
+  }
   const forwardTo = process.env.EMAIL_FORWARD_TO || 'FRLawnCareFL@gmail.com';
   try {
     await getResend().emails.send({
