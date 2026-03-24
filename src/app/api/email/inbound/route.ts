@@ -31,12 +31,26 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
   const gmailUser = process.env.GMAIL_USER!;
 
   // Step 1: Find the original Yelp email in Gmail (sent to the Gmail account directly)
+  // Wait for Gmail to receive and index the email (Resend webhook fires before Gmail indexes)
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
   const searchQuery = encodeURIComponent(`from:messaging.yelp.com subject:"${subject}" newer_than:1d`);
-  const searchResp = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=1`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const searchData = await searchResp.json();
+  let searchData: { messages?: { id: string }[] } = {};
+  
+  // Retry search up to 3 times with increasing delays
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const searchResp = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=1`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    searchData = await searchResp.json();
+    if (searchData.messages?.length) {
+      console.log(`Gmail search: FOUND on attempt ${attempt + 1}`);
+      break;
+    }
+    console.log(`Gmail search: attempt ${attempt + 1} found nothing, waiting...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
   
   let threadId: string | null = null;
   let gmailMessageId: string | null = null;
@@ -90,7 +104,8 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
     
     console.log(`Gmail: found thread ${threadId}, reply-to: ${replyToAddress}, msgId: ${gmailMessageId}, body: ${originalBody.length} chars`);
   } else {
-    console.log(`Gmail search: NO MATCH found for subject "${subject}" — using Resend token: ${replyToAddress}`);
+    console.log(`Gmail search: NO MATCH found for subject "${subject}" — ABORTING (would use wrong token: ${replyToAddress})`);
+    throw new Error('Gmail search failed to find email in inbox — cannot reply with correct token. Falling back to agent.');
   }
 
   const inReplyTo = gmailMessageId || originalMessageId || '';
