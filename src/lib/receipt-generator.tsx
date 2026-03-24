@@ -59,6 +59,7 @@ interface BaseDocumentData {
   taxAmount: number;
   discountAmount?: number;
   discountReason?: string;
+  discountPercent?: number;
   tipAmount?: number;
   totalAmount: number;
   notes?: string;
@@ -981,16 +982,16 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
                   <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
                 </View>
               )}
+              {(data.discountAmount ?? 0) > 0 ? (
+                <View style={s.totalsRow}>
+                  <Text style={s.totalsLabel}>Discount{data.discountPercent ? ` (${data.discountPercent}%)` : ''}{data.discountReason ? ` — ${data.discountReason}` : ''}</Text>
+                  <Text style={[s.totalsVal, { color: '#C62828' }]}>-{fmt(data.discountAmount!)}</Text>
+                </View>
+              ) : null}
               {data.taxAmount > 0 ? (
                 <View style={s.totalsRow}>
                   <Text style={s.totalsLabel}>Tax</Text>
                   <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
-                </View>
-              ) : null}
-              {(data.discountAmount ?? 0) > 0 ? (
-                <View style={s.totalsRow}>
-                  <Text style={s.totalsLabel}>Discount{data.discountReason ? ` — ${data.discountReason}` : ''}</Text>
-                  <Text style={[s.totalsVal, { color: C.paidGreen }]}>-{fmt(data.discountAmount!)}</Text>
                 </View>
               ) : null}
               <View style={s.totalsDivider} />
