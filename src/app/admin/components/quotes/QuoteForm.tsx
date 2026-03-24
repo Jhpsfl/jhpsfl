@@ -28,6 +28,7 @@ export default function QuoteForm({
     tax_rate: number;
     discount_type: "none" | "percent" | "amount" | "target";
     discount_value: number;
+    discount_reason: string;
     notes: string;
     line_items: QuoteLineItem[];
     show_financing: boolean;
@@ -420,20 +421,20 @@ export default function QuoteForm({
                   <input
                     defaultValue=""
                     key="target"
-                    placeholder="Final total"
+                    placeholder="Final total you want"
                     inputMode="decimal"
                     onBlur={e => {
                       const target = parseFloat(e.target.value);
                       if (!isNaN(target) && subtotal > 0 && target < subtotal) {
-                        const pct = ((subtotal - target) / subtotal) * 100;
-                        setForm(prev => ({ ...prev, discount_type: "percent" as const, discount_value: Math.round(pct * 100) / 100 }));
+                        const discountOff = Math.round((subtotal - target) * 100) / 100;
+                        setForm(prev => ({ ...prev, discount_type: "amount" as const, discount_value: discountOff }));
                       }
                     }}
                     onChange={e => {
                       const target = parseFloat(e.target.value);
                       if (!isNaN(target) && subtotal > 0 && target < subtotal) {
-                        const pct = ((subtotal - target) / subtotal) * 100;
-                        setForm(prev => ({ ...prev, discount_value: Math.round(pct * 100) / 100 }));
+                        const discountOff = Math.round((subtotal - target) * 100) / 100;
+                        setForm(prev => ({ ...prev, discount_value: discountOff }));
                       }
                     }}
                     style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
@@ -453,6 +454,14 @@ export default function QuoteForm({
                   />
                 ) : null}
               </div>
+              {form.discount_type !== "none" && (
+                <input
+                  value={form.discount_reason}
+                  onChange={e => setForm(prev => ({ ...prev, discount_reason: e.target.value }))}
+                  placeholder="Reason (e.g. Referral, Senior, Promo, First-time customer)"
+                  style={{ ...inputStyle, marginTop: 6, fontSize: 12 }}
+                />
+              )}
             </div>
           </div>
 
@@ -893,7 +902,7 @@ export default function QuoteForm({
 
             {discountAmount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#ef5350", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
-                <span>Discount {form.discount_type === "percent" ? `(${form.discount_value}%)` : ""}</span>
+                <span>Discount{form.discount_type === "percent" ? ` (${form.discount_value}%)` : ""}{form.discount_reason ? ` — ${form.discount_reason}` : ""}</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>-{formatCurrency(discountAmount)}</span>
               </div>
             )}
