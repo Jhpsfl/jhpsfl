@@ -75,6 +75,9 @@ export async function GET(
       exclusions: quote.exclusions || null,
       warranty: quote.warranty || null,
       closing_statement: quote.closing_statement || null,
+      discount_type: quote.discount_type || null,
+      discount_value: quote.discount_value || null,
+      discount_reason: quote.discount_reason || null,
       terms_text,
     },
   });
