@@ -61,7 +61,7 @@ export default function AiChatBubble({ activeTab = 'overview' }: { activeTab?: s
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('Thinking...');
-  const [aiModel, setAiModel] = useState<'claude' | 'groq'>('claude');
+  const [aiModel, setAiModel] = useState<'grok' | 'claude' | 'groq'>('grok');
   const [unread, setUnread] = useState(0);
 
   // Chat history
@@ -312,12 +312,12 @@ export default function AiChatBubble({ activeTab = 'overview' }: { activeTab?: s
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {!isFloating && (
-            <button onClick={() => setAiModel(prev => prev === 'claude' ? 'groq' : 'claude')} style={{
+            <button onClick={() => setAiModel(prev => prev === 'grok' ? 'claude' : prev === 'claude' ? 'groq' : 'grok')} style={{
               padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              background: aiModel === 'claude' ? 'rgba(34,197,94,0.15)' : 'rgba(96,165,250,0.15)',
-              color: aiModel === 'claude' ? '#22c55e' : '#60a5fa',
-              border: `1px solid ${aiModel === 'claude' ? 'rgba(34,197,94,0.3)' : 'rgba(96,165,250,0.3)'}`,
-            }}>{aiModel === 'claude' ? 'Claude' : 'Groq'}</button>
+              background: aiModel === 'grok' ? 'rgba(96,165,250,0.15)' : aiModel === 'claude' ? 'rgba(34,197,94,0.15)' : 'rgba(234,179,8,0.15)',
+              color: aiModel === 'grok' ? '#60a5fa' : aiModel === 'claude' ? '#22c55e' : '#eab308',
+              border: `1px solid ${aiModel === 'grok' ? 'rgba(96,165,250,0.3)' : aiModel === 'claude' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)'}`,
+            }}>{aiModel === 'grok' ? 'Grok' : aiModel === 'claude' ? 'Claude' : 'Groq'}</button>
           )}
           <button onClick={startNewChat} style={{ padding: 6, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer' }} title="New chat"><IconPlus size={isFloating ? 14 : 16} /></button>
           <button onClick={() => setDisplayMode(isFloating ? 'full' : 'floating')} style={{ padding: 6, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer' }} title={isFloating ? 'Expand' : 'Float'}><IconMove size={isFloating ? 14 : 16} /></button>
