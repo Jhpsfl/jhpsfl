@@ -26,7 +26,7 @@ export default function QuoteForm({
     due_date: string;
     show_due_date: boolean;
     tax_rate: number;
-    discount_type: "none" | "percent" | "amount";
+    discount_type: "none" | "percent" | "amount" | "target";
     discount_value: number;
     notes: string;
     line_items: QuoteLineItem[];
@@ -408,7 +408,7 @@ export default function QuoteForm({
               <div style={{ display: "flex", gap: 6 }}>
                 <select
                   value={form.discount_type}
-                  onChange={e => setForm(prev => ({ ...prev, discount_type: e.target.value as "none" | "percent" | "amount" }))}
+                  onChange={e => setForm(prev => ({ ...prev, discount_type: e.target.value as "none" | "percent" | "amount" | "target" }))}
                   style={{ ...inputStyle, width: 80, padding: "8px 6px", fontSize: 12 }}
                 >
                   <option value="none">None</option>

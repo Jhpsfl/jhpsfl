@@ -53,7 +53,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     due_date: "",
     show_due_date: false,
     tax_rate: 0,
-    discount_type: "none" as "none" | "percent" | "amount",
+    discount_type: "none" as "none" | "percent" | "amount" | "target",
     discount_value: 0,
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }] as QuoteLineItem[],
@@ -276,7 +276,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   };
 
   const subtotal = form.line_items.reduce((sum, item) => sum + item.amount, 0);
-  const discountAmount = form.discount_type === "percent" ? subtotal * (form.discount_value / 100) : form.discount_type === "amount" ? form.discount_value : 0;
+  const discountAmount = (form.discount_type === "percent" || form.discount_type === "target") ? subtotal * (form.discount_value / 100) : form.discount_type === "amount" ? form.discount_value : 0;
   const afterDiscount = subtotal - discountAmount;
   const taxAmount = afterDiscount * (form.tax_rate / 100);
   const total = afterDiscount + taxAmount;
