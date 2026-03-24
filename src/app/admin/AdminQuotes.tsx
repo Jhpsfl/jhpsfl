@@ -277,7 +277,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   };
 
   const subtotal = form.line_items.reduce((sum, item) => sum + item.amount, 0);
-  const discountAmount = (form.discount_type === "percent" || form.discount_type === "target") ? subtotal * (form.discount_value / 100) : form.discount_type === "amount" ? form.discount_value : 0;
+  const discountAmount = form.discount_type === "percent" ? subtotal * (form.discount_value / 100) : (form.discount_type === "amount" || form.discount_type === "target") ? form.discount_value : 0;
   const afterDiscount = subtotal - discountAmount;
   const taxAmount = afterDiscount * (form.tax_rate / 100);
   const total = afterDiscount + taxAmount;
