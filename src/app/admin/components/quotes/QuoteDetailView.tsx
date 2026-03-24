@@ -143,10 +143,10 @@ export default function QuoteDetailView({ quote, isMobile, copiedLink, onBack, o
                   <span>Subtotal</span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(quote.subtotal)}</span>
                 </div>
-                {quote.discount_type && quote.discount_type !== "none" && quote.discount_value > 0 && (
+                {quote.discount_type && quote.discount_type !== "none" && (quote.discount_value || 0) > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13, color: "#ef5350" }}>
                     <span>Discount{quote.discount_type === "percent" ? ` (${quote.discount_value}%)` : ""}{quote.discount_reason ? ` — ${quote.discount_reason}` : ""}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>-{formatCurrency(quote.discount_type === "percent" ? quote.subtotal * quote.discount_value / 100 : quote.discount_value)}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>-{formatCurrency(quote.discount_type === "percent" ? quote.subtotal * (quote.discount_value || 0) / 100 : (quote.discount_value || 0))}</span>
                   </div>
                 )}
                 {quote.tax_rate > 0 && (
