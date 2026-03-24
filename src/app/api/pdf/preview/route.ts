@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
         })),
         subtotal: Math.round((data.subtotal || 0) * 100),
         taxAmount: Math.round((data.tax_amount || 0) * 100),
+        discountAmount: data.discount_amount ? Math.round(data.discount_amount * 100) : undefined,
+        discountReason: data.discount_reason || undefined,
         totalAmount: Math.round((data.total || 0) * 100),
         notes: data.notes || undefined,
         serviceAddress: data.service_address || undefined,

@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
     })),
     subtotal: subtotalCents,
     taxAmount: taxCents,
+    discountAmount: quote.discount_type === 'percent' ? Math.round((quote.subtotal || 0) * (quote.discount_value || 0) / 100 * 100) : quote.discount_type === 'amount' ? Math.round((quote.discount_value || 0) * 100) : undefined,
+    discountReason: quote.discount_reason || undefined,
     totalAmount: totalCents,
     notes: quote.notes || undefined,
     serviceAddress: quote.service_address || undefined,

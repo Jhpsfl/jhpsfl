@@ -245,6 +245,7 @@ const WRITE_TOOLS = [
         tax_rate: { type: "number", description: "Tax percentage (default 0)" },
         discount_type: { type: "string", description: "Discount type: 'none', 'percent', or 'amount' (default none)" },
         discount_value: { type: "number", description: "Discount value (e.g. 10 for 10% or 50 for $50 off)" },
+        discount_reason: { type: "string", description: "Reason for discount (e.g. Referral, Senior, Promo, First-time customer, Subscription)" },
         notes: { type: "string", description: "Internal notes" },
         expiration_days: { type: "number", description: "Days until expiry (default 30)" },
         start_date: { type: "string", description: "Project start date" },
@@ -291,6 +292,7 @@ const WRITE_TOOLS = [
         tax_rate: { type: "number" },
         discount_type: { type: "string", description: "Discount type: 'none', 'percent', or 'amount'" },
         discount_value: { type: "number", description: "Discount value (percentage number or dollar amount)" },
+        discount_reason: { type: "string", description: "Reason for discount" },
         expiration_date: { type: "string" },
         show_financing: { type: "boolean" },
         is_commercial: { type: "boolean" },
@@ -1175,6 +1177,7 @@ async function executeTool(
         tax_rate: taxRate,
         discount_type: discountType,
         discount_value: discountValue,
+        discount_reason: input.discount_reason || null,
         service_address: input.service_address || null,
         scope_summary: input.scope_summary || null,
         exclusions: input.exclusions || null,
@@ -1276,6 +1279,7 @@ async function executeTool(
       if (input.tax_rate !== undefined) updates.tax_rate = Number(input.tax_rate) || 0;
       if (input.discount_type !== undefined) updates.discount_type = input.discount_type || "none";
       if (input.discount_value !== undefined) updates.discount_value = Number(input.discount_value) || 0;
+      if (input.discount_reason !== undefined) updates.discount_reason = input.discount_reason || null;
       if (input.show_financing !== undefined) updates.show_financing = !!input.show_financing;
       if (input.is_commercial !== undefined) updates.is_commercial = !!input.is_commercial;
       if (input.expiration_date !== undefined) updates.expiration_date = input.expiration_date || null;

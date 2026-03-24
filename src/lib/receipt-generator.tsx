@@ -58,6 +58,7 @@ interface BaseDocumentData {
   subtotal: number;
   taxAmount: number;
   discountAmount?: number;
+  discountReason?: string;
   tipAmount?: number;
   totalAmount: number;
   notes?: string;
@@ -988,7 +989,7 @@ const EstimateDoc: React.FC<{ data: EstimateData; logoUrl?: string }> = ({ data,
               ) : null}
               {(data.discountAmount ?? 0) > 0 ? (
                 <View style={s.totalsRow}>
-                  <Text style={s.totalsLabel}>Discount</Text>
+                  <Text style={s.totalsLabel}>Discount{data.discountReason ? ` — ${data.discountReason}` : ''}</Text>
                   <Text style={[s.totalsVal, { color: C.paidGreen }]}>-{fmt(data.discountAmount!)}</Text>
                 </View>
               ) : null}
