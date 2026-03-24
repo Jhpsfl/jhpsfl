@@ -994,16 +994,14 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
           </div>
         </div>
 
-        <div style={{ padding: "16px 20px 12px" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <h1 style={{ flex: 1, fontSize: 22, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.3, margin: 0 }}>{selectedThread.subject}</h1>
-          </div>
-          <span style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "#5a8a5a", background: "rgba(255,255,255,0.05)", border: "1px solid #1a3a1a", borderRadius: 4, padding: "2px 10px" }}>
+        <div style={{ padding: "12px 12px 8px" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.3, margin: 0 }}>{selectedThread.subject}</h1>
+          <span style={{ display: "inline-block", marginTop: 6, fontSize: 11, fontWeight: 600, color: "#5a8a5a", background: "rgba(255,255,255,0.05)", border: "1px solid #1a3a1a", borderRadius: 4, padding: "2px 8px" }}>
             {folder.charAt(0).toUpperCase() + folder.slice(1)}
           </span>
         </div>
 
-        <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
+        <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 0 16px" }}>
           {loadingThread ? (
             <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
           ) : messages.map(msg => {
@@ -1016,8 +1014,8 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             if (isCollapsed) {
               return (
                 <div key={msg.id} onClick={() => setCollapsedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })}
-                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#0d1a0d", margin: "4px 0", borderRadius: 8, cursor: "pointer" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: isOutbound ? "#1a3a2a" : "#1a2a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: isOutbound ? "#4CAF50" : "#6a8a6a" }}>{initials}</div>
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#0d1a0d", marginBottom: 2, cursor: "pointer", borderBottom: "1px solid #1a2a1a" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: isOutbound ? "#1a3a2a" : "#1a2a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: isOutbound ? "#4CAF50" : "#6a8a6a" }}>{initials}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#a0b8a0", flexShrink: 0 }}>{senderName}</div>
                   <div style={{ flex: 1, fontSize: 12, color: "#4a6a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bodyText.substring(0, 80)}</div>
                   <div style={{ fontSize: 11, color: "#3a5a3a", flexShrink: 0 }}>{shortTime(msg.created_at)}</div>
@@ -1026,7 +1024,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             }
 
             return (
-              <div key={msg.id} style={{ background: "#0a140a", borderRadius: 12, padding: "16px 12px", marginBottom: 8, border: "1px solid #1a2a1a", overflow: "hidden" }}>
+              <div key={msg.id} style={{ background: "#0a140a", padding: "14px 12px", marginBottom: 4, borderBottom: "1px solid #1a2a1a", overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                   <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, flexShrink: 0, background: isOutbound ? "linear-gradient(135deg, #2E7D32, #1a4a1a)" : avatarColor(msg.from_email) + "30", color: isOutbound ? "#4CAF50" : avatarColor(msg.from_email) }}>
                     {initials}
@@ -1075,7 +1073,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                   </div>
                 </div>
                 {msg.body_html ? (
-                  <div style={{ overflow: "hidden", borderRadius: 8, background: "#0a160a" }}>
+                  <div style={{ overflow: "hidden", margin: "0 -12px", background: "#0a160a" }}>
                     <iframe
                       srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow:hidden;}img{max-width:100%!important;height:auto!important;}a{color:#4CAF50;}table{width:100%!important;max-width:100%!important;table-layout:fixed!important;}td,th{word-break:break-word!important;overflow-wrap:break-word!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}div,section,article,main,header,footer,aside,nav{max-width:100%!important;overflow:hidden!important;}</style></head><body>${msg.body_html}</body></html>`}
                       sandbox="allow-same-origin"
