@@ -1756,9 +1756,10 @@ export async function POST(req: NextRequest) {
     const { messages, currentTab, useModel } = await req.json();
     if (!messages?.length) return NextResponse.json({ error: "messages required" }, { status: 400 });
 
+    const grokKey = process.env.GROK_API_KEY;
     const claudeKey = process.env.ANTHROPIC_API_KEY;
     const groqKey = process.env.GROQ_API_KEY;
-    if (!claudeKey && !groqKey) return NextResponse.json({ error: "AI not configured" }, { status: 500 });
+    if (!grokKey && !claudeKey && !groqKey) return NextResponse.json({ error: "AI not configured" }, { status: 500 });
 
     const supabase = createSupabaseAdmin();
 
@@ -1791,88 +1792,120 @@ export async function POST(req: NextRequest) {
 
     const dynamicContext = contextParts.length ? "\n" + contextParts.join("\n") : "";
 
-    // Model selection
-    const preferClaude = useModel !== "groq" && !!claudeKey;
+    // Build full system prompt
+    const fullSystem = SYSTEM_PROMPT + dynamicContext;
     let content = "";
     const actions: { type?: string; tab?: string; created_id?: string; description?: string; yelp_reply?: { conversation_id: string; message: string; customer_name: string } }[] = [];
 
-    // ── Claude with native tool_use + prompt caching + multi-round loop ──
-    if (preferClaude) {
+    // Smart tool selection
+    const lastUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
+    const selectedTools = selectTools(typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg));
+
+    // Convert tools to OpenAI function-calling format (for Grok)
+    const openaiTools = (tools: typeof ALL_TOOLS) => tools.map(t => ({
+      type: "function" as const,
+      function: { name: t.name, description: t.description, parameters: t.input_schema },
+    }));
+
+    // ── Priority 1: Grok 4.1 Fast (cheapest + best tool use) ──
+    const preferGrok = useModel !== "claude" && useModel !== "groq" && !!grokKey;
+    if (preferGrok) {
+      try {
+        const apiMessages: any[] = [
+          { role: "system", content: fullSystem },
+          ...messages.map((m: any) => ({ role: m.role, content: m.content })),
+        ];
+        const grokTools = selectedTools.length > 0 ? openaiTools(selectedTools) : undefined;
+
+        let grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${grokKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "grok-4-1-fast",
+            max_tokens: 4000,
+            messages: apiMessages,
+            ...(grokTools ? { tools: grokTools } : {}),
+          }),
+        });
+
+        if (!grokRes.ok) {
+          console.error("[ai-chat] Grok error:", grokRes.status, await grokRes.text());
+        } else {
+          let grokData = await grokRes.json();
+
+          // Tool use loop (max 5 rounds)
+          let rounds = 0;
+          while (grokData.choices?.[0]?.finish_reason === "tool_calls" && rounds < 5) {
+            rounds++;
+            const toolCalls = grokData.choices[0].message.tool_calls || [];
+            apiMessages.push(grokData.choices[0].message);
+
+            for (const tc of toolCalls) {
+              const args = typeof tc.function.arguments === "string" ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+              const { result, action } = await executeTool(tc.function.name, args, supabase);
+              if (action) actions.push(action);
+              apiMessages.push({ role: "tool", tool_call_id: tc.id, content: typeof result === "string" ? result : JSON.stringify(result) });
+            }
+
+            grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${grokKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ model: "grok-4-1-fast", max_tokens: 4000, messages: apiMessages, tools: openaiTools(ALL_TOOLS) }),
+            });
+            if (!grokRes.ok) { console.error("[ai-chat] Grok tool loop error:", grokRes.status); break; }
+            grokData = await grokRes.json();
+          }
+          content = grokData.choices?.[0]?.message?.content || "";
+        }
+      } catch (err) {
+        console.error("[ai-chat] Grok failed:", err);
+      }
+    }
+
+    // ── Priority 2: Claude Haiku fallback ──
+    if (!content && claudeKey && useModel !== "groq") {
       try {
         const apiMessages = messages.map((m: any) => ({ role: m.role, content: m.content }));
-
-        // System prompt: static cached + dynamic uncached
         const systemBlocks: any[] = [
           { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
         ];
-        if (dynamicContext) {
-          systemBlocks.push({ type: "text", text: dynamicContext });
-        }
-
-        // Smart tool selection — only send tools relevant to the user's message
-        const lastUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content || "";
-        const selectedTools = selectTools(typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg));
+        if (dynamicContext) systemBlocks.push({ type: "text", text: dynamicContext });
 
         let claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 4000,
-            system: systemBlocks,
-            messages: apiMessages,
+            model: "claude-haiku-4-5-20251001", max_tokens: 4000, system: systemBlocks, messages: apiMessages,
             ...(selectedTools.length > 0 ? { tools: selectedTools } : {}),
           }),
         });
-
         if (!claudeRes.ok) {
           console.error("[ai-chat] Claude error:", claudeRes.status, await claudeRes.text());
         } else {
           let claudeData = await claudeRes.json();
-
-          // Tool use loop — execute tools and feed results back (max 5 rounds)
           let rounds = 0;
           while (claudeData.stop_reason === "tool_use" && rounds < 5) {
             rounds++;
             const toolBlocks = claudeData.content.filter((b: any) => b.type === "tool_use");
             const toolResults: any[] = [];
             const assistantContent = claudeData.content;
-
             for (const tool of toolBlocks) {
               const { result, action } = await executeTool(tool.name, tool.input, supabase);
               if (action) actions.push(action);
-              toolResults.push({
-                type: "tool_result",
-                tool_use_id: tool.id,
-                content: result,
-              });
+              toolResults.push({ type: "tool_result", tool_use_id: tool.id, content: result });
             }
-
-            // Continue conversation with tool results
             claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
               headers: { "x-api-key": claudeKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
               body: JSON.stringify({
-                model: "claude-haiku-4-5-20251001",
-                max_tokens: 4000,
-                system: systemBlocks,
-                messages: [
-                  ...apiMessages,
-                  { role: "assistant", content: assistantContent },
-                  { role: "user", content: toolResults },
-                ],
+                model: "claude-haiku-4-5-20251001", max_tokens: 4000, system: systemBlocks,
+                messages: [...apiMessages, { role: "assistant", content: assistantContent }, { role: "user", content: toolResults }],
                 tools: ALL_TOOLS,
               }),
             });
-
-            if (!claudeRes.ok) {
-              console.error("[ai-chat] Claude tool loop error:", claudeRes.status);
-              break;
-            }
+            if (!claudeRes.ok) break;
             claudeData = await claudeRes.json();
           }
-
-          // Extract final text response
           const textBlocks = claudeData.content?.filter((b: any) => b.type === "text") || [];
           content = textBlocks.map((b: any) => b.text).join("\n");
         }
@@ -1881,7 +1914,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Groq fallback (no native tool_use — simpler prompt) ──
+    // ── Priority 3: Groq fallback (no tool_use) ──
     if (!content && groqKey) {
       const groqPrompt = SYSTEM_PROMPT + dynamicContext + "\n\nNote: You do not have database tools in this mode. Answer from context and general knowledge only. Be clear when you are estimating vs stating facts.";
       try {
