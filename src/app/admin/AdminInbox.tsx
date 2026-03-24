@@ -1075,21 +1075,29 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 {msg.body_html ? (
                   <div style={{ overflow: "hidden", margin: "0 -12px", background: "#0a160a" }}>
                     <iframe
-                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow:hidden;}img{max-width:100%!important;height:auto!important;}a{color:#4CAF50;}table{width:100%!important;max-width:100%!important;table-layout:fixed!important;}td,th{word-break:break-word!important;overflow-wrap:break-word!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}div,section,article,main,header,footer,aside,nav{max-width:100%!important;overflow:hidden!important;}</style></head><body>${msg.body_html}</body></html>`}
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:transparent;}img{height:auto;}a{color:#4CAF50;}</style></head><body>${msg.body_html}</body></html>`}
                       sandbox="allow-same-origin"
                       style={{ width: "100%", minHeight: 120, border: "none", display: "block", background: "#0a160a" }}
                       onLoad={e => {
                         const iframe = e.target as HTMLIFrameElement;
                         const doc = iframe.contentDocument;
                         if (!doc?.body) return;
-                        const contentW = doc.body.scrollWidth;
+                        // Let content render at natural size first
+                        doc.body.style.display = "inline-block";
+                        doc.body.style.minWidth = "100%";
+                        const naturalW = doc.body.scrollWidth;
                         const frameW = iframe.clientWidth;
-                        if (contentW > frameW && frameW > 0) {
-                          const scale = frameW / contentW;
-                          doc.body.style.transform = `scale(${scale})`;
+                        doc.body.style.display = "";
+                        doc.body.style.minWidth = "";
+                        if (naturalW > frameW && frameW > 0) {
+                          const scale = frameW / naturalW;
                           doc.body.style.transformOrigin = "top left";
-                          doc.body.style.width = contentW + "px";
-                          iframe.style.height = Math.max(120, doc.body.scrollHeight * scale + 10) + "px";
+                          doc.body.style.transform = `scale(${scale})`;
+                          doc.body.style.width = naturalW + "px";
+                          // Wait a frame for transform to apply before measuring height
+                          requestAnimationFrame(() => {
+                            iframe.style.height = Math.max(120, Math.ceil(doc.body.scrollHeight * scale) + 10) + "px";
+                          });
                         } else {
                           iframe.style.height = Math.max(120, doc.body.scrollHeight + 20) + "px";
                         }
@@ -1386,21 +1394,27 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                         {msg.body_html ? (
                           <div style={{ overflow: "hidden", borderRadius: 8, background: "#0a160a" }}>
                             <iframe
-                              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:#0a160a;overflow:hidden;}img{max-width:100%!important;height:auto!important;}a{color:#4CAF50;}table{width:100%!important;max-width:100%!important;table-layout:fixed!important;}td,th{word-break:break-word!important;overflow-wrap:break-word!important;}*{max-width:100%!important;box-sizing:border-box!important;}pre{white-space:pre-wrap!important;overflow-wrap:break-word!important;}div,section,article,main,header,footer,aside,nav{max-width:100%!important;overflow:hidden!important;}</style></head><body>${msg.body_html}</body></html>`}
+                              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:transparent;}img{height:auto;}a{color:#4CAF50;}</style></head><body>${msg.body_html}</body></html>`}
                               sandbox="allow-same-origin"
                               style={{ width: "100%", minHeight: 120, border: "none", display: "block", background: "#0a160a" }}
                               onLoad={e => {
                                 const iframe = e.target as HTMLIFrameElement;
                                 const doc = iframe.contentDocument;
                                 if (!doc?.body) return;
-                                const contentW = doc.body.scrollWidth;
+                                doc.body.style.display = "inline-block";
+                                doc.body.style.minWidth = "100%";
+                                const naturalW = doc.body.scrollWidth;
                                 const frameW = iframe.clientWidth;
-                                if (contentW > frameW && frameW > 0) {
-                                  const scale = frameW / contentW;
-                                  doc.body.style.transform = `scale(${scale})`;
+                                doc.body.style.display = "";
+                                doc.body.style.minWidth = "";
+                                if (naturalW > frameW && frameW > 0) {
+                                  const scale = frameW / naturalW;
                                   doc.body.style.transformOrigin = "top left";
-                                  doc.body.style.width = contentW + "px";
-                                  iframe.style.height = Math.max(120, doc.body.scrollHeight * scale + 10) + "px";
+                                  doc.body.style.transform = `scale(${scale})`;
+                                  doc.body.style.width = naturalW + "px";
+                                  requestAnimationFrame(() => {
+                                    iframe.style.height = Math.max(120, Math.ceil(doc.body.scrollHeight * scale) + 10) + "px";
+                                  });
                                 } else {
                                   iframe.style.height = Math.max(120, doc.body.scrollHeight + 20) + "px";
                                 }
