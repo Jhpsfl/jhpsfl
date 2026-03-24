@@ -11,7 +11,7 @@ export default function QuoteForm({
   view, isMobile, form, setForm, customers, selectedQuote,
   customerJobs, loadingJobs, showNewCustomer, setShowNewCustomer,
   newCustomerForm, setNewCustomerForm, savingNewCustomer,
-  subtotal, taxAmount, total,
+  subtotal, discountAmount, taxAmount, total,
   onBack, onSave, onCreateNewCustomer, onJobAutoFill,
   updateLineItem, addLineItem, removeLineItem, onShowPresetPicker,
   onNavigate, onPreviewPdf, availableTerms,
@@ -26,6 +26,8 @@ export default function QuoteForm({
     due_date: string;
     show_due_date: boolean;
     tax_rate: number;
+    discount_type: "none" | "percent" | "amount";
+    discount_value: number;
     notes: string;
     line_items: QuoteLineItem[];
     show_financing: boolean;
@@ -52,6 +54,7 @@ export default function QuoteForm({
   setNewCustomerForm: React.Dispatch<React.SetStateAction<{ name: string; email: string; phone: string }>>;
   savingNewCustomer: boolean;
   subtotal: number;
+  discountAmount: number;
   taxAmount: number;
   total: number;
   onBack: () => void;
@@ -399,6 +402,29 @@ export default function QuoteForm({
                 inputMode="decimal"
                 style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
               />
+            </div>
+            <div>
+              <label style={labelStyle}>Discount</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select
+                  value={form.discount_type}
+                  onChange={e => setForm(prev => ({ ...prev, discount_type: e.target.value as "none" | "percent" | "amount" }))}
+                  style={{ ...inputStyle, width: 80, padding: "8px 6px", fontSize: 12 }}
+                >
+                  <option value="none">None</option>
+                  <option value="percent">%</option>
+                  <option value="amount">$</option>
+                </select>
+                {form.discount_type !== "none" && (
+                  <input
+                    value={form.discount_value || ""}
+                    onChange={e => setForm(prev => ({ ...prev, discount_value: parseFloat(e.target.value) || 0 }))}
+                    placeholder={form.discount_type === "percent" ? "10" : "50"}
+                    inputMode="decimal"
+                    style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
+                  />
+                )}
+              </div>
             </div>
           </div>
 
@@ -837,6 +863,12 @@ export default function QuoteForm({
               )}
             </div>
 
+            {discountAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#ef5350", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
+                <span>Discount {form.discount_type === "percent" ? `(${form.discount_value}%)` : ""}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>-{formatCurrency(discountAmount)}</span>
+              </div>
+            )}
             {form.tax_rate > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5a8a5a", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #1a3a1a" }}>
                 <span>Tax ({form.tax_rate}%)</span>

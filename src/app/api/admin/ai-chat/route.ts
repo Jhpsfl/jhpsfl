@@ -243,6 +243,8 @@ const WRITE_TOOLS = [
         warranty: { type: "string", description: "Warranty text (default: 30-day workmanship guarantee)" },
         closing_statement: { type: "string", description: "Professional closing with phone number" },
         tax_rate: { type: "number", description: "Tax percentage (default 0)" },
+        discount_type: { type: "string", description: "Discount type: 'none', 'percent', or 'amount' (default none)" },
+        discount_value: { type: "number", description: "Discount value (e.g. 10 for 10% or 50 for $50 off)" },
         notes: { type: "string", description: "Internal notes" },
         expiration_days: { type: "number", description: "Days until expiry (default 30)" },
         start_date: { type: "string", description: "Project start date" },
@@ -287,6 +289,8 @@ const WRITE_TOOLS = [
         start_date: { type: "string" },
         completion_date: { type: "string" },
         tax_rate: { type: "number" },
+        discount_type: { type: "string", description: "Discount type: 'none', 'percent', or 'amount'" },
+        discount_value: { type: "number", description: "Discount value (percentage number or dollar amount)" },
         expiration_date: { type: "string" },
         show_financing: { type: "boolean" },
         is_commercial: { type: "boolean" },
@@ -675,10 +679,12 @@ async function generateNumber(supabase: any, table: string, column: string, pref
 // ═══════════════════════════════════════════
 // HELPER: Recalculate quote totals
 // ═══════════════════════════════════════════
-function recalcQuoteTotals(lineItems: any[], taxRate: number) {
+function recalcQuoteTotals(lineItems: any[], taxRate: number, discountType?: string, discountValue?: number) {
   const subtotal = lineItems.reduce((s: number, li: any) => s + (li.amount || 0), 0);
-  const tax_amount = subtotal * (taxRate / 100);
-  return { subtotal, tax_amount, total: subtotal + tax_amount };
+  const discount = discountType === "percent" ? subtotal * ((discountValue || 0) / 100) : discountType === "amount" ? (discountValue || 0) : 0;
+  const afterDiscount = subtotal - discount;
+  const tax_amount = afterDiscount * (taxRate / 100);
+  return { subtotal, tax_amount, total: afterDiscount + tax_amount };
 }
 
 // ═══════════════════════════════════════════
@@ -1144,7 +1150,9 @@ async function executeTool(
         section: li.section || undefined,
       }));
       const taxRate = input.tax_rate || 0;
-      const totals = recalcQuoteTotals(lineItems, taxRate);
+      const discountType = input.discount_type || "none";
+      const discountValue = input.discount_value || 0;
+      const totals = recalcQuoteTotals(lineItems, taxRate, discountType, discountValue);
       const expDays = input.expiration_days || 30;
       const expDate = new Date(Date.now() + expDays * 86400000).toISOString().split("T")[0];
 
@@ -1165,6 +1173,8 @@ async function executeTool(
         line_items: lineItems,
         ...totals,
         tax_rate: taxRate,
+        discount_type: discountType,
+        discount_value: discountValue,
         service_address: input.service_address || null,
         scope_summary: input.scope_summary || null,
         exclusions: input.exclusions || null,
@@ -1264,6 +1274,8 @@ async function executeTool(
         if (input[f] !== undefined) updates[f] = input[f] || null;
       }
       if (input.tax_rate !== undefined) updates.tax_rate = Number(input.tax_rate) || 0;
+      if (input.discount_type !== undefined) updates.discount_type = input.discount_type || "none";
+      if (input.discount_value !== undefined) updates.discount_value = Number(input.discount_value) || 0;
       if (input.show_financing !== undefined) updates.show_financing = !!input.show_financing;
       if (input.is_commercial !== undefined) updates.is_commercial = !!input.is_commercial;
       if (input.expiration_date !== undefined) updates.expiration_date = input.expiration_date || null;

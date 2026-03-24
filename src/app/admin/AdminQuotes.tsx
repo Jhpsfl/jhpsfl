@@ -53,6 +53,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
     due_date: "",
     show_due_date: false,
     tax_rate: 0,
+    discount_type: "none" as "none" | "percent" | "amount",
+    discount_value: 0,
     notes: "",
     line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }] as QuoteLineItem[],
     show_financing: false,
@@ -274,8 +276,10 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
   };
 
   const subtotal = form.line_items.reduce((sum, item) => sum + item.amount, 0);
-  const taxAmount = subtotal * (form.tax_rate / 100);
-  const total = subtotal + taxAmount;
+  const discountAmount = form.discount_type === "percent" ? subtotal * (form.discount_value / 100) : form.discount_type === "amount" ? form.discount_value : 0;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = afterDiscount * (form.tax_rate / 100);
+  const total = afterDiscount + taxAmount;
 
   // ─── PDF Preview ───
   const handlePreviewQuotePdf = async (quote: Quote) => {
@@ -398,6 +402,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       expiration_date: form.show_expiration ? form.expiration_date : null,
       due_date: form.show_due_date ? form.due_date : null,
       tax_rate: form.tax_rate,
+      discount_type: form.discount_type,
+      discount_value: form.discount_value,
       tax_amount: taxAmount,
       subtotal,
       total,
@@ -617,6 +623,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       due_date: "",
       show_due_date: false,
       tax_rate: 0,
+      discount_type: "none" as const,
+      discount_value: 0,
       notes: "",
       line_items: [{ id: createLineItemId(), description: "", quantity: 1, unit: "flat", unit_price: 0, amount: 0 }],
       show_financing: false,
@@ -745,6 +753,8 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
       due_date: quote.due_date || "",
       show_due_date: !!quote.due_date,
       tax_rate: quote.tax_rate || 0,
+      discount_type: (quote as any).discount_type || "none",
+      discount_value: (quote as any).discount_value || 0,
       notes: quote.notes || "",
       line_items: quote.line_items?.length
         ? quote.line_items.map(item => ({ ...item, id: item.id || createLineItemId() }))
@@ -843,6 +853,7 @@ export default function AdminQuotes({ userId, backRef, onNavigate, onSwitchToInv
           setNewCustomerForm={setNewCustomerForm}
           savingNewCustomer={savingNewCustomer}
           subtotal={subtotal}
+          discountAmount={discountAmount}
           taxAmount={taxAmount}
           total={total}
           onBack={() => { setView("list"); resetForm(); }}
