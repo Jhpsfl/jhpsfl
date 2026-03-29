@@ -15,7 +15,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("invoices")
-    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, total, status, brand, customer_id, customers(company_name, name)")
+    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, total, status, brand, notes, payment_terms, created_at, customer_id, customers(company_name, name, email, phone)")
     .eq("invoice_number", invoiceNumber)
     .single();
 
@@ -39,6 +39,12 @@ export async function GET(
     total: data.total,
     status: data.status,
     brand: data.brand,
+    notes: data.notes || null,
+    payment_terms: data.payment_terms || null,
+    created_at: data.created_at,
     company_name: customer?.company_name || null,
+    customer_name: customer?.name || null,
+    customer_email: customer?.email || null,
+    customer_phone: customer?.phone || null,
   }});
 }
