@@ -31,14 +31,16 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
   const gmailUser = process.env.GMAIL_USER!;
 
   // Step 1: Find the original Yelp email in Gmail (sent to the Gmail account directly)
-  // Wait for Gmail to receive and index the email (Resend webhook fires before Gmail indexes)
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Yelp sends to both info@jhpsfl.com (Resend) and FRLawnCareFL@gmail.com simultaneously.
+  // Each copy has a DIFFERENT reply token. We MUST use the Gmail copy's token.
+  // The Resend webhook fires instantly but Gmail may take several seconds to index.
+  // Wait 8s initially, then retry up to 5 times with 5s gaps (max ~33s total).
+  await new Promise(resolve => setTimeout(resolve, 8000));
   
   const searchQuery = encodeURIComponent(`from:messaging.yelp.com subject:"${subject}" newer_than:1d`);
   let searchData: { messages?: { id: string }[] } = {};
   
-  // Retry search up to 3 times with increasing delays
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const searchResp = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=1`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -48,8 +50,8 @@ async function sendGmailReply(replyText: string, toEmail: string, subject: strin
       console.log(`Gmail search: FOUND on attempt ${attempt + 1}`);
       break;
     }
-    console.log(`Gmail search: attempt ${attempt + 1} found nothing, waiting...`);
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    console.log(`Gmail search: attempt ${attempt + 1} of 5 found nothing, waiting 5s...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
   
   let threadId: string | null = null;
@@ -605,16 +607,44 @@ export async function POST(req: NextRequest) {
         } else {
           // Customer reply or non-messaging Yelp email — use local agent
           const triggerType = isNewLead ? 'new_lead' : 'customer_reply';
+          let resolvedLeadId = leadMatch?.[1] || null;
+
+          // For customer replies: look up real lead_id from conversation if not in email
+          if (!resolvedLeadId && customerName && triggerType === 'customer_reply') {
+            const firstName = customerName.split(' ')[0];
+            const { data: convMatch } = await supabase
+              .from('yelp_conversations')
+              .select('yelp_thread_id, yelp_masked_email')
+              .ilike('customer_name', `%${firstName}%`)
+              .not('status', 'eq', 'completed')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            if (convMatch?.yelp_thread_id) {
+              resolvedLeadId = convMatch.yelp_thread_id;
+              console.log(`Resolved lead_id for ${customerName}: ${resolvedLeadId}`);
+            }
+            // Always update yelp_masked_email from the from address
+            if (convMatch && from_email.includes('@messaging.yelp.com') && !convMatch.yelp_masked_email) {
+              await supabase
+                .from('yelp_conversations')
+                .update({ yelp_masked_email: from_email })
+                .ilike('customer_name', `%${firstName}%`)
+                .not('status', 'eq', 'completed');
+              console.log(`Updated yelp_masked_email for ${customerName}: ${from_email}`);
+            }
+          }
+
           await supabase.from('yelp_triggers').insert({
             trigger_type: triggerType,
-            lead_id: leadMatch?.[1] || null,
+            lead_id: resolvedLeadId,
             thread_id: threadMatch?.[1] || null,
             customer_name: customerName,
             service: serviceMatch?.[1] || null,
             email_subject: subjectStr,
             email_body_text: text.substring(0, 2000),
           });
-          console.log(`Yelp trigger created: ${triggerType} lead=${leadMatch?.[1]} thread=${threadMatch?.[1]}`);
+          console.log(`Yelp trigger created: ${triggerType} lead=${resolvedLeadId} thread=${threadMatch?.[1]}`);
         }
       }
     } catch (err) {

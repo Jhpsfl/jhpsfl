@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   // List all conversations
   let query = supabase
     .from("yelp_conversations")
-    .select("id, customer_name, services, zip_code, urgency, status, ai_exchange_count, messages, thread_href, last_customer_message_at, last_ai_reply_at, created_at, project_details")
+    .select("id, customer_name, services, zip_code, urgency, status, ai_exchange_count, messages, thread_href, last_customer_message_at, last_ai_reply_at, created_at, project_details, lead_score, lead_temperature, conversation_stage, sentiment, pinned, starred, last_admin_read_at, draft_text, yelp_masked_email")
     .order("created_at", { ascending: false });
 
   if (status && status !== "all") {
@@ -172,6 +172,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: triggerErr.message }, { status: 500 });
     }
     return NextResponse.json({ ok: true, syncing: true });
+  }
+
+  if (action === "mark_read") {
+    const { error } = await supabase
+      .from("yelp_conversations")
+      .update({ last_admin_read_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

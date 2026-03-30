@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/billing",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/yelp-gmail-check",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/yelp-health-check",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/yelp-followups",
+      "schedule": "0 * * * *"
     }
   ]
 }

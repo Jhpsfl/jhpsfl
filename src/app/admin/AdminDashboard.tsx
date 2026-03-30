@@ -16,6 +16,7 @@ import AdminInvoices from "./AdminInvoices";
 import AdminQuotes from "./AdminQuotes";
 import AdminAnalytics from "./AdminAnalytics";
 import AdminYelpLeads from "./AdminYelpLeads";
+import AdminYelpDiagnostics from "./AdminYelpDiagnostics";
 import AdminSettings from "./AdminSettings";
 import FeedbackModal from "./components/FeedbackModal";
 
@@ -197,6 +198,7 @@ export default function AdminDashboard() {
   const [processorSwitching, setProcessorSwitching] = useState(false);
   const [processorMessage, setProcessorMessage] = useState<string | null>(null);
   const [pendingYelpReply, setPendingYelpReply] = useState<{ conversation_id: string; message: string; customer_name: string } | null>(null);
+  const [showYelpDiagnostics, setShowYelpDiagnostics] = useState(false);
 
   // Data
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -1949,8 +1951,11 @@ export default function AdminDashboard() {
                     )}
 
                     {/* ─── YELP LEADS TAB ─── */}
-                    {activeTab === "yelp_leads" && userId && (
-                      <AdminYelpLeads userId={userId} backRef={yelpLeadsBackRef} onNavigate={pushSentinel} pendingReply={pendingYelpReply} onPendingReplyConsumed={() => setPendingYelpReply(null)} />
+                    {activeTab === "yelp_leads" && userId && !showYelpDiagnostics && (
+                      <AdminYelpLeads userId={userId} backRef={yelpLeadsBackRef} onNavigate={pushSentinel} pendingReply={pendingYelpReply} onPendingReplyConsumed={() => setPendingYelpReply(null)} onShowDiagnostics={() => setShowYelpDiagnostics(true)} />
+                    )}
+                    {activeTab === "yelp_leads" && showYelpDiagnostics && (
+                      <AdminYelpDiagnostics onBack={() => setShowYelpDiagnostics(false)} />
                     )}
 
                     {/* ─── MESSAGES TAB ─── */}
