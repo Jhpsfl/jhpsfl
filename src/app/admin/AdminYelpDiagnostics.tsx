@@ -393,11 +393,11 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
                     padding: "6px 10px", borderRadius: "6px", background: "rgba(0,0,0,0.3)",
                     fontSize: "12px", color: "#aaa", marginBottom: "6px",
                     maxHeight: "80px", overflow: "hidden",
-                  }}>{String(dl.context.messageText).substring(0, 300)}</div>
+                  }}>{String(dl.context.messageText as string).substring(0, 300)}</div>
                 )}
                 <div style={{ display: "flex", gap: "6px" }}>
                   {dl.context?.messageText && (
-                    <button onClick={() => navigator.clipboard.writeText(String(dl.context.messageText))} style={{
+                    <button onClick={() => navigator.clipboard.writeText(dl.context.messageText as string)} style={{
                       padding: "3px 8px", borderRadius: "4px", border: "1px solid #4CAF5044",
                       background: "rgba(76,175,80,0.1)", color: "#4CAF50", fontSize: "11px", cursor: "pointer",
                     }}>Copy Message</button>
