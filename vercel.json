@@ -5,16 +5,12 @@
       "schedule": "0 10 * * *"
     },
     {
-      "path": "/api/cron/yelp-gmail-check",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/yelp-health-check",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/yelp-followups",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
     }
   ]
 }
