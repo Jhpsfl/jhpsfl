@@ -47,6 +47,8 @@ interface YelpConversation {
   last_admin_read_at: string | null;
   draft_text: string | null;
   yelp_masked_email: string | null;
+  delivery_status: string | null;
+  updated_at: string | null;
 }
 
 // ─── Helpers ───
@@ -825,6 +827,38 @@ export default function AdminYelpLeads({
           })}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Delivery Status Bar */}
+        {selected.delivery_status && selected.delivery_status !== "none" && selected.delivery_status !== "sent" && (
+          <div style={{
+            padding: "6px 14px", flexShrink: 0, display: "flex", alignItems: "center", gap: "8px",
+            background: selected.delivery_status === "failed"
+              ? "rgba(239,68,68,0.08)" : "rgba(76,175,80,0.06)",
+            borderTop: `1px solid ${selected.delivery_status === "failed" ? "#ef444430" : "#2a4a2a"}`,
+          }}>
+            {selected.delivery_status === "failed" ? (
+              <>
+                <span style={{ fontSize: "12px", color: "#ef4444" }}>⚠ Last message failed to deliver</span>
+              </>
+            ) : selected.delivery_status === "queued_quiet_hours" ? (
+              <span style={{ fontSize: "12px", color: "#888" }}>🌙 Queued — will send at 7 AM ET</span>
+            ) : (
+              <span style={{ fontSize: "12px", color: "#5a8a5a" }}>
+                <span style={{ display: "inline-block", animation: "pulse 1s infinite" }}>●</span>
+                {" "}Sending...
+              </span>
+            )}
+          </div>
+        )}
+        {selected.delivery_status === "sent" && selected.updated_at &&
+          Date.now() - new Date(selected.updated_at).getTime() < 60000 && (
+          <div style={{
+            padding: "4px 14px", flexShrink: 0,
+            background: "rgba(76,175,80,0.06)", borderTop: "1px solid #2a4a2a",
+          }}>
+            <span style={{ fontSize: "11px", color: "#4CAF50" }}>✓ Delivered</span>
+          </div>
+        )}
 
         {/* AI Suggestion */}
         {selected.status !== "completed" && !suggestDismissed && (suggestion || suggestLoading) && (

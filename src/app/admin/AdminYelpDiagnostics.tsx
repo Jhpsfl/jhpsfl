@@ -343,31 +343,28 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
           <div style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
               <div style={{ fontWeight: 700, color: "#4CAF50", fontSize: "13px" }}>Error Log</div>
-              <button onClick={() => doDiagAction("clear_resolved")} style={{
-                padding: "4px 10px", borderRadius: "6px", border: "1px solid #66666644",
-                background: "rgba(0,0,0,0.2)", color: "#888", fontSize: "11px", cursor: "pointer",
-              }}>Clear Resolved</button>
+              <button onClick={() => { if (confirm("Delete all errors?")) doDiagAction("clear_all_errors"); }} style={{
+                padding: "4px 10px", borderRadius: "6px", border: "1px solid #ef444444",
+                background: "rgba(239,68,68,0.08)", color: "#ef4444", fontSize: "11px", cursor: "pointer",
+              }}>Clear All</button>
             </div>
             {!errors.length ? (
               <div style={{ color: "#5a8a5a", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>No errors</div>
             ) : errors.map(err => (
               <div key={err.id} style={{
                 padding: "10px 12px", borderRadius: "8px", marginBottom: "6px",
-                background: err.resolved ? "rgba(0,0,0,0.2)" : "rgba(239,68,68,0.05)",
-                border: `1px solid ${err.resolved ? "#1a3a1a" : "#ef444430"}`,
-                opacity: err.resolved ? 0.5 : 1,
+                background: "rgba(239,68,68,0.05)",
+                border: "1px solid #ef444430",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                  <span style={{ fontWeight: 600, color: err.resolved ? "#666" : "#ef4444", fontSize: "12px" }}>{err.error_type}</span>
+                  <span style={{ fontWeight: 600, color: "#ef4444", fontSize: "12px" }}>{err.error_type}</span>
                   <span style={{ fontSize: "10px", color: "#555" }}>{timeAgo(err.created_at)}</span>
                 </div>
                 <div style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px" }}>{err.message.substring(0, 200)}</div>
-                {!err.resolved && (
-                  <button onClick={() => doDiagAction("resolve_error", { id: err.id })} style={{
-                    padding: "2px 8px", borderRadius: "4px", border: "1px solid #66666644",
-                    background: "rgba(0,0,0,0.2)", color: "#888", fontSize: "11px", cursor: "pointer",
-                  }}>Mark Resolved</button>
-                )}
+                <button onClick={() => doDiagAction("delete_error", { id: err.id })} style={{
+                  padding: "2px 8px", borderRadius: "4px", border: "1px solid #ef444444",
+                  background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: "11px", cursor: "pointer",
+                }}>Delete</button>
               </div>
             ))}
           </div>

@@ -121,6 +121,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === 'delete_error') {
+    const { id } = payload || {};
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+    await supabase.from('yelp_error_log').delete().eq('id', id);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'clear_all_errors') {
+    await supabase.from('yelp_error_log').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === 'clear_resolved') {
     await supabase.from('yelp_error_log').delete().eq('resolved', true);
     return NextResponse.json({ ok: true });
@@ -129,7 +141,7 @@ export async function POST(req: NextRequest) {
   if (action === 'resolve_dead_letter') {
     const { id } = payload || {};
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
-    await supabase.from('yelp_error_log').update({ resolved: true }).eq('id', id);
+    await supabase.from('yelp_error_log').delete().eq('id', id);
     return NextResponse.json({ ok: true });
   }
 
