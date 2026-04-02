@@ -406,13 +406,14 @@ export default function AdminYelpLeads({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selected.id, action: "sync_thread" }),
       });
+      // Poll for up to 2 minutes (Chromium startup takes ~45s)
       let polls = 0;
       const poller = setInterval(async () => {
         polls++;
         await fetchConversations();
-        if (polls >= 10) { clearInterval(poller); setSyncing(false); }
-      }, 3000);
-      setTimeout(() => setSyncing(false), 30000);
+        if (polls >= 24) { clearInterval(poller); setSyncing(false); }
+      }, 5000);
+      setTimeout(() => { clearInterval(poller); setSyncing(false); }, 120000);
     } catch { setSyncing(false); }
   };
 
