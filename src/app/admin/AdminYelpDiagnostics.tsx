@@ -279,6 +279,7 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
                 {[
                   { action: "reset_circuit", label: "Reset Circuit Breaker", color: "#f97316" },
                   { action: "retry_failed", label: "Retry All Failed", color: "#4CAF50" },
+                  { action: "clear_queue", label: "🗑 Clear Queue", color: "#ef4444" },
                   { action: "clear_stale", label: "Clear Stale", color: "#2196F3" },
                   { action: "clear_browser", label: "Clear Browser Session", color: "#888" },
                 ].map(btn => (
@@ -299,10 +300,16 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
           <div style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
               <div style={{ fontWeight: 700, color: "#4CAF50", fontSize: "13px" }}>Trigger Queue</div>
-              <button onClick={() => doAction("retry_failed")} style={{
-                padding: "4px 10px", borderRadius: "6px", border: "1px solid #4CAF5044",
-                background: "rgba(76,175,80,0.1)", color: "#4CAF50", fontSize: "11px", cursor: "pointer",
-              }}>Retry All Failed</button>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button onClick={() => doAction("retry_failed")} style={{
+                  padding: "4px 10px", borderRadius: "6px", border: "1px solid #4CAF5044",
+                  background: "rgba(76,175,80,0.1)", color: "#4CAF50", fontSize: "11px", cursor: "pointer",
+                }}>Retry All Failed</button>
+                <button onClick={() => doAction("clear_queue")} style={{
+                  padding: "4px 10px", borderRadius: "6px", border: "1px solid #ef444444",
+                  background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: "11px", cursor: "pointer",
+                }}>🗑 Clear All</button>
+              </div>
             </div>
             {!data?.queue?.length ? (
               <div style={{ color: "#5a8a5a", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>No active triggers</div>

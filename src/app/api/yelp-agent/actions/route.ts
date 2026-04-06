@@ -71,5 +71,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === 'clear_queue') {
+    const { data } = await supabase
+      .from('yelp_triggers')
+      .update({ status: 'expired' })
+      .in('status', ['pending', 'processing'])
+      .select('id');
+    return NextResponse.json({ ok: true, message: `Cleared ${data?.length || 0} trigger(s) from queue` });
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
