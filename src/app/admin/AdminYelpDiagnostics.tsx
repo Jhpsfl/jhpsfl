@@ -95,6 +95,13 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
 
   const doAction = async (action: string, payload?: Record<string, unknown>) => {
     setActionMsg(`Running ${action}...`);
+    // Optimistically remove cancelled/cleared triggers from local state immediately
+    if (action === "cancel_trigger" && payload?.triggerId) {
+      setData(prev => prev ? { ...prev, queue: prev.queue.filter(t => t.id !== payload.triggerId) } : prev);
+    }
+    if (action === "clear_queue") {
+      setData(prev => prev ? { ...prev, queue: [] } : prev);
+    }
     try {
       const res = await fetch("/api/yelp-agent/actions", {
         method: "POST",
@@ -102,10 +109,10 @@ export default function AdminYelpDiagnostics({ onBack }: { onBack: () => void })
         body: JSON.stringify({ action, payload }),
       });
       const result = await res.json();
-      setActionMsg(result.message || result.ok ? `✓ ${action} done` : `✗ ${action} failed`);
-      fetchData();
-    } catch (e) {
-      setActionMsg(`✗ ${action} error`);
+      setActionMsg(result.message || (result.ok ? `✓ Done` : `✗ Failed`));
+      await fetchData();
+    } catch {
+      setActionMsg(`✗ Error`);
     }
     setTimeout(() => setActionMsg(""), 3000);
   };
