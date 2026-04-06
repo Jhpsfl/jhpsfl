@@ -17,9 +17,9 @@ export const metadata: Metadata = {
 export default function PayPage({
   searchParams,
 }: {
-  searchParams: { ref?: string };
+  searchParams: Record<string, string | undefined>;
 }) {
-  if (!searchParams.ref) {
+  if (Object.keys(searchParams).length === 0) {
     redirect("/");
   }
   return (
