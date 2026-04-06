@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     const { data } = await supabase
       .from('yelp_triggers')
       .update({ status: 'expired' })
-      .in('status', ['pending', 'processing'])
+      .in('status', ['pending', 'processing', 'failed'])
       .select('id');
     return NextResponse.json({ ok: true, message: `Cleared ${data?.length || 0} trigger(s) from queue` });
   }
