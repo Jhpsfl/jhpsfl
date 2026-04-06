@@ -533,7 +533,18 @@ export async function POST(req: NextRequest) {
         || subjectStr.includes('Password')
         || subjectStr.includes('New login')
         || subjectStr.includes('access has changed');
-      if (isNearbyJob || isAccountEmail) {
+      // Skip billing, ads, and Yelp admin emails that are not customer messages
+      const isAdminEmail = subjectStr.includes('payment')
+        || subjectStr.includes('Payment')
+        || subjectStr.includes('billing')
+        || subjectStr.includes('Billing')
+        || subjectStr.includes('Yelp Ads')
+        || subjectStr.includes('response quality score')
+        || subjectStr.includes('metrics update')
+        || subjectStr.includes('People are checking out')
+        || subjectStr.includes('score changed')
+        || (subjectStr.includes('Action required') && !subjectStr.includes('Message from'));
+      if (isNearbyJob || isAccountEmail || isAdminEmail) {
         console.log(`Yelp non-actionable email — skipping trigger: ${subjectStr}`);
       } else {
         const isNewLead = subjectStr.includes('new lead on Yelp');
