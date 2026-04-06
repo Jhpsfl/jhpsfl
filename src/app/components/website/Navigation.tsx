@@ -56,15 +56,6 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
             onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(200,168,75,0.3)"; }}>
               🏢 Commercial
             </Link>
-            <Link href="/pay" style={{
-              color: "#4CAF50", fontSize: 14, fontWeight: 600, textDecoration: "none",
-              padding: "8px 20px", border: "1px solid #2a5a2a", borderRadius: 10,
-              transition: "all 0.3s",
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(76,175,80,0.1)"; e.currentTarget.style.borderColor = "#4CAF50"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#2a5a2a"; }}>
-              💳 Pay
-            </Link>
             <button className="cta-primary" onClick={() => setShowEstimate(true)} style={{ padding: "10px 24px", fontSize: 14 }}>
               Free Estimate
             </button>
@@ -135,9 +126,6 @@ export default function Navigation({ scrollY, menuOpen, setMenuOpen, logoSrc, co
           ))}
           <Link href="/commercial" onClick={() => setMenuOpen(false)} style={{ color: "#c8a84b", fontSize: 22, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
             🏢 Commercial Services
-          </Link>
-          <Link href="/pay" onClick={() => setMenuOpen(false)} style={{ color: "#e8f5e8", fontSize: 28, fontWeight: 600, textDecoration: "none", fontFamily: "'Playfair Display', serif" }}>
-            Make Payment
           </Link>
           <button className="cta-primary" onClick={() => { setMenuOpen(false); setShowEstimate(true); }} style={{ marginTop: 16 }}>
             Get Free Estimate
