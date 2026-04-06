@@ -72,12 +72,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'clear_queue') {
-    const { data } = await supabase
-      .from('yelp_triggers')
-      .update({ status: 'expired' })
-      .in('status', ['pending', 'processing', 'failed'])
-      .select('id');
-    return NextResponse.json({ ok: true, message: `Cleared ${data?.length || 0} trigger(s) from queue` });
+    // Delete failed triggers permanently; expire pending/processing so agent won't act on them
+    const [{ data: deleted }, { data: expired }] = await Promise.all([
+      supabase.from('yelp_triggers').delete().eq('status', 'failed').select('id'),
+      supabase.from('yelp_triggers').update({ status: 'expired' }).in('status', ['pending', 'processing']).select('id'),
+    ]);
+    const total = (deleted?.length || 0) + (expired?.length || 0);
+    return NextResponse.json({ ok: true, message: `Cleared ${total} trigger(s) from queue` });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
