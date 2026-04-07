@@ -243,7 +243,6 @@ STRICT RULES:
   const contextLines = [
     `Customer name: ${parsed.customerName}`,
     `Service: ${service}`,
-    `Location: ${location}`,
   ];
   if (parsed.projectDetails.length > 0) {
     contextLines.push('\nProject details from their Yelp request:');
@@ -256,11 +255,11 @@ STRICT RULES:
 
 Write a warm first reply that:
 1. Greets them by first name
-2. ACKNOWLEDGES their specific project details (mention what they need)
-3. Asks a clarifying question about the job (access, areas of concern, preferred scheduling)
+2. ACKNOWLEDGES their specific project details (mention what they need — e.g. the property type, size, or scope they described)
+3. Asks a clarifying question about the job (access to property, specific areas of concern, or preferred scheduling)
 4. Keep it 3-4 sentences, conversational, like a friendly contractor texting back
 
-CRITICAL: You MUST reference at least one specific detail from their request. Do NOT write a generic reply.
+CRITICAL: You MUST reference at least one specific detail from their request. Do NOT write a generic reply. Do NOT mention ZIP codes or specific locations.
 
 End with "- The JHPS Team".`;
 
