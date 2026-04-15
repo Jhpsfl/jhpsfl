@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         })),
         subtotal: Math.round((data.subtotal || 0) * 100),
         taxAmount: Math.round((data.tax_amount || 0) * 100),
+        surchargeAmount: Math.round((data.surcharge_amount || 0) * 100),
         totalAmount: Math.round((data.total || 0) * 100),
         paymentLink: data.payment_link || undefined,
         notes: data.notes || undefined,
