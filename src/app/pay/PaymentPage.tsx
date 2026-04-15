@@ -339,6 +339,8 @@ interface InvoicePublicData {
   subtotal: number;
   tax_rate: number;
   tax_amount: number;
+  surcharge?: boolean;
+  surcharge_amount?: number;
   total: number;
   status: string;
   brand?: string;
@@ -1392,6 +1394,12 @@ export default function PaymentPage() {
                                       <span>Subtotal</span>
                                       <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${invoiceData.subtotal.toFixed(2)}</span>
                                     </div>
+                                    {(invoiceData.surcharge_amount || 0) > 0 && (
+                                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
+                                        <span>4% Surcharge</span>
+                                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${(invoiceData.surcharge_amount || 0).toFixed(2)}</span>
+                                      </div>
+                                    )}
                                     {invoiceData.tax_rate > 0 && (
                                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
                                         <span>Tax ({invoiceData.tax_rate}%)</span>
@@ -1955,6 +1963,12 @@ export default function PaymentPage() {
                           </span>
                         </div>
                       ))}
+                      {(invoiceData.surcharge_amount || 0) > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: brand.colors.textMuted }}>
+                          <span>4% Surcharge</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${(invoiceData.surcharge_amount || 0).toFixed(2)}</span>
+                        </div>
+                      )}
                       {invoiceData.tax_rate > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: brand.colors.textMuted }}>
                           <span>Tax ({invoiceData.tax_rate}%)</span>

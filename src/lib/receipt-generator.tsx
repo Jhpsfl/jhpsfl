@@ -95,6 +95,8 @@ export interface InvoiceData extends BaseDocumentData {
   invoiceStatus: 'DUE' | 'OVERDUE' | 'SENT';
   paymentLink?: string;
   jobAddress?: string;
+  /** 4% processing surcharge amount in cents (0 if not applied) */
+  surchargeAmount?: number;
   /** Brand key for multi-brand support */
   brandKey?: BrandKey;
   /** When present, the invoice becomes a multi-page Service Contract */
@@ -729,10 +731,18 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
             <Text style={s.totalsLabel}>Subtotal</Text>
             <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
           </View>
-          <View style={s.totalsRow}>
-            <Text style={s.totalsLabel}>4% Surcharge</Text>
-            <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
-          </View>
+          {(data.surchargeAmount || 0) > 0 && (
+            <View style={s.totalsRow}>
+              <Text style={s.totalsLabel}>4% Surcharge</Text>
+              <Text style={s.totalsVal}>{fmt(data.surchargeAmount || 0)}</Text>
+            </View>
+          )}
+          {data.taxAmount > 0 && (
+            <View style={s.totalsRow}>
+              <Text style={s.totalsLabel}>Tax</Text>
+              <Text style={s.totalsVal}>{fmt(data.taxAmount)}</Text>
+            </View>
+          )}
           <View style={s.totalsDivider} />
           <View style={[s.grandTotal, { backgroundColor: docColors.primary }]}>
             <Text style={s.grandTotalText}>Amount Due</Text>

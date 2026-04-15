@@ -41,6 +41,7 @@ export async function GET(
     })),
     subtotal: Math.round((invoice.subtotal || 0) * 100),
     taxAmount: Math.round((invoice.tax_amount || 0) * 100),
+    surchargeAmount: Math.round((invoice.surcharge_amount || 0) * 100),
     totalAmount: Math.round((invoice.total || 0) * 100),
     notes: invoice.notes || undefined,
     paymentTerms: invoice.payment_terms || undefined,

@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
   // ─── Build InvoiceData for PDF generator ───
   const subtotalCents = Math.round((invoice.subtotal || 0) * 100);
   const taxCents = Math.round((invoice.tax_amount || 0) * 100);
+  const surchargeCents = Math.round((invoice.surcharge_amount || 0) * 100);
   const totalCents = Math.round((invoice.total || 0) * 100);
 
   const invoiceData: InvoiceData = {
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
     })),
     subtotal: subtotalCents,
     taxAmount: taxCents,
+    surchargeAmount: surchargeCents,
     totalAmount: totalCents,
     paymentLink: payment_link || undefined,
     notes: invoice.notes || undefined,
