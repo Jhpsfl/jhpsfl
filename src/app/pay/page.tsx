@@ -14,12 +14,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PayPage({
+export default async function PayPage({
   searchParams,
 }: {
-  searchParams: Record<string, string | undefined>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  if (Object.keys(searchParams).length === 0) {
+  const params = await searchParams;
+  if (Object.keys(params).length === 0) {
     redirect("/");
   }
   return (
