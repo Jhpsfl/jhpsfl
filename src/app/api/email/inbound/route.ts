@@ -169,6 +169,14 @@ function parseEmail(raw: string): string {
   return match ? match[1].toLowerCase() : raw.toLowerCase().trim();
 }
 
+// Extract the friendly display name from "Display Name <email@x.com>" format.
+// Returns null when the From header is a bare address (no name to show).
+function parseName(raw: string): string | null {
+  const match = raw.match(/^\s*"?([^"<]*?)"?\s*<[^>]+>/);
+  const name = match?.[1]?.trim();
+  return name ? name.replace(/\s+/g, ' ') : null;
+}
+
 // ─── PARSE YELP NEW LEAD EMAIL ─────────────────────────────────────────────
 function parseYelpLeadEmail(text: string, html: string) {
   const combined = text + html;
@@ -365,7 +373,9 @@ export async function POST(req: NextRequest) {
     console.error('Failed to fetch full email from Resend:', err);
   }
 
-  const from_email = parseEmail(typeof from === 'string' ? from : String(from));
+  const fromRaw = typeof from === 'string' ? from : String(from);
+  const from_email = parseEmail(fromRaw);
+  const from_name = parseName(fromRaw);
   const to_email = parseEmail(
     typeof to === 'string' ? to : Array.isArray(to) ? to[0] : 'info@jhpsfl.com'
   );
@@ -455,6 +465,7 @@ export async function POST(req: NextRequest) {
     lead_id: leadId,
     direction: 'inbound',
     from_email,
+    from_name: from_name ?? undefined,
     to_email,
     subject: subjectStr,
     body_html: body_html ?? undefined,

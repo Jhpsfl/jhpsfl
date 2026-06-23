@@ -114,6 +114,7 @@ async function buildThreadQuery(
     lead_id: string | null;
     created_at: string;
     customer_name?: string;
+    counterparty_name?: string;
     has_inbound: boolean;
   }>();
 
@@ -123,6 +124,8 @@ async function buildThreadQuery(
       threadMap.set(msg.thread_id, {
         thread_id: msg.thread_id,
         subject: msg.subject,
+        // to_email = the external party (customer/sender), from_email = our account.
+        // Kept this way because reply logic targets thread.to_email.
         to_email: msg.direction === 'outbound' ? msg.to_email : msg.from_email,
         from_email: msg.direction === 'outbound' ? msg.from_email : msg.to_email,
         latest_message: msg.created_at,
@@ -134,6 +137,8 @@ async function buildThreadQuery(
         has_attachments: !!msg.has_attachments,
         lead_id: msg.lead_id,
         created_at: msg.created_at,
+        // Display name of the external party, taken from the most recent inbound message.
+        counterparty_name: msg.direction === 'inbound' ? (msg.from_name || undefined) : undefined,
         has_inbound: msg.direction === 'inbound',
       });
     }
@@ -144,6 +149,11 @@ async function buildThreadQuery(
     if (msg.starred) thread.starred = true;
     if (msg.has_attachments) thread.has_attachments = true;
     if (msg.direction === 'inbound') thread.has_inbound = true;
+    // Backfill the sender's display name from any inbound message (messages are
+    // ordered newest-first, so the first one seen wins).
+    if (!thread.counterparty_name && msg.direction === 'inbound' && msg.from_name) {
+      thread.counterparty_name = msg.from_name;
+    }
   }
 
   // For inbox, only show threads that have received at least one inbound message
@@ -280,7 +290,23 @@ export async function DELETE(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
-  const { thread_ids, permanent } = body as { thread_ids: string[]; permanent?: boolean };
+  const { thread_ids, permanent, empty_trash } = body as { thread_ids?: string[]; permanent?: boolean; empty_trash?: boolean };
+
+  // Empty Trash — permanently delete everything currently in the trash folder.
+  if (empty_trash) {
+    const { data: trashed } = await supabase
+      .from('email_messages')
+      .select('id')
+      .eq('folder', 'trash');
+    const ids = (trashed || []).map(m => m.id);
+    if (ids.length) {
+      await supabase.from('email_attachments').delete().in('message_id', ids);
+    }
+    const { error } = await supabase.from('email_messages').delete().eq('folder', 'trash');
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ deleted: ids.length });
+  }
+
   if (!thread_ids?.length) return NextResponse.json({ error: 'No thread_ids provided' }, { status: 400 });
 
   if (permanent) {

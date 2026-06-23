@@ -9,6 +9,7 @@ export interface EmailMessage {
   lead_id: string | null;
   direction: 'outbound' | 'inbound';
   from_email: string;
+  from_name: string | null;
   to_email: string;
   subject: string;
   body_html: string | null;
@@ -40,6 +41,7 @@ export interface EmailThread {
   lead_id: string | null;
   created_at: string;
   customer_name?: string;
+  counterparty_name?: string;
 }
 
 export interface EmailAttachment {
@@ -86,6 +88,7 @@ export async function logEmail(params: {
   lead_id?: string | null;
   direction: 'outbound' | 'inbound';
   from_email: string;
+  from_name?: string | null;
   to_email: string;
   subject: string;
   body_html?: string;
@@ -107,6 +110,7 @@ export async function logEmail(params: {
       lead_id: params.lead_id || null,
       direction: params.direction,
       from_email: params.from_email,
+      from_name: params.from_name ?? null,
       to_email: params.to_email,
       subject: params.subject,
       body_html: params.body_html || null,

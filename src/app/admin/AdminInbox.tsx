@@ -15,10 +15,11 @@ interface Thread {
   latest_message: string; latest_body_preview: string; latest_direction: string;
   message_count: number; unread_count: number; starred: boolean;
   has_attachments: boolean; lead_id: string | null; created_at: string;
-  customer_name?: string;
+  customer_name?: string; counterparty_name?: string;
 }
 interface Message {
   id: string; thread_id: string; direction: string; from_email: string;
+  from_name?: string | null;
   to_email: string; subject: string; body_html: string | null;
   body_text: string | null; read: boolean; starred: boolean;
   folder: string; created_at: string; cc_emails: string[]; bcc_emails: string[];
@@ -54,6 +55,13 @@ const FOLDERS: { key: Folder; label: string; icon: string }[] = [
 function getInitials(name: string | undefined, email: string): string {
   if (name) return name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
   return email.split("@")[0].substring(0, 2).toUpperCase();
+}
+// Best display name for a sender: a real name if we have one, otherwise a tidied
+// version of the address local-part ("john.doe" -> "John Doe", "info" -> "Info").
+function senderDisplayName(realName: string | undefined | null, email: string): string {
+  if (realName && realName.trim()) return realName.trim();
+  const local = (email.split("@")[0] || email).replace(/[._-]+/g, " ").trim();
+  return local.split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ") || email;
 }
 function avatarColor(email: string): string {
   const colors = ["#2E7D32", "#4CAF50", "#3b8dd4", "#22C55E", "#EC4899", "#8B5CF6", "#EF4444", "#06B6D4", "#66BB6A", "#43A047"];
@@ -639,6 +647,22 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
     fetchThreads(true);
   };
 
+  const emptyTrash = async () => {
+    if (!window.confirm("Permanently delete all messages in Trash? This cannot be undone.")) return;
+    const res = await fetch("/api/email/threads", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ empty_trash: true }),
+    });
+    if (res.ok) {
+      if (view === "thread") closeThread();
+      exitSelectMode();
+      showToast("Trash emptied");
+      fetchThreads(true);
+    } else {
+      showToast("Failed to empty trash", "error");
+    }
+  };
+
   const toggleStar = async (threadId: string, currentStarred: boolean, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setThreads(prev => prev.map(t => t.thread_id === threadId ? { ...t, starred: !currentStarred } : t));
@@ -1051,7 +1075,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
           ) : messages.map(msg => {
             const isOutbound = msg.direction === "outbound";
-            const senderName = isOutbound ? "JHPS" : (selectedThread.customer_name || msg.from_email.split("@")[0]);
+            const senderName = isOutbound ? "JHPS" : senderDisplayName(selectedThread.customer_name || msg.from_name, msg.from_email);
             const initials = isOutbound ? "JP" : getInitials(selectedThread.customer_name, msg.from_email);
             const isCollapsed = collapsedMsgs.has(msg.id);
             const bodyText = msg.body_text || (msg.body_html ? htmlToText(msg.body_html) : "\u2014");
@@ -1362,7 +1386,7 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                     <div style={{ display: "flex", justifyContent: "center", padding: "64px 0", color: "#4CAF50" }}>Loading...</div>
                   ) : messages.map(msg => {
                     const isOutbound = msg.direction === "outbound";
-                    const senderName = isOutbound ? "JHPS" : (selectedThread.customer_name || msg.from_email.split("@")[0]);
+                    const senderName = isOutbound ? "JHPS" : senderDisplayName(selectedThread.customer_name || msg.from_name, msg.from_email);
                     const initials = isOutbound ? "JP" : getInitials(selectedThread.customer_name, msg.from_email);
                     const isCollapsed = collapsedMsgs.has(msg.id);
                     const bodyText = msg.body_text || (msg.body_html ? htmlToText(msg.body_html) : "\u2014");
@@ -1480,7 +1504,15 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 {someSelected && <span style={{ fontSize: 11, color: "#5a8a5a" }}>{selectedIds.size} selected</span>}
               </div>
               {/* Folder label */}
-              <div style={{ padding: "8px 20px 4px", fontSize: 13, color: "#3a5a3a", fontWeight: 500, textTransform: "capitalize" }}>{folder}</div>
+              <div style={{ padding: "8px 20px 4px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 500, textTransform: "capitalize" }}>{folder}</span>
+                {folder === "trash" && filtered.length > 0 && (
+                  <button onClick={emptyTrash}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 16, border: "1px solid rgba(239,83,80,0.4)", background: "transparent", color: "#ef5350", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    <IconTrash /> Empty Trash
+                  </button>
+                )}
+              </div>
               {/* Thread rows */}
               <div style={{ flex: 1, overflowY: "auto" }}>
                 {loading ? (
@@ -1491,8 +1523,8 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                     <div style={{ color: "#3a5a3a", fontSize: 13 }}>{search ? "No matching threads" : `No emails in ${folder}`}</div>
                   </div>
                 ) : filtered.map(thread => {
-                  const senderEmail = folder === "sent" ? thread.to_email : thread.from_email;
-                  const senderName = thread.customer_name || senderEmail.split("@")[0];
+                  const senderEmail = thread.to_email;
+                  const senderName = senderDisplayName(thread.customer_name || thread.counterparty_name, senderEmail);
                   const isSelected = selectedIds.has(thread.thread_id);
                   const isUnread = thread.unread_count > 0;
                   const isDraft = folder === "drafts";
@@ -1745,8 +1777,14 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
 
       {/* Folder label */}
       {!selectMode && (
-        <div style={{ padding: "4px 20px 6px" }}>
+        <div style={{ padding: "4px 20px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 15, fontWeight: 500, color: "#4a6a4a", textTransform: "capitalize" }}>{folder}</span>
+          {folder === "trash" && filtered.length > 0 && (
+            <button onClick={emptyTrash}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 16, border: "1px solid rgba(239,83,80,0.4)", background: "transparent", color: "#ef5350", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <IconTrash /> Empty Trash
+            </button>
+          )}
         </div>
       )}
 
@@ -1760,8 +1798,8 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
             <p style={{ color: "#4a6a4a", fontSize: 16 }}>{search ? "No emails match your search." : "No emails in this folder."}</p>
           </div>
         ) : filtered.map(thread => {
-          const senderEmail = folder === "sent" ? thread.to_email : thread.from_email;
-          const senderName = thread.customer_name || senderEmail.split("@")[0];
+          const senderEmail = thread.to_email;
+          const senderName = senderDisplayName(thread.customer_name || thread.counterparty_name, senderEmail);
           const isSelected = selectedIds.has(thread.thread_id);
           return (
             <button key={thread.thread_id}
