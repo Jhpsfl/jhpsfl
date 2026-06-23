@@ -86,6 +86,51 @@ function htmlToText(html: string): string {
     .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
     .replace(/&#39;/gi, "'").replace(/&quot;/gi, '"').replace(/\n{3,}/g, "\n\n").trim();
 }
+// Build a responsive sandboxed document for an email body. The extra CSS forces
+// fixed-width email tables/images (e.g. Zoho billing) to reflow to the frame width
+// instead of overflowing — so on mobile they don't render microscopic.
+function emailSrcDoc(html: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;}body{padding:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:transparent;word-break:break-word;overflow-wrap:break-word;}img{max-width:100%!important;height:auto!important;}table{max-width:100%!important;}a{color:#4CAF50;}</style></head><body>${html}</body></html>`;
+}
+
+// Size an email iframe to its content. Email HTML loads remote images AFTER onLoad
+// fires, so we re-measure as each image settles (and a few delayed passes for web
+// fonts) — otherwise the iframe locks to a too-short height and clips the body.
+function fitEmailIframe(iframe: HTMLIFrameElement) {
+  const doc = iframe.contentDocument;
+  if (!doc?.body) return;
+  const body = doc.body;
+  const measure = () => {
+    // Reset any prior scaling so we read the true natural width.
+    body.style.transform = "";
+    body.style.width = "";
+    body.style.display = "inline-block";
+    body.style.minWidth = "100%";
+    const naturalW = body.scrollWidth;
+    body.style.display = "";
+    body.style.minWidth = "";
+    const frameW = iframe.clientWidth;
+    if (naturalW > frameW + 1 && frameW > 0) {
+      const scale = frameW / naturalW;
+      body.style.transformOrigin = "top left";
+      body.style.transform = `scale(${scale})`;
+      body.style.width = naturalW + "px";
+      iframe.style.height = Math.max(120, Math.ceil(body.scrollHeight * scale) + 12) + "px";
+    } else {
+      iframe.style.height = Math.max(120, body.scrollHeight + 16) + "px";
+    }
+  };
+  measure();
+  Array.from(doc.images || []).forEach(img => {
+    if (!img.complete) {
+      img.addEventListener("load", measure, { once: true });
+      img.addEventListener("error", measure, { once: true });
+    }
+  });
+  // Catch late reflows from web fonts / slow images.
+  [150, 500, 1200].forEach(t => setTimeout(measure, t));
+}
+
 function fileIcon(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
   if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "\uD83D\uDDBC";
@@ -1075,33 +1120,10 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                 {msg.body_html ? (
                   <div style={{ overflow: "hidden", margin: "0 -12px", background: "#0a160a" }}>
                     <iframe
-                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:transparent;}img{height:auto;}a{color:#4CAF50;}</style></head><body>${msg.body_html}</body></html>`}
+                      srcDoc={emailSrcDoc(msg.body_html)}
                       sandbox="allow-same-origin"
                       style={{ width: "100%", minHeight: 120, border: "none", display: "block", background: "#0a160a" }}
-                      onLoad={e => {
-                        const iframe = e.target as HTMLIFrameElement;
-                        const doc = iframe.contentDocument;
-                        if (!doc?.body) return;
-                        // Let content render at natural size first
-                        doc.body.style.display = "inline-block";
-                        doc.body.style.minWidth = "100%";
-                        const naturalW = doc.body.scrollWidth;
-                        const frameW = iframe.clientWidth;
-                        doc.body.style.display = "";
-                        doc.body.style.minWidth = "";
-                        if (naturalW > frameW && frameW > 0) {
-                          const scale = frameW / naturalW;
-                          doc.body.style.transformOrigin = "top left";
-                          doc.body.style.transform = `scale(${scale})`;
-                          doc.body.style.width = naturalW + "px";
-                          // Wait a frame for transform to apply before measuring height
-                          requestAnimationFrame(() => {
-                            iframe.style.height = Math.max(120, Math.ceil(doc.body.scrollHeight * scale) + 10) + "px";
-                          });
-                        } else {
-                          iframe.style.height = Math.max(120, doc.body.scrollHeight + 20) + "px";
-                        }
-                      }}
+                      onLoad={e => fitEmailIframe(e.target as HTMLIFrameElement)}
                     />
                   </div>
                 ) : (
@@ -1384,31 +1406,10 @@ export default function AdminInbox({ userId, backRef, onNavigate }: { userId: st
                         {msg.body_html ? (
                           <div style={{ overflow: "hidden", borderRadius: 8, background: "#0a160a" }}>
                             <iframe
-                              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:8px;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#c8dcc8;background:transparent;}img{height:auto;}a{color:#4CAF50;}</style></head><body>${msg.body_html}</body></html>`}
+                              srcDoc={emailSrcDoc(msg.body_html)}
                               sandbox="allow-same-origin"
                               style={{ width: "100%", minHeight: 120, border: "none", display: "block", background: "#0a160a" }}
-                              onLoad={e => {
-                                const iframe = e.target as HTMLIFrameElement;
-                                const doc = iframe.contentDocument;
-                                if (!doc?.body) return;
-                                doc.body.style.display = "inline-block";
-                                doc.body.style.minWidth = "100%";
-                                const naturalW = doc.body.scrollWidth;
-                                const frameW = iframe.clientWidth;
-                                doc.body.style.display = "";
-                                doc.body.style.minWidth = "";
-                                if (naturalW > frameW && frameW > 0) {
-                                  const scale = frameW / naturalW;
-                                  doc.body.style.transformOrigin = "top left";
-                                  doc.body.style.transform = `scale(${scale})`;
-                                  doc.body.style.width = naturalW + "px";
-                                  requestAnimationFrame(() => {
-                                    iframe.style.height = Math.max(120, Math.ceil(doc.body.scrollHeight * scale) + 10) + "px";
-                                  });
-                                } else {
-                                  iframe.style.height = Math.max(120, doc.body.scrollHeight + 20) + "px";
-                                }
-                              }}
+                              onLoad={e => fitEmailIframe(e.target as HTMLIFrameElement)}
                             />
                           </div>
                         ) : (
