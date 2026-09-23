@@ -1144,7 +1144,7 @@ export default function PaymentPage() {
                 }}>Payment</span>
               </h1>
               <p style={{ color: brand.colors.textMuted, fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
-                Pay for services quickly and securely.{brand.key === 'jhps' && (<>{" "}Have an account?{" "}
+                {invoiceData?.return_url ? "Complete your order securely." : "Pay for services quickly and securely."}{brand.key === 'jhps' && (<>{" "}Have an account?{" "}
                 <Link href="/account" style={{ color: brand.colors.primary, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
                   Sign in for faster checkout
                 </Link></>)}
@@ -1632,10 +1632,10 @@ export default function PaymentPage() {
                         border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
                         <h2 style={{ fontFamily: brand.fonts.display, fontSize: 20, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 8 }}>
-                          Service Address
+                          {invoiceData?.return_url ? "Shipping Address" : "Service Address"}
                         </h2>
                         <p style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 20 }}>
-                          Where the work is or was performed.
+                          {invoiceData?.return_url ? "Where we'll ship your order." : "Where the work is or was performed."}
                         </p>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -1681,7 +1681,7 @@ export default function PaymentPage() {
                             </div>
                             <div>
                               <p style={{ fontSize: 14, fontWeight: 600, color: sameBilling ? brand.colors.textSecondary : brand.colors.textMuted }}>
-                                Billing address same as service address
+                                Billing address same as {invoiceData?.return_url ? "shipping" : "service"} address
                               </p>
                               {!sameBilling && (
                                 <p style={{ fontSize: 12, color: brand.colors.textMuted, marginTop: 2 }}>
