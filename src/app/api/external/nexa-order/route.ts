@@ -6,7 +6,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
  * Server-to-server: the Nexa Pro store (nexavisiongroup.com/nexaphone) creates
  * a Nexa-branded invoice here and sends the buyer to the pay page.
  *
- * Auth: HMAC-SHA256 over `${timestamp}.${rawBody}` with NEXA_ORDER_SECRET,
+ * Auth: HMAC-SHA256 over `${timestamp}.${rawBody}` with NEXA_ORDER_SECRET (env or app_secrets),
  * sent as X-Nexa-Timestamp + X-Nexa-Signature: sha256=<hex>. 5-minute window.
  * Idempotent per order_id (unique invoices.external_order_id).
  * All money is recomputed here in integer cents; the caller's totals are ignored.
@@ -27,8 +27,20 @@ type InBody = {
 const s = (v: unknown, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const cents = (n: number) => Math.round(Number(n) * 100);
 
-function verify(raw: string, ts: string | null, sig: string | null) {
-  const secret = process.env.NEXA_ORDER_SECRET;
+// Secret: Vercel env if set, otherwise the service-role-only app_secrets table
+// (the live JHPS Vercel account's API token isn't available to set env vars).
+let cached: { v: string; at: number } | null = null;
+async function orderSecret(): Promise<string | null> {
+  if (process.env.NEXA_ORDER_SECRET) return process.env.NEXA_ORDER_SECRET;
+  if (cached && Date.now() - cached.at < 5 * 60_000) return cached.v;
+  const { data } = await createSupabaseAdmin().from('app_secrets').select('value').eq('key', 'NEXA_ORDER_SECRET').maybeSingle();
+  if (!data?.value) return null;
+  cached = { v: data.value, at: Date.now() };
+  return cached.v;
+}
+
+async function verify(raw: string, ts: string | null, sig: string | null) {
+  const secret = await orderSecret();
   if (!secret || !ts || !sig) return false;
   const age = Math.abs(Date.now() / 1000 - Number(ts));
   if (!Number.isFinite(age) || age > 300) return false;
@@ -60,7 +72,7 @@ function payUrl(num: string, c: InBody['customer']) {
 
 export async function POST(req: Request) {
   const raw = await req.text();
-  if (!verify(raw, req.headers.get('x-nexa-timestamp'), req.headers.get('x-nexa-signature'))) {
+  if (!(await verify(raw, req.headers.get('x-nexa-timestamp'), req.headers.get('x-nexa-signature')))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   let b: InBody;
@@ -179,7 +191,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const orderId = s(url.searchParams.get('order_id'), 40);
-  if (!orderId || !verify(orderId, req.headers.get('x-nexa-timestamp'), req.headers.get('x-nexa-signature'))) {
+  if (!orderId || !(await verify(orderId, req.headers.get('x-nexa-timestamp'), req.headers.get('x-nexa-signature')))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const supabase = createSupabaseAdmin();
