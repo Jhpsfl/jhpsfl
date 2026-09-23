@@ -345,6 +345,7 @@ interface InvoicePublicData {
   status: string;
   brand?: string;
   notes?: string | null;
+  return_url?: string | null;
   payment_terms?: { type: string; deposit_amount?: number; schedule?: { label: string; amount: number; due_date?: string | null; status?: string }[] } | null;
   created_at?: string;
   company_name?: string | null;
@@ -1103,7 +1104,7 @@ export default function PaymentPage() {
           <button onClick={() => setMenuOpen(false)} style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: brand.colors.primary, fontSize: 32, cursor: "pointer" }}>✕</button>
           <Link href="/" onClick={() => setMenuOpen(false)}>Home</Link>
           <Link href="/account" onClick={() => setMenuOpen(false)}>My Account</Link>
-          <a href="tel:4076869817" style={{ color: brand.colors.primary }}>📞 407-686-9817</a>
+          <a href={`tel:${brand.phone.replace(/\D/g, "")}`} style={{ color: brand.colors.primary }}>📞 {brand.phone}</a>
         </div>
       )}
 
@@ -1259,13 +1260,25 @@ export default function PaymentPage() {
                   <p style={{ color: brand.colors.textMuted, fontSize: 14, marginBottom: 20 }}>
                     Questions? We&apos;re here to help.
                   </p>
-                  <a href="tel:4076869817" style={{
+                  <a href={`tel:${brand.phone.replace(/\D/g, "")}`} style={{
                     background: "transparent", color: brand.colors.primary, border: `2px solid ${brand.colors.border}`,
                     padding: "14px 32px", borderRadius: 14, fontSize: 15, fontWeight: 600,
                     textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                   }}>
-                    📞 407-686-9817
+                    📞 {brand.phone}
                   </a>
+
+                  {/* Orders placed on an external brand site (Nexa Pro store) return there after paying */}
+                  {invoiceData?.return_url && (
+                    <a href={`${invoiceData.return_url}${invoiceData.return_url.includes("?") ? "&" : "?"}paid=1`} style={{
+                      display: "block", textAlign: "center", padding: "16px", marginTop: 16,
+                      background: `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.primaryDark})`, color: "#fff",
+                      borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: "none",
+                      boxShadow: `0 4px 20px ${brand.colors.glow}`,
+                    }}>
+                      Back to your order →
+                    </a>
+                  )}
 
                   {/* Dashboard link for deposit customers — already signed in via Clerk */}
                   {isDeposit && accountCreated && (
