@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createPaymentIntent, ensureStripeCustomer } from '@/lib/stripe';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { checkCharge, loadInvoice } from '@/lib/invoice-payment';
 
 export async function POST(request: Request) {
   try {
@@ -26,6 +27,16 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseAdmin();
+
+    // Invoice payments: the server, not the browser, decides what may be charged.
+    if (invoiceNumber) {
+      const inv = await loadInvoice(supabase, String(invoiceNumber));
+      if (inv) {
+        const problem = checkCharge(inv, amountInCents);
+        if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+      }
+    }
+
     let stripeCustomerId: string | undefined;
 
     // If we have a clerkUserId or email, try to find/create a Stripe customer

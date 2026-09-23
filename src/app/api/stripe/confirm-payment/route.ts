@@ -6,6 +6,7 @@ import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@
 import type { ReceiptData } from '@/lib/receipt-generator';
 import { getBrand, type BrandKey } from '@/lib/brand-config';
 import { logEmail } from '@/lib/email';
+import { loadInvoice, settleInvoice } from '@/lib/invoice-payment';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -23,7 +24,6 @@ export async function POST(request: Request) {
       billingCity,
       billingZip,
       service,
-      invoiceNumber,
       note,
       clerkUserId,
       companyName,
@@ -43,13 +43,25 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const amount = pi.amount / 100;
-    const amountInCents = pi.amount;
+    // The PaymentIntent is the source of truth: which invoice it was created
+    // for and how much was actually received. Never trust the request body.
+    const invoiceNumber: string | null = (pi.metadata?.invoiceNumber as string) || null;
+    const amountInCents = pi.amount_received || pi.amount;
+    const amount = amountInCents / 100;
+
+    const supabase = createSupabaseAdmin();
+
+    // Idempotent: a second confirm for the same PaymentIntent changes nothing.
+    {
+      const { data: dup } = await supabase.from('payments').select('id').eq('stripe_payment_id', paymentIntentId).limit(1).maybeSingle();
+      if (dup) {
+        const url = (pi.latest_charge as { receipt_url?: string } | null)?.receipt_url || null;
+        return NextResponse.json({ success: true, paymentId: paymentIntentId, receiptUrl: url, duplicate: true });
+      }
+    }
     const paymentMethodDesc = describePaymentMethod(pi);
     const stripeReceiptUrl = (pi.latest_charge as { receipt_url?: string } | null)?.receipt_url || null;
     const paymentNote = note || [service, invoiceNumber ? `INV#${invoiceNumber}` : ''].filter(Boolean).join(' - ') || 'Payment';
-
-    const supabase = createSupabaseAdmin();
 
     // ─── Look up invoice record ───
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,26 +160,20 @@ export async function POST(request: Request) {
       // ─── Mark invoice as paid + auto-create job ───
       if (invoiceNumber) {
         const { data: inv } = await supabase.from('invoices')
-          .select('id, customer_id, quote_id, line_items, notes, total')
+          .select('id, customer_id, quote_id, line_items, notes, total, brand')
           .eq('invoice_number', invoiceNumber)
           .limit(1)
           .single();
 
-        if (inv) {
-          const invoiceUpdate: Record<string, unknown> = {
-            status: 'paid',
-            paid_date: new Date().toISOString().split('T')[0],
-            amount_paid: amount,
-            stripe_payment_id: paymentIntentId,
-          };
-          if (!inv.customer_id && customerId) {
-            invoiceUpdate.customer_id = customerId;
-          }
-          await supabase.from('invoices').update(invoiceUpdate).eq('id', inv.id);
+        const payable = inv ? await loadInvoice(supabase, invoiceNumber) : null;
+        if (inv && payable) {
+          const extra: Record<string, unknown> = { stripe_payment_id: paymentIntentId };
+          if (!inv.customer_id && customerId) extra.customer_id = customerId;
+          const { fullyPaid } = await settleInvoice(supabase, payable, amountInCents, extra);
 
-          // Auto-create job if none exists
+          // Auto-create job once the invoice is fully paid (service brands only)
           const effectiveCustomerId = inv.customer_id || customerId;
-          if (effectiveCustomerId) {
+          if (effectiveCustomerId && fullyPaid && inv.brand !== 'nexa') {
             const { data: existingJob } = await supabase.from('jobs')
               .select('id').eq('invoice_id', inv.id).limit(1).maybeSingle();
 

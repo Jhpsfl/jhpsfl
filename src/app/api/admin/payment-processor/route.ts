@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@clerk/nextjs/server';
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || '';
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || '';
@@ -19,7 +20,8 @@ async function verifyAdmin(clerkUserId: string | null) {
 
 // ─── GET: Read current payment processor ───
 export async function GET(req: NextRequest) {
-  const clerkUserId = req.nextUrl.searchParams.get('clerk_user_id');
+  // Identity comes from the Clerk session, never from a query parameter.
+  const { userId: clerkUserId } = await auth();
   if (!(await verifyAdmin(clerkUserId))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -49,7 +51,8 @@ export async function GET(req: NextRequest) {
 
 // ─── POST: Switch payment processor + trigger redeploy ───
 export async function POST(req: NextRequest) {
-  const clerkUserId = req.nextUrl.searchParams.get('clerk_user_id');
+  // Identity comes from the Clerk session, never from a query parameter.
+  const { userId: clerkUserId } = await auth();
   if (!(await verifyAdmin(clerkUserId))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }

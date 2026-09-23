@@ -15,7 +15,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("invoices")
-    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, surcharge, surcharge_amount, total, status, brand, notes, payment_terms, created_at, customer_id, customers(company_name, name, email, phone)")
+    .select("invoice_number, due_date, line_items, subtotal, tax_rate, tax_amount, surcharge, surcharge_amount, total, amount_paid, status, brand, notes, payment_terms, created_at, customer_id, customers(company_name, name, email, phone)")
     .eq("invoice_number", invoiceNumber)
     .single();
 
@@ -39,6 +39,8 @@ export async function GET(
     surcharge: data.surcharge ?? false,
     surcharge_amount: data.surcharge_amount ?? 0,
     total: data.total,
+    amount_paid: data.amount_paid || 0,
+    balance_due: Math.max(0, Math.round(((data.total || 0) - (data.amount_paid || 0)) * 100) / 100),
     status: data.status,
     brand: data.brand,
     notes: data.notes || null,

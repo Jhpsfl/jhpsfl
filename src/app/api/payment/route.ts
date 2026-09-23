@@ -7,6 +7,9 @@ import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@
 import type { ReceiptData } from '@/lib/receipt-generator';
 import { getBrand, type BrandKey } from '@/lib/brand-config';
 import { logEmail } from '@/lib/email';
+import { auth } from '@clerk/nextjs/server';
+import { createHash } from 'crypto';
+import { checkCharge, loadInvoice, settleInvoice } from '@/lib/invoice-payment';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -27,6 +30,24 @@ export async function POST(request: Request) {
 
     const locationId = sqLocationId;
     const supabase = createSupabaseAdmin();
+
+    // Test payments skip the card entirely, so only a signed-in admin may use them.
+    if (testMode) {
+      const { userId } = await auth();
+      const { data: admin } = userId
+        ? await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).limit(1).maybeSingle()
+        : { data: null };
+      if (!admin) {
+        return NextResponse.json({ success: false, error: 'Test payments are only available to admins.' }, { status: 403 });
+      }
+    }
+
+    // Invoice payments: the server decides what may be charged.
+    const payable = invoiceNumber ? await loadInvoice(supabase, String(invoiceNumber)) : null;
+    if (payable && !testMode) {
+      const problem = checkCharge(payable, amountInCents);
+      if (problem) return NextResponse.json({ success: false, error: problem }, { status: 400 });
+    }
     const paymentNote =
       note || [service, invoiceNumber ? 'INV#' + invoiceNumber : ''].filter(Boolean).join(' - ') || 'Payment';
 
@@ -282,7 +303,8 @@ export async function POST(request: Request) {
     // ─── 3. Create Square Payment (linked to Order if available) ───
     const result = await squareClient.payments.create({
       sourceId: token,
-      idempotencyKey: crypto.randomUUID(),
+      // Same card token => same key, so a double-submit can't charge twice.
+      idempotencyKey: createHash('sha256').update(`${token}|${amountInCents}`).digest('hex').slice(0, 45),
       amountMoney: { amount: BigInt(amountInCents), currency: Currency.Usd },
       ...(orderId && { orderId }),
       locationId,
@@ -403,25 +425,19 @@ export async function POST(request: Request) {
           // Mark invoice as paid + link customer if invoice had none
           if (invoiceNumber) {
             const { data: inv } = await supabase.from('invoices')
-              .select('id, customer_id, quote_id, line_items, notes, total')
+              .select('id, customer_id, quote_id, line_items, notes, total, brand')
               .eq('invoice_number', invoiceNumber)
               .limit(1)
               .single();
-            if (inv) {
-              const invoiceUpdate: Record<string, unknown> = {
-                status: 'paid',
-                paid_date: new Date().toISOString().split('T')[0],
-                amount_paid: parseFloat(amount),
-              };
+            if (inv && payable) {
+              const extra: Record<string, unknown> = {};
               // If invoice had no customer, link the newly-created one
-              if (!inv.customer_id && customerId) {
-                invoiceUpdate.customer_id = customerId;
-              }
-              await supabase.from('invoices').update(invoiceUpdate).eq('id', inv.id);
+              if (!inv.customer_id && customerId) extra.customer_id = customerId;
+              const { fullyPaid } = await settleInvoice(supabase, payable, amountInCents, extra);
 
-              // Auto-create a job if none exists for this invoice
+              // Auto-create a job once the invoice is fully paid (service brands only)
               const effectiveCustomerId = inv.customer_id || customerId;
-              if (effectiveCustomerId) {
+              if (effectiveCustomerId && fullyPaid && inv.brand !== 'nexa') {
                 const { data: existingJob } = await supabase.from('jobs')
                   .select('id')
                   .eq('invoice_id', inv.id)

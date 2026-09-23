@@ -461,7 +461,9 @@ export default function PaymentPage() {
             // Lock the amount to the real invoice total — UNLESS a specific amount was passed in URL (e.g. deposit)
             const urlAmount = searchParams.get("amount");
             if (!urlAmount) {
-              setFormData(prev => ({ ...prev, amount: data.invoice.total.toFixed(2) }));
+              // Pre-fill what is still owed (a part-paid invoice owes less than its total)
+              const due = typeof data.invoice.balance_due === "number" ? data.invoice.balance_due : data.invoice.total;
+              setFormData(prev => ({ ...prev, amount: Number(due).toFixed(2) }));
             }
           } else {
             setInvoiceError(data.error || "Could not load invoice details.");
