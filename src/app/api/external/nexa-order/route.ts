@@ -20,6 +20,7 @@ type InBody = {
   order_id: string;
   customer: { name: string; email: string; phone?: string; company?: string; address?: { line1?: string; line2?: string; city?: string; state?: string; zip?: string } };
   items: InItem[];
+  shipping?: { description: string; amount: number };
   notes?: string;
   return_url?: string;
 };
@@ -121,8 +122,16 @@ export async function POST(req: Request) {
     lineItems.push({ id: randomBytes(6).toString('hex'), description: desc, quantity: qty, unit_price: unit / 100, amount: (unit * qty) / 100 });
   }
   const taxRate = Number(process.env.NEXA_TAX_RATE || 0); // percent; set once the accountant confirms
+  // Tax applies to the merchandise only; shipping is a separately stated, untaxed line.
   const taxCents = Math.round(subtotalCents * (taxRate / 100));
-  const totalCents = subtotalCents + taxCents;
+  let shipCents = 0;
+  if (b.shipping) {
+    shipCents = cents(b.shipping.amount);
+    const desc = s(b.shipping.description, 120) || 'Shipping';
+    if (!(shipCents >= 0 && shipCents <= 100_000)) return NextResponse.json({ error: 'invalid shipping' }, { status: 400 });
+    if (shipCents > 0) lineItems.push({ id: randomBytes(6).toString('hex'), description: desc, quantity: 1, unit_price: shipCents / 100, amount: shipCents / 100, taxable: false });
+  }
+  const totalCents = subtotalCents + shipCents + taxCents;
   if (totalCents < 50) return NextResponse.json({ error: 'total too small' }, { status: 400 });
 
   // Customer: reuse by email, else create.
@@ -156,7 +165,7 @@ export async function POST(req: Request) {
       invoice_number: num,
       due_date: due,
       line_items: lineItems,
-      subtotal: subtotalCents / 100,
+      subtotal: (subtotalCents + shipCents) / 100,
       tax_rate: taxRate,
       tax_amount: taxCents / 100,
       surcharge: false,

@@ -72,7 +72,9 @@ export async function POST(request: Request) {
 
         if (inv.line_items?.length) {
           // Invoice line items are pre-tax amounts — use ADDITIVE tax
-          orderLineItems = inv.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number }) => ({
+          orderLineItems = inv.line_items.map((item: { description?: string; quantity?: number; unit_price?: number; amount?: number; taxable?: boolean }, idx: number) => ({
+            uid: `li_${idx}`,
+            ...(item.taxable === false ? {} : { appliedTaxes: [{ taxUid: 'fl_sales_tax' }] }),
             name: item.description || 'Service',
             quantity: String(item.quantity || 1),
             basePriceMoney: {
@@ -198,7 +200,7 @@ export async function POST(request: Request) {
               })
             : [{ name: service || `${brand.shortName} Service`, quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
 
-          const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
+          const taxCents = invoiceRecord?.tax_amount != null ? Math.round(Number(invoiceRecord.tax_amount) * 100) : taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
           const subtotalCents = paymentAmountCents - taxCents;
 
           const receiptNum = generateReceiptNumber();
@@ -277,7 +279,8 @@ export async function POST(request: Request) {
         // Invoice line items are pre-tax → ADDITIVE tax adds on top
         // Non-invoice commercial → INCLUSIVE (total stays what customer entered)
         type: useAdditionalTax ? 'ADDITIVE' as const : 'INCLUSIVE' as const,
-        scope: 'ORDER' as const,
+        // Invoices with an untaxed line (Nexa shipping) tax only the lines that carry appliedTaxes
+        scope: (invoiceRecord?.line_items || []).some((i: { taxable?: boolean }) => i.taxable === false) ? 'LINE_ITEM' as const : 'ORDER' as const,
       }] : undefined;
 
       const orderResult = await squareClient.orders.create({
@@ -497,7 +500,7 @@ export async function POST(request: Request) {
                 })
               : [{ name: service || `${brand.shortName} Service`, quantity: 1, unitPrice: paymentAmountCents, totalPrice: paymentAmountCents }];
 
-            const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
+            const taxCents = invoiceRecord?.tax_amount != null ? Math.round(Number(invoiceRecord.tax_amount) * 100) : taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
             const subtotalCents = paymentAmountCents - taxCents;
 
             const receiptNum = generateReceiptNumber();
@@ -637,7 +640,8 @@ function buildReceiptHtml(params: {
       `<tr><td style="padding:8px 12px;color:#333;font-size:14px;border-bottom:1px solid #f0f0f0;">${item.description}</td><td style="padding:8px 12px;color:#333;font-size:14px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace;">${fmt(item.amount)}</td></tr>`
     ).join('');
     const subtotal = lineItems.reduce((s, i) => s + i.amount, 0);
-    const taxAmt = taxRate > 0 ? subtotal * (taxRate / 100) : 0;
+    const taxable = lineItems.filter((i) => (i as { taxable?: boolean }).taxable !== false).reduce((s, i) => s + i.amount, 0);
+    const taxAmt = taxRate > 0 ? Math.round(taxable * taxRate) / 100 : 0;
     itemsHtml = `
       <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 20px;border:1px solid ${borderTint};border-radius:8px;overflow:hidden;">
         <tr style="background:${headerBgTint};"><th style="padding:10px 12px;text-align:left;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Service</th><th style="padding:10px 12px;text-align:right;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Amount</th></tr>

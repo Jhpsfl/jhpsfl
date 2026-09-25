@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let invoiceRecord: any = null;
     let taxRate = 0;
+    let invTaxAmount: number | null = null;
 
     if (invoiceNumber) {
       const { data: inv } = await supabase.from('invoices')
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
       if (inv) {
         invoiceRecord = inv;
         taxRate = inv.tax_rate || 0;
+        invTaxAmount = inv.tax_amount != null ? Number(inv.tax_amount) : null;
       }
     }
 
@@ -221,7 +223,7 @@ export async function POST(request: Request) {
             })
           : [{ name: service || `${brand.shortName} Service`, quantity: 1, unitPrice: amountInCents, totalPrice: amountInCents }];
 
-        const taxCents = taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
+        const taxCents = invTaxAmount != null ? Math.round(invTaxAmount * 100) : taxRate > 0 ? Math.round(lineItemsCents.reduce((s, i) => s + i.totalPrice, 0) * (taxRate / 100)) : 0;
         const subtotalCents = amountInCents - taxCents;
 
         const receiptNum = generateReceiptNumber();
@@ -335,7 +337,8 @@ function buildReceiptHtml(params: {
       `<tr><td style="padding:8px 12px;color:#333;font-size:14px;border-bottom:1px solid #f0f0f0;">${item.description}</td><td style="padding:8px 12px;color:#333;font-size:14px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace;">${fmt(item.amount)}</td></tr>`
     ).join('');
     const subtotal = lineItems.reduce((s, i) => s + i.amount, 0);
-    const taxAmt = taxRate > 0 ? subtotal * (taxRate / 100) : 0;
+    const taxable = lineItems.filter((i) => (i as { taxable?: boolean }).taxable !== false).reduce((s, i) => s + i.amount, 0);
+    const taxAmt = taxRate > 0 ? Math.round(taxable * taxRate) / 100 : 0;
     itemsHtml = `
       <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 20px;border:1px solid ${borderTint};border-radius:8px;overflow:hidden;">
         <tr style="background:${headerBgTint};"><th style="padding:10px 12px;text-align:left;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Service</th><th style="padding:10px 12px;text-align:right;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Amount</th></tr>
