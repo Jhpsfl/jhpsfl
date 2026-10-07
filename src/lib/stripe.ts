@@ -47,7 +47,7 @@ export async function createPaymentIntent(opts: {
     automatic_payment_methods: { enabled: true },
     description: opts.description || 'JHPS Payment',
     metadata: opts.metadata || {},
-    receipt_email: opts.customerEmail || undefined,
+    // No receipt_email: we send our own branded receipt, and setting it makes Stripe email a second one.
   };
 
   if (opts.stripeCustomerId) {
@@ -137,7 +137,7 @@ export async function chargeStoredPaymentMethod(
     off_session: true,
     confirm: true,
     description: note?.slice(0, 500) || 'JHPS Recurring Payment',
-    receipt_email: buyerEmail || undefined,
+    // No receipt_email — see createPaymentIntent.
   });
 
   return {
