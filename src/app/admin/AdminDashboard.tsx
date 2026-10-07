@@ -1276,7 +1276,7 @@ export default function AdminDashboard() {
                                       .then(r => r.json())
                                       .then(d => {
                                         if (d.success) { setPaymentProcessor("stripe"); setProcessorMessage(d.message); }
-                                        else setProcessorMessage(d.error || "Failed");
+                                        else setProcessorMessage(`Failed: ${d.error || "unknown error"}`);
                                       })
                                       .catch(() => setProcessorMessage("Request failed"))
                                       .finally(() => setProcessorSwitching(false));
@@ -1304,7 +1304,7 @@ export default function AdminDashboard() {
                                       .then(r => r.json())
                                       .then(d => {
                                         if (d.success) { setPaymentProcessor("square"); setProcessorMessage(d.message); }
-                                        else setProcessorMessage(d.error || "Failed");
+                                        else setProcessorMessage(`Failed: ${d.error || "unknown error"}`);
                                       })
                                       .catch(() => setProcessorMessage("Request failed"))
                                       .finally(() => setProcessorSwitching(false));
