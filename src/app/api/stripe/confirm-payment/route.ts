@@ -209,7 +209,8 @@ export async function POST(request: Request) {
     }
 
     // ─── Send receipt email with PDF ───
-    if (customerEmail) {
+    // Skipped for "No emails" invoices (customer pays by texted link only).
+    if (customerEmail && !invoiceRecord?.no_email) {
       try {
         const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
         const brand = getBrand(brandKey);

@@ -183,7 +183,7 @@ export async function POST(request: Request) {
       }
 
       // Send receipt email (same as real flow)
-      if (customerEmail) {
+      if (customerEmail && !invoiceRecord?.no_email) {
         try {
           const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';
           const brand = getBrand(brandKey);
@@ -312,7 +312,8 @@ export async function POST(request: Request) {
       ...(orderId && { orderId }),
       locationId,
       note: paymentNote.slice(0, 500),
-      buyerEmailAddress: customerEmail || undefined,
+      // No buyer email on "No emails" invoices, so Square can't send its own receipt either.
+      buyerEmailAddress: (!invoiceRecord?.no_email && customerEmail) || undefined,
     });
 
     // ─── 4. Record in Supabase + send receipt email ───
@@ -477,7 +478,8 @@ export async function POST(request: Request) {
         }
 
         // ─── 5. Send receipt email with PDF attachment ───
-        if (customerEmail) {
+        // Skipped for "No emails" invoices (customer pays by texted link only).
+        if (customerEmail && !invoiceRecord?.no_email) {
           try {
             // Resolve brand from invoice record
             const brandKey: BrandKey = (invoiceRecord?.brand as BrandKey) || 'jhps';

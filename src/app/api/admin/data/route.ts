@@ -389,6 +389,7 @@ export async function POST(request: NextRequest) {
                 brand: payload.brand || 'jhps',
                 surcharge: payload.surcharge || false,
                 surcharge_amount: payload.surcharge_amount || 0,
+                no_email: payload.no_email || false,
               })
               .select(`*, customers ( name, email, phone )`)
               .single();
@@ -402,7 +403,7 @@ export async function POST(request: NextRequest) {
               "tax_rate", "tax_amount", "total", "amount_paid",
               "due_date", "paid_date", "notes", "line_items",
               "payment_link", "sent_at", "payment_terms", "quote_id", "brand",
-              "surcharge", "surcharge_amount"
+              "surcharge", "surcharge_amount", "no_email"
             ];
             for (const field of allowedFields) {
               if (payload[field] !== undefined) updateData[field] = payload[field];

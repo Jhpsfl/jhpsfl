@@ -341,6 +341,7 @@ interface InvoicePublicData {
   tax_amount: number;
   surcharge?: boolean;
   surcharge_amount?: number;
+  no_email?: boolean;
   total: number;
   status: string;
   brand?: string;
@@ -403,6 +404,8 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
   const paymentLabel = searchParams.get("payment_label") || "";
   const isDeposit = paymentLabel.toLowerCase().includes("deposit");
+  // "No emails" invoices: customer pays by texted link, email is optional (deposits still need it for the account)
+  const emailOptional = !!invoiceData?.no_email && !isDeposit;
   const isTestMode = searchParams.get("test") === "1";
 
   // ─── Brand theming ───
@@ -510,7 +513,7 @@ export default function PaymentPage() {
 
   const handleContinue = () => {
     const valid = !!(
-      formData.name && formData.phone && formData.email &&
+      formData.name && formData.phone && (formData.email || emailOptional) &&
       formData.address && formData.amount && parseFloat(formData.amount) > 0
     );
     // Deposit payments require password when not signed in
@@ -521,7 +524,7 @@ export default function PaymentPage() {
         const firstError =
           !formData.name ? nameRef :
           !formData.phone ? phoneRef :
-          !formData.email ? emailRef :
+          (!formData.email && !emailOptional) ? emailRef :
           !formData.address ? addressRef :
           amountRef;
         firstError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1499,11 +1502,11 @@ export default function PaymentPage() {
                           </div>
 
                           {/* Email */}
-                          <div ref={emailRef} className={showErrors && !formData.email ? "field-invalid" : ""}>
-                            <label style={labelStyle}>Email *</label>
+                          <div ref={emailRef} className={showErrors && !formData.email && !emailOptional ? "field-invalid" : ""}>
+                            <label style={labelStyle}>{emailOptional ? "Email (optional)" : "Email *"}</label>
                             <input className="pay-input" placeholder="john@example.com" type="email" value={formData.email}
                               onChange={(e) => updateField("email", e.target.value)} />
-                            {showErrors && !formData.email && <span className="field-error-msg">Email is required</span>}
+                            {showErrors && !formData.email && !emailOptional && <span className="field-error-msg">Email is required</span>}
                           </div>
 
                           {/* Create Account — for deposit payments when not signed in */}

@@ -44,6 +44,8 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
   userId?: string;
 }) {
   const hasPaymentTerms = invoice.payment_terms && invoice.payment_terms.type !== "full";
+  // Link-only and "No emails" invoices are delivered by texting the link
+  const linkPrimary = !invoice.customer_id || !!invoice.no_email;
   const [showPaymentLog, setShowPaymentLog] = useState(false);
   const [paymentLog, setPaymentLog] = useState<SquarePaymentLog[]>([]);
   const [logLoading, setLogLoading] = useState(false);
@@ -246,7 +248,16 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
           </h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {["draft", "sent", "overdue", "partial"].includes(invoice.status) && (
+            {invoice.no_email && invoice.status !== "paid" && (
+              <div style={{
+                padding: "10px 12px", borderRadius: 12, fontSize: 12, lineHeight: 1.5,
+                background: "rgba(255,183,77,0.1)", border: "1px solid rgba(255,183,77,0.35)", color: "#ffb74d",
+              }}>
+                🚫 <strong>No emails</strong> — this customer gets no invoice or receipt emails. Copy the link below and text it. (Turn this off with Edit.)
+              </div>
+            )}
+
+            {["draft", "sent", "overdue", "partial"].includes(invoice.status) && !invoice.no_email && (
               <button
                 onClick={() => { onNavigate?.(); onSend(); }}
                 style={{
@@ -304,16 +315,16 @@ export default function InvoiceDetailView({ invoice, isMobile, copiedLink, onBac
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   padding: "12px", borderRadius: 12,
-                  border: !invoice.customer_id ? "none" : "1px solid rgba(33,150,243,0.3)",
-                  background: !invoice.customer_id ? "linear-gradient(135deg, #1e88e5, #1565c0)" : "rgba(33,150,243,0.08)",
-                  color: !invoice.customer_id ? "#fff" : "#42a5f5",
-                  fontSize: !invoice.customer_id ? 14 : 13,
-                  fontWeight: !invoice.customer_id ? 700 : 600,
+                  border: linkPrimary ? "none" : "1px solid rgba(33,150,243,0.3)",
+                  background: linkPrimary ? "linear-gradient(135deg, #1e88e5, #1565c0)" : "rgba(33,150,243,0.08)",
+                  color: linkPrimary ? "#fff" : "#42a5f5",
+                  fontSize: linkPrimary ? 14 : 13,
+                  fontWeight: linkPrimary ? 700 : 600,
                   cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  ...((!invoice.customer_id) ? { boxShadow: "0 4px 20px rgba(33,150,243,0.35)" } : {}),
+                  ...(linkPrimary ? { boxShadow: "0 4px 20px rgba(33,150,243,0.35)" } : {}),
                 }}
               >
-                <IconCopy /> {copiedLink ? "Copied!" : (!invoice.customer_id ? "Copy Payment Link" : "Copy Payment Link (for SMS)")}
+                <IconCopy /> {copiedLink ? "Copied!" : (linkPrimary ? "Copy Payment Link" : "Copy Payment Link (for SMS)")}
               </button>
             )}
             {!invoice.customer_id && invoice.status !== "paid" && (

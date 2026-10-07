@@ -79,6 +79,7 @@ export interface Invoice {
 
   // ─── Brand / Division ───
   brand?: 'jhps' | 'nexa';
+  no_email?: boolean;
 
   // ─── Verification settings (per-invoice overrides) ───
   verification_settings?: {

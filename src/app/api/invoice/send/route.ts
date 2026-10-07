@@ -53,6 +53,14 @@ export async function POST(req: NextRequest) {
     .single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // "No emails" invoices are paid by texted link only — never email the customer.
+  if (invoice.id) {
+    const { data: flags } = await supabase.from('invoices').select('no_email').eq('id', invoice.id).maybeSingle();
+    if (flags?.no_email) {
+      return NextResponse.json({ error: 'This invoice is set to "No emails". Copy the payment link and text it instead.' }, { status: 400 });
+    }
+  }
+
   // ─── Detect if this is a contract (has payment terms) ───
   const isContract = invoice.payment_terms && invoice.payment_terms.type !== 'full' && invoice.payment_terms.schedule?.length > 0;
   let agreementUrl: string | null = null;

@@ -50,6 +50,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     payment_terms: null as PaymentTerms | null,
     brand: 'jhps' as BrandKey,
     surcharge: false,
+    no_email: false,
   });
 
   // Send modal
@@ -442,6 +443,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       line_items: form.line_items.filter(item => item.description && item.amount > 0),
       payment_terms: form.payment_terms || null,
       brand: form.brand || 'jhps',
+      no_email: form.no_email,
     };
 
     if (view === "edit" && selectedInvoice) {
@@ -456,11 +458,12 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     if (res?.success || res?.data) {
       await loadInvoices();
 
-      if (!asDraft && res?.data && (!form.customer_id || form.customer_id === "__link_only__")) {
+      // Link-only or "No emails": skip the send modal — copy the link to text it.
+      if (!asDraft && res?.data && (form.no_email || !form.customer_id || form.customer_id === "__link_only__")) {
         const link = getPaymentLink(res.data);
         createShortLink(link, `Payment: ${res.data.invoice_number}`).then(shortLink => {
           navigator.clipboard.writeText(shortLink).then(() => {
-            showToast("Invoice created — payment link copied to clipboard!");
+            showToast(form.no_email ? "Saved — no emails will be sent. Payment link copied, paste it in a text!" : "Invoice created — payment link copied to clipboard!");
           }).catch(() => {
             showToast("Invoice created! Copy the payment link from the invoice detail.");
           });
@@ -656,6 +659,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       payment_terms: null,
       brand: 'jhps' as BrandKey,
       surcharge: false,
+      no_email: false,
     });
   };
 
@@ -676,6 +680,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
       payment_terms: invoice.payment_terms || null,
       brand: (invoice.brand || 'jhps') as BrandKey,
       surcharge: !!(invoice as any).surcharge,
+      no_email: !!invoice.no_email,
     });
     setView("edit");
   };

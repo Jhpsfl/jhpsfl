@@ -1509,10 +1509,11 @@ async function executeTool(
       if (!input.invoice_number || !input.to_email) return { result: "Error: invoice_number and to_email required." };
       const { data: inv } = await supabase
         .from("invoices")
-        .select("id, invoice_number, total, amount_paid, due_date, customer:customers(name)")
+        .select("id, invoice_number, total, amount_paid, due_date, no_email, customer:customers(name)")
         .eq("invoice_number", input.invoice_number)
         .single();
       if (!inv) return { result: `Invoice ${input.invoice_number} not found.` };
+      if (inv.no_email) return { result: `Invoice ${input.invoice_number} is set to "No emails" — the customer asked not to get email. Copy the payment link and text it instead.` };
 
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://jhps.co";
       const viewLink = `${baseUrl}/invoice/${input.invoice_number}`;

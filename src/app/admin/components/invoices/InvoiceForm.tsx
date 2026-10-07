@@ -30,6 +30,7 @@ export default function InvoiceForm({
     payment_terms: PaymentTerms | null;
     brand: BrandKey;
     surcharge: boolean;
+    no_email: boolean;
   };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   customers: Customer[];
@@ -409,6 +410,30 @@ export default function InvoiceForm({
             </div>
           </div>
 
+          {/* ─── No Emails (text the link only) ─── */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={labelStyle}>Customer Emails</label>
+            <button
+              type="button"
+              onClick={() => setForm(prev => ({ ...prev, no_email: !prev.no_email }))}
+              style={{
+                width: "100%", padding: "12px 14px", textAlign: "left",
+                background: form.no_email ? "rgba(255,183,77,0.12)" : "#0d1a0d",
+                border: `1px solid ${form.no_email ? "rgba(255,183,77,0.45)" : "#1a3a1a"}`, borderRadius: 10,
+                color: form.no_email ? "#ffb74d" : "#5a8a5a", fontSize: 14, fontWeight: 600,
+                cursor: "pointer", transition: "all 0.2s",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              {form.no_email ? "🚫 NO EMAILS — text the payment link only" : "✉️ Emails ON — invoice + receipt emails"}
+            </button>
+            {form.no_email && (
+              <p style={{ fontSize: 12, color: "#8a7a5a", marginTop: 6, lineHeight: 1.5 }}>
+                The customer won&apos;t get any email: no invoice, no payment receipt (from us, Stripe or Square). After saving, the payment link is copied so you can paste it in a text.
+              </p>
+            )}
+          </div>
+
           {/* ─── Line Items ─── */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -598,7 +623,7 @@ export default function InvoiceForm({
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}
             >
-              <IconSend /> Save & Send
+              <IconSend /> {form.no_email ? "Save & Copy Link" : "Save & Send"}
             </button>
           </div>
         </div>

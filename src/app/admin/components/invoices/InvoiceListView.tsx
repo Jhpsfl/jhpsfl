@@ -174,7 +174,7 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
                       {inv.invoice_number}
                     </td>
                     <td style={{ padding: "14px 12px", fontSize: 14, color: inv.customer_id ? "#c8e0c8" : "#64b5f6", borderBottom: "1px solid #0d1a0d" }}>
-                      {inv.customer_id ? (customer?.name || customer?.email || "—") : "🔗 Link Only"}
+                      {inv.customer_id ? (customer?.name || customer?.email || "—") : "🔗 Link Only"}{inv.no_email && <span title="No emails — text the link" style={{ marginLeft: 6, fontSize: 11, color: "#ffb74d" }}>🚫✉️</span>}
                     </td>
                     <td style={{ padding: "14px 12px", borderBottom: "1px solid #0d1a0d" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -208,7 +208,7 @@ export default function InvoiceListView({ invoices, customers, filteredInvoices,
                             <IconLink /> Link
                           </button>
                         )}
-                        {["draft", "sent", "overdue", "partial"].includes(inv.status) && (
+                        {["draft", "sent", "overdue", "partial"].includes(inv.status) && !inv.no_email && (
                           <button
                             onClick={() => onSend(inv)}
                             title="Send invoice"

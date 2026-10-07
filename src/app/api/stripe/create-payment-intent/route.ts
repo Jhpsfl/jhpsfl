@@ -28,6 +28,13 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseAdmin();
 
+    // "No emails" invoices: don't give Stripe the email, or it sends its own receipt.
+    let noEmail = false;
+    if (invoiceNumber) {
+      const { data: inv } = await supabase.from('invoices').select('no_email').eq('invoice_number', invoiceNumber).limit(1).maybeSingle();
+      noEmail = !!inv?.no_email;
+    }
+
     // Invoice payments: the server, not the browser, decides what may be charged.
     if (invoiceNumber) {
       const inv = await loadInvoice(supabase, String(invoiceNumber));
@@ -63,7 +70,7 @@ export async function POST(request: Request) {
           stripeCustomerId = await ensureStripeCustomer(
             supabaseCustomerId,
             customerName,
-            customerEmail,
+            noEmail ? undefined : customerEmail,
             customerPhone,
           );
         } catch (err) {
@@ -89,7 +96,7 @@ export async function POST(request: Request) {
 
     const { clientSecret, paymentIntentId } = await createPaymentIntent({
       amountCents: amountInCents,
-      customerEmail,
+      customerEmail: noEmail ? undefined : customerEmail,
       customerName,
       metadata,
       description,
