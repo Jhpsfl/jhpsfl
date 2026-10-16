@@ -96,7 +96,10 @@ export async function GET(req: Request) {
 type Item = { description: string; quantity: number; unit_price: number };
 type CreateBody = {
   action: 'create';
-  customer: { id?: string; name?: string; email?: string; phone?: string; company?: string };
+  // Omit (or link_only) for a link-only invoice: the customer fills in their info on the pay page,
+  // and the payment creates + links their customer record (brand nexa).
+  customer?: { id?: string; name?: string; email?: string; phone?: string; company?: string } | null;
+  link_only?: boolean;
   items: Item[];
   tax_rate?: number;
   surcharge?: boolean;
@@ -216,7 +219,9 @@ async function create(supabase: Supabase, b: CreateBody) {
   // ─── Customer: existing id, else match by email/phone, else create as a Nexa customer ───
   const c = b.customer || {};
   let customerId: string | null = null;
-  if (c.id) {
+  if (b.link_only || !b.customer) {
+    customerId = null;
+  } else if (c.id) {
     const { data } = await supabase.from('customers').select('id').eq('id', str(c.id, 40)).maybeSingle();
     customerId = data?.id || null;
     if (!customerId) return NextResponse.json({ error: 'Customer not found' }, { status: 400 });
