@@ -100,6 +100,7 @@ export async function POST(request: Request) {
     }
     if (!customerId) {
       const { data } = await supabase.from('customers').insert({
+        brand: invoiceRecord?.brand === 'nexa' ? 'nexa' : 'jhps',
         name: customerName || null,
         email: customerEmail || null,
         phone: customerPhone || null,
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
     // ─── Record payment in Supabase ───
     if (customerId) {
       await supabase.from('payments').insert({
+        brand: invoiceRecord?.brand === 'nexa' ? 'nexa' : 'jhps',
         customer_id: customerId,
         amount,
         status: 'completed',

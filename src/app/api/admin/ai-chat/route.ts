@@ -958,11 +958,12 @@ async function executeTool(
 
     case "get_dashboard_stats": {
       const [customers, quotes, invoices, jobs, payments] = await Promise.all([
-        supabase.from("customers").select("id", { count: "exact", head: true }),
+        // JHPS numbers only — Nexa (phone store) business is reported in the Nexa admin
+        supabase.from("customers").select("id", { count: "exact", head: true }).neq("brand", "nexa"),
         supabase.from("quotes").select("id, status, total"),
-        supabase.from("invoices").select("id, status, total, amount_paid"),
+        supabase.from("invoices").select("id, status, total, amount_paid").neq("brand", "nexa"),
         supabase.from("jobs").select("id, status, amount"),
-        supabase.from("payments").select("id, amount, status"),
+        supabase.from("payments").select("id, amount, status").neq("brand", "nexa"),
       ]);
       const quoteData = quotes.data || [];
       const invoiceData = invoices.data || [];

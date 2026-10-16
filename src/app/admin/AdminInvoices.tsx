@@ -282,6 +282,7 @@ export default function AdminInvoices({ userId, backRef, onNavigate, createRef, 
     if (!newCustomerForm.name.trim()) { showToast("Name is required", "error"); return; }
     setSavingNewCustomer(true);
     const res = await adminPost("customers", "create", {
+      brand: form.brand,
       name: newCustomerForm.name.trim(),
       email: newCustomerForm.email.trim() || null,
       phone: newCustomerForm.phone.trim() || null,

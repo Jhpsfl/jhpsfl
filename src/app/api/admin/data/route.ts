@@ -101,11 +101,11 @@ export async function GET(request: NextRequest) {
           feedbackRequestsRes,
           feedbackResponsesRes,
         ] = await Promise.all([
-          supabase.from("payments").select("amount, status, payment_method, created_at, paid_at").eq("status", "completed").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
-          supabase.from("invoices").select("amount_due, amount_paid, status, created_at, paid_at").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("payments").select("amount, status, payment_method, created_at, paid_at").eq("status", "completed").neq("brand", "nexa").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("invoices").select("amount_due, amount_paid, status, created_at, paid_at").neq("brand", "nexa").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
           supabase.from("quotes").select("id, status, total, created_at, is_commercial").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
           supabase.from("jobs").select("id, status, service_type, amount, created_at, completed_date").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
-          supabase.from("customers").select("id, customer_type, created_at").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
+          supabase.from("customers").select("id, customer_type, created_at").neq("brand", "nexa").gte("created_at", sixMonthsAgo).order("created_at", { ascending: true }),
           supabase.from("feedback_requests").select("id, type, status, sent_at, responded_at, created_at"),
           supabase.from("feedback_responses").select("id, rating, lost_estimate_reason, google_review_clicked, resolution_requested, created_at"),
         ]);
@@ -126,13 +126,13 @@ export async function GET(request: NextRequest) {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
         const [customersRes, activeJobsRes, completedJobsRes, subsRes, paymentsRes, recentPaymentsRes, paidInvoicesRes] = await Promise.all([
-          supabase.from("customers").select("id", { count: "exact", head: true }),
+          supabase.from("customers").select("id", { count: "exact", head: true }).neq("brand", "nexa"),
           supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
           supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "completed"),
           supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("payments").select("amount, notes").eq("status", "completed").gte("paid_at", thirtyDaysAgo),
-          supabase.from("payments").select("*").order("created_at", { ascending: false }).limit(5),
-          supabase.from("invoices").select("invoice_number, amount_paid").eq("status", "paid").gte("paid_at", thirtyDaysAgo),
+          supabase.from("payments").select("amount, notes").eq("status", "completed").neq("brand", "nexa").gte("paid_at", thirtyDaysAgo),
+          supabase.from("payments").select("*").neq("brand", "nexa").order("created_at", { ascending: false }).limit(5),
+          supabase.from("invoices").select("invoice_number, amount_paid").eq("status", "paid").neq("brand", "nexa").gte("paid_at", thirtyDaysAgo),
         ]);
 
         const paymentsList = paymentsRes.data || [];
@@ -163,6 +163,7 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
           .from("customers")
           .select("*")
+          .neq("brand", "nexa") // phone-only customers live in the Nexa admin
           .order("created_at", { ascending: false })
           .limit(limit);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -176,9 +177,9 @@ export async function GET(request: NextRequest) {
           supabase.from("customers").select("*").eq("id", customerId).single(),
           supabase.from("job_sites").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("jobs").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
-          supabase.from("payments").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+          supabase.from("payments").select("*").eq("customer_id", customerId).neq("brand", "nexa").order("created_at", { ascending: false }),
           supabase.from("subscriptions").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
-          supabase.from("invoices").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+          supabase.from("invoices").select("*").eq("customer_id", customerId).or("brand.neq.nexa,status.neq.paid").order("created_at", { ascending: false }),
           supabase.from("stored_cards").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("quotes").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
           supabase.from("customer_notes").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
@@ -222,7 +223,7 @@ export async function GET(request: NextRequest) {
       }
 
       case "payments": {
-        let query = supabase.from("payments").select("*, customers(name, phone, email)").order("created_at", { ascending: false }).limit(limit);
+        let query = supabase.from("payments").select("*, customers(name, phone, email)").neq("brand", "nexa").order("created_at", { ascending: false }).limit(limit);
         if (status) query = query.eq("status", status);
         if (customerId) query = query.eq("customer_id", customerId);
         const { data, error } = await query;
@@ -240,7 +241,8 @@ export async function GET(request: NextRequest) {
       }
 
       case "invoices": {
-        let query = supabase.from("invoices").select("*, customers(name, phone, email)").order("created_at", { ascending: false }).limit(limit);
+        // Paid Nexa invoices live in the Nexa admin (nexavisiongroup.com/admin/invoices); unpaid ones stay here to send
+        let query = supabase.from("invoices").select("*, customers(name, phone, email)").or("brand.neq.nexa,status.neq.paid").order("created_at", { ascending: false }).limit(limit);
         if (status) query = query.eq("status", status);
         if (customerId) query = query.eq("customer_id", customerId);
         const { data, error } = await query;
@@ -316,6 +318,7 @@ export async function POST(request: NextRequest) {
 
           const { data, error } = await supabase.from("jobs").insert(insert).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+          await supabase.from("customers").update({ brand: "jhps" }).eq("id", customer_id).eq("brand", "nexa");
           return NextResponse.json({ success: true, data });
         }
         if (action === "update") {
@@ -394,6 +397,10 @@ export async function POST(request: NextRequest) {
               .select(`*, customers ( name, email, phone )`)
               .single();
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+            // A JHPS invoice makes a phone-only (Nexa) customer a JHPS customer too
+            if (data.customer_id && data.brand !== "nexa") {
+              await supabase.from("customers").update({ brand: "jhps" }).eq("id", data.customer_id).eq("brand", "nexa");
+            }
             return NextResponse.json({ success: true, data });
           }
           case "update": {
@@ -611,7 +618,7 @@ export async function POST(request: NextRequest) {
 
       case "customers": {
         if (action === "create") {
-          const { name, email, phone, address, customer_type, company_name, nickname, billing_address, billing_city, billing_zip } = payload;
+          const { name, email, phone, address, customer_type, company_name, nickname, billing_address, billing_city, billing_zip, brand } = payload;
           if (!name && !email && !phone && !nickname) return NextResponse.json({ error: "At least one of name, email, phone, or nickname is required" }, { status: 400 });
           const { data, error } = await supabase.from("customers").insert({
             name: name || null, email: email || null, phone: phone || null,
@@ -622,6 +629,7 @@ export async function POST(request: NextRequest) {
             billing_address: billing_address || null,
             billing_city: billing_city || null,
             billing_zip: billing_zip || null,
+            brand: brand === "nexa" ? "nexa" : "jhps",
           }).select().single();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, data });

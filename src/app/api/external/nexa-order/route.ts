@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes } from 'crypto';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { verifyNexaSignature } from '@/lib/nexa-hmac';
 
 /**
  * Server-to-server: the Nexa Pro store (nexavisiongroup.com/nexaphone) creates
@@ -28,27 +29,7 @@ type InBody = {
 const s = (v: unknown, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const cents = (n: number) => Math.round(Number(n) * 100);
 
-// Secret: Vercel env if set, otherwise the service-role-only app_secrets table
-// (the live JHPS Vercel account's API token isn't available to set env vars).
-let cached: { v: string; at: number } | null = null;
-async function orderSecret(): Promise<string | null> {
-  if (process.env.NEXA_ORDER_SECRET) return process.env.NEXA_ORDER_SECRET;
-  if (cached && Date.now() - cached.at < 5 * 60_000) return cached.v;
-  const { data } = await createSupabaseAdmin().from('app_secrets').select('value').eq('key', 'NEXA_ORDER_SECRET').maybeSingle();
-  if (!data?.value) return null;
-  cached = { v: data.value, at: Date.now() };
-  return cached.v;
-}
-
-async function verify(raw: string, ts: string | null, sig: string | null) {
-  const secret = await orderSecret();
-  if (!secret || !ts || !sig) return false;
-  const age = Math.abs(Date.now() / 1000 - Number(ts));
-  if (!Number.isFinite(age) || age > 300) return false;
-  const want = Buffer.from('sha256=' + createHmac('sha256', secret).update(`${ts}.${raw}`).digest('hex'));
-  const got = Buffer.from(sig);
-  return want.length === got.length && timingSafeEqual(want, got);
-}
+const verify = verifyNexaSignature;
 
 function invoiceNumber() {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -143,6 +124,7 @@ export async function POST(req: Request) {
     const { data: created } = await supabase
       .from('customers')
       .insert({
+        brand: 'nexa',
         name,
         email,
         phone: s(b.customer.phone, 40) || null,

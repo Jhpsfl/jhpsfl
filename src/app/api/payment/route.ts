@@ -123,6 +123,7 @@ export async function POST(request: Request) {
         }
 
         await supabase.from('payments').insert({
+          brand: invoiceRecord?.brand === 'nexa' ? 'nexa' : 'jhps',
           invoice_id: invoiceRecord?.id || null,
           customer_id: invoiceRecord?.customer_id || null,
           amount: parseFloat(amount),
@@ -340,6 +341,7 @@ export async function POST(request: Request) {
         }
         if (!customerId) {
           const { data } = await supabase.from('customers').insert({
+            brand: invoiceRecord?.brand === 'nexa' ? 'nexa' : 'jhps',
             name: customerName || null,
             email: customerEmail || null,
             phone: customerPhone || null,
@@ -391,6 +393,7 @@ export async function POST(request: Request) {
 
         if (customerId) {
           await supabase.from('payments').insert({
+            brand: invoiceRecord?.brand === 'nexa' ? 'nexa' : 'jhps',
             customer_id: customerId,
             amount: parseFloat(amount),
             status: 'completed',
