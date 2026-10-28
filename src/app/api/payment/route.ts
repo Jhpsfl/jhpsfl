@@ -598,7 +598,25 @@ export async function POST(request: Request) {
     const errorCode = firstError.code || 'UNKNOWN_ERROR';
     const errorDetail = firstError.detail || 'Payment failed';
     const category = firstError.category || 'API_ERROR';
-    const displayMessage = `Error [${errorCode}]: ${errorDetail}. (Ref: ${category})`;
+    const DECLINE_MESSAGES: Record<string, string> = {
+      GENERIC_DECLINE: 'Your bank declined this card. Please call the number on the back of your card to approve the charge, or try a different card.',
+      CARD_DECLINED: 'Your bank declined this card. Please call the number on the back of your card to approve the charge, or try a different card.',
+      INSUFFICIENT_FUNDS: 'Your card was declined for insufficient funds. Please try a different card.',
+      TRANSACTION_LIMIT: 'This amount is over your card\'s transaction limit. Please call your bank or try a different card.',
+      CARD_VELOCITY_EXCEEDED: 'Your bank declined this card for too many recent charges. Please call your bank or try a different card.',
+      CVV_FAILURE: 'The security code (CVV) didn\'t match. Please check it and try again.',
+      ADDRESS_VERIFICATION_FAILURE: 'The billing ZIP code didn\'t match your card. Please check it and try again.',
+      INVALID_EXPIRATION: 'The expiration date is invalid. Please check it and try again.',
+      BAD_EXPIRY: 'The expiration date is invalid. Please check it and try again.',
+      EXPIRED_CARD: 'This card has expired. Please use a different card.',
+      INVALID_CARD: 'The card number is invalid. Please check it and try again.',
+      INVALID_ACCOUNT: 'This card account is closed or invalid. Please use a different card.',
+      CARD_NOT_SUPPORTED: 'This card type isn\'t supported. Please use a different card.',
+      VOICE_FAILURE: 'Your bank needs to approve this charge by phone. Please call them, then try again.',
+    };
+    const displayMessage = DECLINE_MESSAGES[errorCode]
+      ? `${DECLINE_MESSAGES[errorCode]} (Code: ${errorCode})`
+      : `Error [${errorCode}]: ${errorDetail}. (Ref: ${category})`;
 
     return NextResponse.json({
       success: false, error: displayMessage,
