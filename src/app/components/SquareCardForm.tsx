@@ -15,7 +15,7 @@ interface SquarePayments {
 }
 export interface SquareCard {
   attach: (selector: string) => Promise<void>;
-  tokenize: () => Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>;
+  tokenize: (verificationDetails?: Record<string, unknown>) => Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>;
   destroy: () => Promise<void>;
 }
 

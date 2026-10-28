@@ -202,7 +202,7 @@ interface SquarePayments {
 }
 interface SquareCard {
   attach: (selector: string) => Promise<void>;
-  tokenize: () => Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>;
+  tokenize: (verificationDetails?: Record<string, unknown>) => Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>;
   destroy: () => Promise<void>;
 }
 
@@ -733,7 +733,25 @@ export default function PaymentPage() {
         if (!ok) { setIsProcessing(false); return; }
       }
 
-      const result = await squareCard.tokenize();
+      // Buyer verification (3-D Secure): lets the bank ask the customer to confirm instead of declining outright.
+      const [givenName, ...rest] = (formData.name || "").trim().split(/\s+/);
+      const result = await squareCard.tokenize({
+        amount: Number(formData.amount).toFixed(2),
+        currencyCode: "USD",
+        intent: saveCard && clerkUserId ? "CHARGE_AND_STORE" : "CHARGE",
+        customerInitiated: true,
+        sellerKeyedIn: false,
+        billingContact: {
+          givenName: givenName || undefined,
+          familyName: rest.join(" ") || undefined,
+          email: formData.email || undefined,
+          phone: formData.phone || undefined,
+          addressLines: [(sameBilling ? formData.address : formData.billingAddress) || ""].filter(Boolean),
+          city: (sameBilling ? formData.city : formData.billingCity) || undefined,
+          postalCode: (sameBilling ? formData.zip : formData.billingZip) || undefined,
+          countryCode: "US",
+        },
+      });
 
       if (result.status !== "OK") {
         const msg = result.errors?.map((e) => e.message).join(", ") || "Card verification failed. Please check your details.";
