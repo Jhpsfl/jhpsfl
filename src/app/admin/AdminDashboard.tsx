@@ -784,7 +784,7 @@ export default function AdminDashboard() {
         @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
         @keyframes toastIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
 
-        .admin-layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+        .admin-layout { display: block; min-height: 100vh; } /* sidebar is position:fixed, so a grid here squeezed <main> to 0px on desktop */
         .admin-sidebar {
           background: linear-gradient(180deg, #071207 0%, #050e05 100%);
           border-right: 1px solid #1a3a1a;
