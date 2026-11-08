@@ -175,6 +175,17 @@ async function recordFailure(supabase: SupabaseClient, sub: any, amount: number,
   }
 }
 
+/** A PDF problem must never cost the customer their receipt: the email goes out without the attachment. */
+async function receiptAttachment(data: ReceiptData) {
+  try {
+    const pdf = await generateReceiptPDF(data);
+    return [{ filename: getReceiptFilename(data), content: pdf.toString('base64') }];
+  } catch (e) {
+    console.error('BILLING_RECEIPT_PDF_ERROR', e);
+    return undefined;
+  }
+}
+
 async function sendReceipt(sub: any, cents: number, paymentId: string) {
   const email = sub.customers?.email;
   if (!email) return;
@@ -189,11 +200,11 @@ async function sendReceipt(sub: any, cents: number, paymentId: string) {
       paymentId, receiptNumber: receiptNum, paymentDate: new Date(), customerName: sub.customers?.name || 'Valued Customer', customerEmail: email,
       lineItems, subtotal: cents, taxAmount: 0, totalAmount: cents, paymentStatus: 'COMPLETED', brandKey: brand.key,
     };
-    const pdf = await generateReceiptPDF(data);
+    const attachments = await receiptAttachment(data);
     const lines = lineItems.map((l) => `<li>${esc(l.name)}: ${usd(l.totalPrice / 100)}</li>`).join('');
     await billingEmail(sub, email, `Payment Confirmation: ${usd(cents / 100)} - ${brand.name}`,
-      `${hi(sub)}<p>Your automatic payment of <b>${usd(cents / 100)}</b> went through.</p><ul>${lines}</ul><p>Receipt #${receiptNum} is attached.${sub.brand === 'nexa' ? ` This charge appears on your card statement as ${STATEMENT_NAME}.` : ''}</p>`,
-      [{ filename: getReceiptFilename(data), content: pdf.toString('base64') }]);
+      `${hi(sub)}<p>Your automatic payment of <b>${usd(cents / 100)}</b> went through.</p><ul>${lines}</ul><p>Receipt #${receiptNum}${attachments ? ' is attached' : ''}.${sub.brand === 'nexa' ? ` This charge appears on your card statement as ${STATEMENT_NAME}.` : ''}</p>`,
+      attachments);
   } catch (e) {
     console.error('BILLING_RECEIPT_ERROR', e);
   }
@@ -210,10 +221,10 @@ export async function emailFirstPaymentReceipt(sub: any, cents: number, paymentI
       paymentId, receiptNumber: receiptNum, paymentDate: new Date(), customerName: sub.customers?.name || 'Valued Customer', customerEmail: email,
       lineItems: [{ name: description, quantity: 1, unitPrice: cents, totalPrice: cents }], subtotal: cents, taxAmount: 0, totalAmount: cents, paymentStatus: 'COMPLETED', brandKey: brand.key,
     };
-    const pdf = await generateReceiptPDF(data);
+    const attachments = await receiptAttachment(data);
     await billingEmail(sub, email, `Payment Confirmation: ${usd(cents / 100)} - ${brand.name}`,
-      `${hi(sub)}<p>Your payment of <b>${usd(cents / 100)}</b> went through. Thank you.</p><p>Receipt #${receiptNum} is attached. This charge appears on your card statement as ${STATEMENT_NAME}.</p>`,
-      [{ filename: getReceiptFilename(data), content: pdf.toString('base64') }]);
+      `${hi(sub)}<p>Your payment of <b>${usd(cents / 100)}</b> went through. Thank you.</p><p>Receipt #${receiptNum}${attachments ? ' is attached' : ''}. This charge appears on your card statement as ${STATEMENT_NAME}.</p>`,
+      attachments);
   } catch (e) {
     console.error('BILLING_RECEIPT_ERROR', e);
   }

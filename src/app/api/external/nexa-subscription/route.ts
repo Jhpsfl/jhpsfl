@@ -48,6 +48,16 @@ export async function POST(req: Request) {
   };
 
   try {
+    if (b.action === 'diag_receipt') { // TEMPORARY
+      const { generateReceiptPDF } = await import('@/lib/receipt-generator');
+      try {
+        const pdf = await generateReceiptPDF({ paymentId: 'diagnostic', receiptNumber: 'R-DIAG', paymentDate: new Date(), customerName: 'T', customerEmail: 'a@b.c', lineItems: [{ name: 'n', quantity: 1, unitPrice: 100, totalPrice: 100 }], subtotal: 100, taxAmount: 0, totalAmount: 100, paymentStatus: 'COMPLETED', brandKey: 'nexa' } as any);
+        return NextResponse.json({ ok: true, bytes: pdf.length });
+      } catch (e) {
+        return NextResponse.json({ ok: false, error: e instanceof Error ? (e.message + ' :: ' + (e.stack || '')).slice(0, 900) : String(e) });
+      }
+    }
+
     if (b.action === 'ensure') {
       const found = await load();
       const dueInvoice = s(b.due_invoice, 40) || null;
