@@ -101,7 +101,7 @@ export async function chargeSubscription(supabase: SupabaseClient, sub: any): Pr
   const note = `${brand.name}: ${sub.plan_name}${sub.reference ? ` (${sub.reference})` : ''}`;
   let pay;
   try {
-    pay = await chargeStoredCard(cardId, cents, sub.customers?.square_customer_id || '', note, sub.customers?.email || undefined, createHash('sha256').update(key).digest('hex').slice(0, 45));
+    pay = await chargeStoredCard(cardId, cents, sub.customers?.square_customer_id || '', note, sub.brand === 'nexa' ? undefined : sub.brand === 'nexa' ? undefined : sub.customers?.email || undefined, createHash('sha256').update(key).digest('hex').slice(0, 45));
   } catch (err) {
     const c = classify(err);
     if (!c.definite) {
