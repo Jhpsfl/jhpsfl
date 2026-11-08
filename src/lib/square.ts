@@ -96,10 +96,11 @@ export async function chargeStoredCard(
   squareCustomerId: string,
   note?: string,
   buyerEmail?: string,
+  idempotencyKey?: string,
 ): Promise<{ paymentId: string; receiptUrl: string | null; status: string }> {
   const result = await squareClient.payments.create({
     sourceId: squareCardId,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: idempotencyKey || crypto.randomUUID(),
     amountMoney: { amount: BigInt(amountCents), currency: Currency.Usd },
     locationId,
     customerId: squareCustomerId,
@@ -128,36 +129,41 @@ export async function deleteStoredCard(squareCardId: string): Promise<void> {
 }
 
 /**
- * Advance a billing date by the given frequency.
+ * Advance a billing date by the given frequency. Stays on the billing day, using the
+ * last day of a shorter month: Jan 31 gives Feb 28, then Mar 31 when anchorDay is 31.
  */
 export function advanceBillingDate(
   currentDate: string | Date,
   frequency: string,
+  anchorDay?: number,
 ): string {
-  const d = new Date(currentDate);
-
+  const d = new Date(typeof currentDate === 'string' && currentDate.length === 10 ? `${currentDate}T12:00:00Z` : currentDate);
+  const addMonths = (n: number) => {
+    const day = anchorDay || d.getUTCDate();
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + n;
+    const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(day, last), 12));
+  };
+  let next: Date;
   switch (frequency.toLowerCase()) {
     case 'weekly':
-      d.setDate(d.getDate() + 7);
+      next = new Date(d.getTime() + 7 * 864e5);
       break;
     case 'biweekly':
     case 'bi-weekly':
-      d.setDate(d.getDate() + 14);
-      break;
-    case 'monthly':
-      d.setMonth(d.getMonth() + 1);
+      next = new Date(d.getTime() + 14 * 864e5);
       break;
     case 'quarterly':
-      d.setMonth(d.getMonth() + 3);
+      next = addMonths(3);
       break;
     case 'yearly':
     case 'annual':
-      d.setFullYear(d.getFullYear() + 1);
+      next = addMonths(12);
       break;
+    case 'monthly':
     default:
-      // Default to monthly
-      d.setMonth(d.getMonth() + 1);
+      next = addMonths(1);
   }
-
-  return d.toISOString().split('T')[0];
+  return next.toISOString().split('T')[0];
 }
