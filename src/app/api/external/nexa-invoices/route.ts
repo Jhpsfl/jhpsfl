@@ -14,7 +14,7 @@ import { randomInt, randomUUID } from 'crypto';
  * POST signs the raw JSON body.
  */
 
-const PAY_BASE = 'https://jhpsfl.com/pay';
+const PAY_BASE = 'https://pay.nexavisiongroup.com/pay';
 
 export async function GET(req: Request) {
   const ok = await verifyNexaSignature('nexa-invoices', req.headers.get('x-nexa-timestamp'), req.headers.get('x-nexa-signature'));

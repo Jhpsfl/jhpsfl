@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPaymentIntent, describePaymentMethod } from '@/lib/stripe';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { Resend } from 'resend';
+import { brandMail } from '@/lib/brand-mail';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 import { getBrand, type BrandKey } from '@/lib/brand-config';
@@ -267,8 +268,8 @@ export async function POST(request: Request) {
         });
 
         const emailSubject = `Payment Confirmation — $${amount.toFixed(2)} — ${brand.name}`;
-        await getResend().emails.send({
-          from: `${brand.name} <info@jhpsfl.com>`,
+        await brandMail(brand).resend.emails.send({
+          from: brandMail(brand).from,
           replyTo: brand.email,
           to: [customerEmail],
           subject: emailSubject,

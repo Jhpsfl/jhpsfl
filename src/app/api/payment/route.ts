@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { squareClient, locationId as sqLocationId, ensureSquareCustomer, storeCardOnFile } from '@/lib/square';
 import { Resend } from 'resend';
+import { brandMail } from '@/lib/brand-mail';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
 import type { ReceiptData } from '@/lib/receipt-generator';
 import { getBrand, type BrandKey } from '@/lib/brand-config';
@@ -241,8 +242,8 @@ export async function POST(request: Request) {
           });
 
           const emailSubject = `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`;
-          await getResend().emails.send({
-            from: `${brand.name} <info@jhpsfl.com>`,
+          await brandMail(brand).resend.emails.send({
+            from: brandMail(brand).from,
             replyTo: brand.email,
             to: [customerEmail],
             subject: emailSubject,
@@ -546,8 +547,8 @@ export async function POST(request: Request) {
             });
 
             const realEmailSubject = `Payment Confirmation — $${parseFloat(amount).toFixed(2)} — ${brand.name}`;
-            await getResend().emails.send({
-              from: `${brand.name} <info@jhpsfl.com>`,
+            await brandMail(brand).resend.emails.send({
+              from: brandMail(brand).from,
               replyTo: brand.email,
               to: [customerEmail],
               subject: realEmailSubject,

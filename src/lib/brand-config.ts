@@ -172,8 +172,8 @@ const nexa: BrandConfig = {
   phone: '(864) 301-1806',
   email: 'info@nexavisiongroup.com',
   website: 'www.nexavisiongroup.com',
-  serviceArea: 'Central Florida & Beyond',
-  tagline: 'Revenue Infrastructure · Digital Solutions',
+  serviceArea: 'Serving businesses nationwide',
+  tagline: 'Managed Digital Operations',
   logo: '/nexa-logo.svg',
   colors: {
     bg: '#0A1628',

@@ -14,10 +14,14 @@ import { verifyNexaSignature } from '@/lib/nexa-hmac';
  */
 
 const RETURN_ORIGIN = 'https://nexavisiongroup.com';
-const PAY_BASE = 'https://jhpsfl.com/pay';
+const PAY_BASE = 'https://pay.nexavisiongroup.com/pay';
 
 type InItem = { description: string; quantity: number; unit_price: number };
 type InBody = {
+  /** 'service' = a signed Nexa proposal. Omitted = a Nexa Pro store order. */
+  kind?: 'service';
+  /** 4% card fee, service invoices only */
+  surcharge?: boolean;
   order_id: string;
   customer: { name: string; email: string; phone?: string; company?: string; address?: { line1?: string; line2?: string; city?: string; state?: string; zip?: string } };
   items: InItem[];
@@ -31,14 +35,14 @@ const cents = (n: number) => Math.round(Number(n) * 100);
 
 const verify = verifyNexaSignature;
 
-function invoiceNumber() {
+function invoiceNumber(prefix = 'NXP') {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const d = new Date();
   const ym = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}`;
   const bytes = randomBytes(8);
   let r = '';
   for (let i = 0; i < 8; i++) r += a[bytes[i] % a.length];
-  return `NXP-${ym}-${r}`;
+  return `${prefix}-${ym}-${r}`;
 }
 
 function payUrl(num: string, c: InBody['customer']) {
@@ -90,13 +94,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ invoice_number: existing.invoice_number, total: existing.total, status: existing.status, pay_url: payUrl(existing.invoice_number, b.customer) });
   }
 
+  const isService = b.kind === 'service';
+  const maxUnit = isService ? 25_000_000 : 1_000_000; // proposals can run past a phone's price
   const lineItems = [];
   let subtotalCents = 0;
   for (const it of b.items) {
     const qty = Math.floor(Number(it.quantity));
     const unit = cents(it.unit_price);
     const desc = s(it.description, 200);
-    if (!desc || !(qty >= 1 && qty <= 99) || !(unit >= 0 && unit <= 1_000_000)) {
+    if (!desc || !(qty >= 1 && qty <= 99) || !(unit >= 0 && unit <= maxUnit)) {
       return NextResponse.json({ error: 'invalid item' }, { status: 400 });
     }
     subtotalCents += unit * qty;
@@ -112,7 +118,8 @@ export async function POST(req: Request) {
     if (!(shipCents >= 0 && shipCents <= 100_000)) return NextResponse.json({ error: 'invalid shipping' }, { status: 400 });
     if (shipCents > 0) lineItems.push({ id: randomBytes(6).toString('hex'), description: desc, quantity: 1, unit_price: shipCents / 100, amount: shipCents / 100, taxable: false });
   }
-  const totalCents = subtotalCents + shipCents + taxCents;
+  const surchargeCents = isService && b.surcharge ? Math.round(subtotalCents * 0.04) : 0;
+  const totalCents = subtotalCents + shipCents + taxCents + surchargeCents;
   if (totalCents < 50) return NextResponse.json({ error: 'total too small' }, { status: 400 });
 
   // Customer: reuse by email, else create.
@@ -140,7 +147,7 @@ export async function POST(req: Request) {
 
   const due = new Date(Date.now() + 7 * 864e5).toISOString().split('T')[0];
   for (let attempt = 0; attempt < 4; attempt++) {
-    const num = invoiceNumber();
+    const num = invoiceNumber(isService ? 'NXS' : 'NXP');
     const url = payUrl(num, b.customer);
     const { error } = await supabase.from('invoices').insert({
       customer_id: customerId,
@@ -150,8 +157,8 @@ export async function POST(req: Request) {
       subtotal: (subtotalCents + shipCents) / 100,
       tax_rate: taxRate,
       tax_amount: taxCents / 100,
-      surcharge: false,
-      surcharge_amount: 0,
+      surcharge: surchargeCents > 0,
+      surcharge_amount: surchargeCents / 100,
       total: totalCents / 100,
       amount: totalCents / 100,
       amount_paid: 0,

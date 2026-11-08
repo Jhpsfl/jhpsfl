@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { brandMail } from '@/lib/brand-mail';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail } from '@/lib/email';
 import { generateInvoicePDF, getInvoiceFilename } from '@/lib/receipt-generator';
@@ -22,6 +23,7 @@ export type SendInvoiceResult =
 
 // Server-side short link helper
 export async function shortenUrl(url: string, label: string, supabase: Supabase): Promise<string> {
+  const linkHost = url.startsWith('https://pay.nexavisiongroup.com') ? 'https://pay.nexavisiongroup.com' : 'https://jhpsfl.com';
   try {
     // Check if already shortened
     const { data: existing } = await supabase
@@ -30,14 +32,14 @@ export async function shortenUrl(url: string, label: string, supabase: Supabase)
       .eq('target_url', url)
       .limit(1);
     if (existing && existing.length > 0) {
-      return `https://jhpsfl.com/l/${existing[0].code}`;
+      return `${linkHost}/l/${existing[0].code}`;
     }
     // Generate code
     const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
     let code = '';
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     await supabase.from('short_links').insert({ code, target_url: url, label });
-    return `https://jhpsfl.com/l/${code}`;
+    return `${linkHost}/l/${code}`;
   } catch {
     return url; // fallback
   }
@@ -242,8 +244,8 @@ export async function sendInvoiceEmail(supabase: Supabase, invoice: any, custome
   const thread_id = randomUUID();
   let resendMessageId: string | undefined;
   try {
-    const { data, error } = await getResend().emails.send({
-      from: `${brand.name} <info@jhpsfl.com>`,
+    const { data, error } = await brandMail(brand).resend.emails.send({
+      from: brandMail(brand).from,
       to: [customer.email],
       subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— ${brand.name}`,
       html,
@@ -268,7 +270,7 @@ export async function sendInvoiceEmail(supabase: Supabase, invoice: any, custome
   await logEmail({
     thread_id,
     direction: 'outbound',
-    from_email: 'info@jhpsfl.com',
+    from_email: brand.key === 'nexa' ? 'info@nexavisiongroup.com' : 'info@jhpsfl.com',
     to_email: customer.email,
     subject: `${docLabel} ${invoiceData.invoiceNumber} — ${fmt(totalCents)} ${isContract ? '' : 'Due '}— ${brand.name}`,
     body_html: html,

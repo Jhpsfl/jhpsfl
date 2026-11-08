@@ -407,6 +407,8 @@ export default function PaymentPage() {
   // "No emails" invoices: customer pays by texted link, email is optional (deposits still need it for the account)
   const emailOptional = !!invoiceData?.no_email && !isDeposit;
   const isTestMode = searchParams.get("test") === "1";
+  // Nexa Pro store orders ship something. Service invoices also return to Nexa, but nothing ships.
+  const isStoreOrder = !!invoiceData?.return_url && String(invoiceData?.invoice_number || "").startsWith("NXP-");
 
   // ─── Brand theming ───
   const brandParam = searchParams.get("brand");
@@ -1165,7 +1167,7 @@ export default function PaymentPage() {
                 }}>Payment</span>
               </h1>
               <p style={{ color: brand.colors.textMuted, fontSize: 16, maxWidth: 520, margin: "0 auto" }}>
-                {invoiceData?.return_url ? "Complete your order securely." : "Pay for services quickly and securely."}{brand.key === 'jhps' && (<>{" "}Have an account?{" "}
+                {isStoreOrder ? "Complete your order securely." : "Pay for services quickly and securely."}{brand.key === 'jhps' && (<>{" "}Have an account?{" "}
                 <Link href="/account" style={{ color: brand.colors.primary, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
                   Sign in for faster checkout
                 </Link></>)}
@@ -1297,7 +1299,7 @@ export default function PaymentPage() {
                       borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: "none",
                       boxShadow: `0 4px 20px ${brand.colors.glow}`,
                     }}>
-                      Back to your order →
+                      {isStoreOrder ? "Back to your order →" : "Back to your project →"}
                     </a>
                   )}
 
@@ -1653,10 +1655,10 @@ export default function PaymentPage() {
                         border: `1px solid ${brand.colors.border}`, borderRadius: 20, padding: "28px 28px",
                       }}>
                         <h2 style={{ fontFamily: brand.fonts.display, fontSize: 20, color: brand.colors.textPrimary, fontWeight: 700, marginBottom: 8 }}>
-                          {invoiceData?.return_url ? "Shipping Address" : "Service Address"}
+                          {isStoreOrder ? "Shipping Address" : invoiceData?.brand === "nexa" ? "Business Address" : "Service Address"}
                         </h2>
                         <p style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 20 }}>
-                          {invoiceData?.return_url ? "Where we'll ship your order." : "Where the work is or was performed."}
+                          {isStoreOrder ? "Where we'll ship your order." : invoiceData?.brand === "nexa" ? "The address for your billing records." : "Where the work is or was performed."}
                         </p>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -1702,7 +1704,7 @@ export default function PaymentPage() {
                             </div>
                             <div>
                               <p style={{ fontSize: 14, fontWeight: 600, color: sameBilling ? brand.colors.textSecondary : brand.colors.textMuted }}>
-                                Billing address same as {invoiceData?.return_url ? "shipping" : "service"} address
+                                Billing address same as {isStoreOrder ? "shipping" : invoiceData?.brand === "nexa" ? "business" : "service"} address
                               </p>
                               {!sameBilling && (
                                 <p style={{ fontSize: 12, color: brand.colors.textMuted, marginTop: 2 }}>
