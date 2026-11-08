@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { chargeSubscription, remindStaff } from '@/lib/recurring-billing';
+import { alertApproval, chargeSubscription, emailUpcomingCharge, needsApproval, remindStaff } from '@/lib/recurring-billing';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     else results.skipped++;
   }
 
-  // Heads-up 3 days out, in case that month's usage amount hasn't arrived.
+  // 3 days out: staff get a heads-up, and the customer gets the exact amount. An over-limit amount waits for approval first.
   const soon = new Date(Date.now() + 3 * 864e5).toISOString().split('T')[0];
   const { data: upcoming } = await supabase
     .from('subscriptions')
@@ -53,6 +53,8 @@ export async function GET(request: NextRequest) {
   for (const sub of upcoming || []) {
     if (sub.reminded_for === sub.next_billing_date) continue;
     await remindStaff(supabase, sub);
+    if (needsApproval(sub)) await alertApproval(supabase, sub);
+    else await emailUpcomingCharge(sub);
     results.reminded++;
   }
 
