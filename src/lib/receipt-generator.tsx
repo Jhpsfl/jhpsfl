@@ -317,7 +317,7 @@ const ItemsTable: React.FC<{ items: DocumentLineItem[]; primaryColor?: string }>
   let currentSection = '';
   for (const item of items) {
     const section = item.description || '';
-    if (section !== currentSection) {
+    if (sections.length === 0 || section !== currentSection) {
       sections.push({ label: section, items: [item] });
       currentSection = section;
     } else {

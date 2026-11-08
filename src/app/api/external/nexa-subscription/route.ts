@@ -52,6 +52,8 @@ export async function POST(req: Request) {
       const { generateReceiptPDF } = await import('@/lib/receipt-generator');
       try {
         const pdf = await generateReceiptPDF({ paymentId: 'diagnostic', receiptNumber: 'R-DIAG', paymentDate: new Date(), customerName: 'T', customerEmail: 'a@b.c', lineItems: [{ name: 'n', quantity: 1, unitPrice: 100, totalPrice: 100 }], subtotal: 100, taxAmount: 0, totalAmount: 100, paymentStatus: 'COMPLETED', brandKey: 'nexa' } as any);
+        const { emailFirstPaymentReceipt } = await import('@/lib/recurring-billing');
+        await emailFirstPaymentReceipt({ brand: 'nexa', plan_name: 'Receipt test', customers: { name: 'Test Customer', email: 'admin@nexavisiongroup.com' } }, 100, 'diagnostic', 'Receipt test');
         return NextResponse.json({ ok: true, bytes: pdf.length });
       } catch (e) {
         return NextResponse.json({ ok: false, error: e instanceof Error ? (e.message + ' :: ' + (e.stack || '')).slice(0, 900) : String(e) });
