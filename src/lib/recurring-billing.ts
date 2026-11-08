@@ -199,6 +199,26 @@ async function sendReceipt(sub: any, cents: number, paymentId: string) {
   }
 }
 
+/** Receipt for the payment made when the customer first saves their card. */
+export async function emailFirstPaymentReceipt(sub: any, cents: number, paymentId: string, description: string) {
+  const email = sub.customers?.email;
+  if (!email) return;
+  try {
+    const brand = getBrand(sub.brand);
+    const receiptNum = generateReceiptNumber();
+    const data: ReceiptData = {
+      paymentId, receiptNumber: receiptNum, paymentDate: new Date(), customerName: sub.customers?.name || 'Valued Customer', customerEmail: email,
+      lineItems: [{ name: description, quantity: 1, unitPrice: cents, totalPrice: cents }], subtotal: cents, taxAmount: 0, totalAmount: cents, paymentStatus: 'COMPLETED', brandKey: brand.key,
+    };
+    const pdf = await generateReceiptPDF(data);
+    await billingEmail(sub, email, `Payment Confirmation: ${usd(cents / 100)} - ${brand.name}`,
+      `${hi(sub)}<p>Your payment of <b>${usd(cents / 100)}</b> went through. Thank you.</p><p>Receipt #${receiptNum} is attached. This charge appears on your card statement as ${STATEMENT_NAME}.</p>`,
+      [{ filename: getReceiptFilename(data), content: pdf.toString('base64') }]);
+  } catch (e) {
+    console.error('BILLING_RECEIPT_ERROR', e);
+  }
+}
+
 /** Tells the customer what the next charge will be. Sent before any new or different amount. */
 export async function emailUpcomingCharge(sub: any) {
   if (!sub.next_billing_date) return;

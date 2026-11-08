@@ -50,7 +50,12 @@ export async function POST(req: Request) {
   try {
     if (b.action === 'ensure') {
       const found = await load();
-      if (found) return NextResponse.json(view(found));
+      const dueInvoice = s(b.due_invoice, 40) || null;
+      if (found) {
+        // The signing payment's invoice can be created after the billing record.
+        if (dueInvoice && found.due_invoice !== dueInvoice) return NextResponse.json(view(await save({ due_invoice: dueInvoice })));
+        return NextResponse.json(view(found));
+      }
       const name = s(b.customer?.name, 120);
       const email = s(b.customer?.email, 160).toLowerCase();
       const amount = money(b.amount);
@@ -69,7 +74,7 @@ export async function POST(req: Request) {
       const { error } = await supabase.from('subscriptions').insert({
         customer_id: customerId, brand: 'nexa', external_order_id: orderId, card_token: randomBytes(24).toString('base64url'),
         plan_name: s(b.plan_name, 160) || 'Monthly service', service_type: 'Managed Digital Operations', frequency: 'monthly', amount,
-        status: 'awaiting_card', billing_mode: 'auto', next_billing_date: null, reference: s(b.reference, 40) || null, plan_note: s(b.plan_note, 1500) || null,
+        due_invoice: dueInvoice, status: 'awaiting_card', billing_mode: 'auto', next_billing_date: null, reference: s(b.reference, 40) || null, plan_note: s(b.plan_note, 1500) || null,
         return_url: returnUrl.startsWith('https://nexavisiongroup.com/') ? returnUrl : null,
       });
       // Two calls at once: the other one won, which is fine.

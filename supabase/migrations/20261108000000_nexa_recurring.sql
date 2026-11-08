@@ -45,3 +45,6 @@ ALTER TABLE subscriptions
   ADD COLUMN IF NOT EXISTS approved_cents integer,
   ADD COLUMN IF NOT EXISTS approved_for date,
   ADD COLUMN IF NOT EXISTS approval_alerted_for text;
+
+-- The invoice for what's due at signing, paid on the same card form that saves the card.
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS due_invoice text;
