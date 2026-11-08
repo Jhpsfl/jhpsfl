@@ -108,7 +108,8 @@ export async function POST(req: Request) {
     subtotalCents += unit * qty;
     lineItems.push({ id: randomBytes(6).toString('hex'), description: desc, quantity: qty, unit_price: unit / 100, amount: (unit * qty) / 100 });
   }
-  const taxRate = Number(process.env.NEXA_TAX_RATE || 0); // percent; set once the accountant confirms
+  // Store merchandise only. Service proposals charge exactly what the customer signed.
+  const taxRate = isService ? 0 : Number(process.env.NEXA_TAX_RATE || 0); // percent
   // Tax applies to the merchandise only; shipping is a separately stated, untaxed line.
   const taxCents = Math.round(subtotalCents * (taxRate / 100));
   let shipCents = 0;
@@ -164,7 +165,7 @@ export async function POST(req: Request) {
       amount_paid: 0,
       status: 'sent',
       brand: 'nexa',
-      notes: [`Nexa Pro order ${orderId}`, s(b.notes, 800)].filter(Boolean).join('\n'),
+      notes: [isService ? '' : `Nexa Pro order ${orderId}`, s(b.notes, 800)].filter(Boolean).join('\n'),
       payment_link: url,
       sent_at: new Date().toISOString(),
       external_source: 'nexa',
