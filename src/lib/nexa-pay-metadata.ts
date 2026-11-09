@@ -12,6 +12,8 @@ export function nexaPayMetadata(title: string, description: string): Metadata {
     description,
     authors: [{ name: 'NexaVision Group' }],
     creator: 'NexaVision Group',
+    keywords: null,
+    alternates: null,
     openGraph: { title: fullTitle, description, siteName: 'NexaVision Group', type: 'website', url: 'https://pay.nexavisiongroup.com' },
     twitter: { card: 'summary', title: fullTitle, description },
     icons: { icon: [{ url: 'https://nexavisiongroup.com/favicon.ico' }], apple: [] },
