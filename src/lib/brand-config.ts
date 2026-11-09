@@ -168,7 +168,7 @@ const jhps: BrandConfig = {
 const nexa: BrandConfig = {
   key: 'nexa',
   name: 'NexaVision Group',
-  shortName: 'Nexa',
+  shortName: 'NexaVision Group',
   phone: '(864) 301-1806',
   email: 'info@nexavisiongroup.com',
   website: 'www.nexavisiongroup.com',
