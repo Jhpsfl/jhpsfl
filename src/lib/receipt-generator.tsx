@@ -727,6 +727,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
         <View style={{ marginBottom: 20 }} />
 
         <View style={s.totalsWrap} wrap={false}>
+          <View style={s.totalsBlock}>
           <View style={s.totalsRow}>
             <Text style={s.totalsLabel}>Subtotal</Text>
             <Text style={s.totalsVal}>{fmt(data.subtotal)}</Text>
@@ -747,6 +748,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           <View style={[s.grandTotal, { backgroundColor: docColors.primary }]}>
             <Text style={s.grandTotalText}>Amount Due</Text>
             <Text style={s.grandTotalText}>{fmt(data.totalAmount)}</Text>
+          </View>
           </View>
         </View>
 
