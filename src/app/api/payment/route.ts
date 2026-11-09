@@ -1,7 +1,7 @@
 import { Currency, type OrderLineItem } from 'square';
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { squareClient, locationId as sqLocationId, ensureSquareCustomer, storeCardOnFile } from '@/lib/square';
+import { squareClient, locationId as sqLocationId, nexaLocationId, ensureSquareCustomer, storeCardOnFile } from '@/lib/square';
 import { Resend } from 'resend';
 import { brandMail } from '@/lib/brand-mail';
 import { generateReceiptPDF, getReceiptFilename, generateReceiptNumber } from '@/lib/receipt-generator';
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payment amount' }, { status: 400 });
     }
 
-    const locationId = sqLocationId;
+    let locationId = sqLocationId;
     const supabase = createSupabaseAdmin();
 
     // Test payments skip the card entirely, so only a signed-in admin may use them.
@@ -269,6 +269,9 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true, paymentId: testPaymentId, test: true });
     }
+
+    // NexaVision invoices are charged under NexaVision's own Square location.
+    if (invoiceRecord?.brand === 'nexa') locationId = nexaLocationId;
 
     // ─── 2. Create Square Order ───
     let orderId: string | undefined;

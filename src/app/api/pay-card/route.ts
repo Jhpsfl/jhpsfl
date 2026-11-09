@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { createHash } from 'crypto';
-import { Currency, deleteStoredCard, ensureSquareCustomer, locationId, squareClient, storeCardOnFile } from '@/lib/square';
+import { Currency, deleteStoredCard, ensureSquareCustomer, nexaLocationId as locationId, squareClient, storeCardOnFile } from '@/lib/square';
 import { billingEmail, emailFirstPaymentReceipt, staffEmail } from '@/lib/recurring-billing';
 import { balanceCents, checkCharge, loadInvoice, settleInvoice } from '@/lib/invoice-payment';
 import { STATEMENT_NAME, authorizationText, longDate, usd } from '@/lib/recurring-text';

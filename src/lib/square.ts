@@ -10,6 +10,12 @@ export const squareClient = new SquareClient({
 
 export const locationId = process.env.SQUARE_LOCATION_ID?.trim()!;
 
+/** NexaVision Group's own Square location (same account, own name on statements and its own payout account). */
+export const nexaLocationId = process.env.SQUARE_NEXA_LOCATION_ID?.trim() || 'L11ZPC19YWNWY';
+
+/** The Square location a charge for this brand belongs to. */
+export const locationFor = (brand?: string | null) => (brand === 'nexa' ? nexaLocationId : locationId);
+
 /**
  * Get-or-create a Square Customer linked to a Supabase customer row.
  * Returns the Square customer ID.
@@ -97,12 +103,13 @@ export async function chargeStoredCard(
   note?: string,
   buyerEmail?: string,
   idempotencyKey?: string,
+  location: string = locationId,
 ): Promise<{ paymentId: string; receiptUrl: string | null; status: string }> {
   const result = await squareClient.payments.create({
     sourceId: squareCardId,
     idempotencyKey: idempotencyKey || crypto.randomUUID(),
     amountMoney: { amount: BigInt(amountCents), currency: Currency.Usd },
-    locationId,
+    locationId: location,
     customerId: squareCustomerId,
     note: note?.slice(0, 500) || 'JHPS Recurring Payment',
     buyerEmailAddress: buyerEmail || undefined,
