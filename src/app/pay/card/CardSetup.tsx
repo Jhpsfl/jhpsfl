@@ -78,7 +78,8 @@ export default function CardSetup({ token, active, plan, name, email, phone, las
       {active && !saved && <Script src="https://web.squarecdn.com/v1/square.js" onReady={() => setSdk(true)} />}
       <div style={{ maxWidth: 520, margin: '0 auto' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={brand.logo} alt={brand.name} style={{ height: 44, marginBottom: 28 }} />
+        <img src={brand.logo} alt={brand.name} style={{ height: 44, marginBottom: 8 }} />
+        <p style={{ color: c.textSecondary, fontSize: 15, margin: '0 0 24px' }}>{brand.tagline}</p>
         {!active ? (
           <>
             <h1 style={h1}>This link is no longer active</h1>

@@ -412,6 +412,7 @@ function buildReceiptHtml(params: {
             &nbsp;&middot;&nbsp;
             &#9993; <a href="mailto:${brand.email}" style="color:${accentColor};text-decoration:none;">${brand.email}</a>
           </p>
+          ${brand.catchphrase ? `<p style="margin:0 0 4px;color:#888;font-size:12px;"><strong>${brand.tagline}</strong> ${brand.catchphrase}</p>` : ''}
           <p style="margin:0;color:#aaa;font-size:11px;">${brand.serviceArea}</p>
         </td></tr>
       </table>

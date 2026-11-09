@@ -23,7 +23,7 @@ export async function billingEmail(sub: any, to: string | undefined | null, subj
     const { resend, from } = brandMail(brand);
     const { error } = await resend.emails.send({
       from, to: [to], replyTo: brand.email, subject, attachments,
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.55;color:#10211f;max-width:560px;margin:0 auto;padding:12px"><p style="font-size:18px;font-weight:700;margin:0 0 16px">${esc(brand.name)}</p>${html}<p style="margin:24px 0 0;color:#51625f;font-size:14px">${esc(brand.name)} · ${esc(brand.email)}</p></div>`,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.55;color:#10211f;max-width:560px;margin:0 auto;padding:12px"><p style="font-size:18px;font-weight:700;margin:0 0 16px">${esc(brand.name)}</p>${html}<p style="margin:24px 0 0;color:#51625f;font-size:14px">${brand.catchphrase ? `<b>${esc(brand.tagline)}</b> ${esc(brand.catchphrase)}<br>` : ''}${esc(brand.name)} · ${esc(brand.email)}</p></div>`,
     });
     if (error) console.error('BILLING_EMAIL_ERROR', error);
   } catch (e) {

@@ -77,6 +77,8 @@ export interface BrandConfig {
   serviceArea: string;
   /** Tagline / subtitle */
   tagline: string;
+  /** Short line under the motto in customer email */
+  catchphrase?: string;
   /** Path to logo in /public */
   logo: string;
   /** Brand color palette */
@@ -173,7 +175,8 @@ const nexa: BrandConfig = {
   email: 'info@nexavisiongroup.com',
   website: 'www.nexavisiongroup.com',
   serviceArea: 'Serving businesses nationwide',
-  tagline: 'Managed Digital Operations',
+  tagline: 'Empowering Your Digital Ecosystem.',
+  catchphrase: 'We build it. We run it. You run your business.',
   logo: '/nexa-logo.svg',
   colors: {
     bg: '#0A1628',

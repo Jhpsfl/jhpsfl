@@ -235,6 +235,7 @@ export async function sendInvoiceEmail(supabase: Supabase, invoice: any, custome
           &nbsp;·&nbsp;
           ✉️ <a href="mailto:${brand.email}" style="color:${emailAccent};text-decoration:none;">${brand.email}</a>
         </p>
+        ${brand.catchphrase ? `<p style="margin:0 0 4px;color:#888;font-size:12px;"><strong>${brand.tagline}</strong> ${brand.catchphrase}</p>` : ''}
         <p style="margin:0;color:#aaa;font-size:11px;">${brand.serviceArea}</p>
       </div>
     </div>
