@@ -3,9 +3,10 @@ import CardSetup from './CardSetup';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { authorizationText } from '@/lib/recurring-text';
 import { balanceCents, loadInvoice } from '@/lib/invoice-payment';
+import { nexaPayMetadata } from '@/lib/nexa-pay-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Save your card | NexaVision Group', description: 'Automatic monthly billing for NexaVision Group.', robots: { index: false, follow: false } };
+export const metadata: Metadata = nexaPayMetadata('Save your card', 'Automatic monthly billing for NexaVision Group.');
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { t } = await searchParams;

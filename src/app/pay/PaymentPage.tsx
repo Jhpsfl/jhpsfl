@@ -1048,7 +1048,8 @@ export default function PaymentPage() {
         }
 
         @media (max-width: 768px) {
-          .pay-grid { grid-template-columns: 1fr !important; }
+          /* The summary card slides in from the side; without this it widens the page on phones. */
+          .pay-grid { grid-template-columns: 1fr !important; overflow-x: clip; }
           .pay-grid-reverse { display: flex; flex-direction: column-reverse; }
           .summary-card { position: static; }
           .desktop-nav { display: none !important; }
@@ -1515,7 +1516,7 @@ export default function PaymentPage() {
                             </div>
                             <div ref={phoneRef} className={showErrors && !formData.phone ? "field-invalid" : ""}>
                               <label style={labelStyle}>Phone Number *</label>
-                              <input className="pay-input" placeholder="(407) 555-0123" type="tel" value={formData.phone}
+                              <input className="pay-input" placeholder={brand.key === 'jhps' ? "(407) 555-0123" : "(555) 555-0123"} type="tel" value={formData.phone}
                                 onChange={(e) => updateField("phone", e.target.value)} />
                               {showErrors && !formData.phone && <span className="field-error-msg">Phone is required</span>}
                             </div>
@@ -1672,12 +1673,12 @@ export default function PaymentPage() {
                           <div className="form-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
                             <div>
                               <label style={labelStyle}>City</label>
-                              <input className="pay-input" placeholder="Deltona" value={formData.city}
+                              <input className="pay-input" placeholder={brand.key === 'jhps' ? "Deltona" : "City"} value={formData.city}
                                 onChange={(e) => updateField("city", e.target.value)} />
                             </div>
                             <div>
                               <label style={labelStyle}>Zip Code</label>
-                              <input className="pay-input" placeholder="32725" value={formData.zip}
+                              <input className="pay-input" placeholder={brand.key === 'jhps' ? "32725" : "ZIP"} value={formData.zip}
                                 onChange={(e) => updateField("zip", e.target.value)} />
                             </div>
                           </div>
@@ -1750,14 +1751,14 @@ export default function PaymentPage() {
                                 </div>
                                 <div>
                                   <label style={labelStyle}>City</label>
-                                  <input className="pay-input" placeholder="Deltona"
+                                  <input className="pay-input" placeholder={brand.key === 'jhps' ? "Deltona" : "City"}
                                     value={formData.billingCity}
                                     onChange={(e) => updateField("billingCity", e.target.value)}
                                     style={{ borderColor: "rgba(33,150,243,0.25)" }} />
                                 </div>
                                 <div>
                                   <label style={labelStyle}>Zip Code</label>
-                                  <input className="pay-input" placeholder="32725"
+                                  <input className="pay-input" placeholder={brand.key === 'jhps' ? "32725" : "ZIP"}
                                     value={formData.billingZip}
                                     onChange={(e) => updateField("billingZip", e.target.value)}
                                     style={{ borderColor: "rgba(33,150,243,0.25)" }} />
@@ -2031,12 +2032,12 @@ export default function PaymentPage() {
                   {/* Trust signals */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <div className="trust-badge">🔒 Secure payment</div>
-                    <div className="trust-badge">🛡️ Reliable & Insured</div>
-                    <div className="trust-badge">✓ Free estimates available</div>
+                    {brand.key === 'jhps' && <div className="trust-badge">🛡️ Reliable & Insured</div>}
+                    {brand.key === 'jhps' && <div className="trust-badge">✓ Free estimates available</div>}
                   </div>
 
                   {/* Account CTA */}
-                  <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${brand.colors.border}` }}>
+                  {brand.key === 'jhps' && <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${brand.colors.border}` }}>
                     <p style={{ fontSize: 13, color: brand.colors.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
                       Want to track payments, view history & manage subscriptions?
                     </p>
@@ -2045,7 +2046,7 @@ export default function PaymentPage() {
                     }}>
                       Create an Account →
                     </Link>
-                  </div>
+                  </div>}
 
                   {/* Help */}
                   <div style={{ marginTop: 20, textAlign: "center" }}>
