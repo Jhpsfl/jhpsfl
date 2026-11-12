@@ -347,11 +347,12 @@ export async function POST(req: NextRequest) {
   let body_text: string | null = null;
   let in_reply_to: string | null = null;
   let original_message_id: string | null = null;
-  let inboundAttachments: Array<{ filename: string; content_type: string; content: string }> = [];
+  let inboundAttachments: Array<{ filename: string; content_type: string; content?: string; download_url?: string }> = [];
+  const resendAuth = { Authorization: `Bearer ${process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY}` };
 
   try {
     const resp = await fetch(`https://api.resend.com/emails/receiving/${email_id}`, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY}` },
+      headers: resendAuth,
     });
     if (resp.ok) {
       const full = await resp.json();
@@ -365,8 +366,16 @@ export async function POST(req: NextRequest) {
       // Capture original Message-ID for reply threading (needed for Yelp reply-by-email)
       original_message_id = headers['message-id'] || headers['Message-ID'] || headers['Message-Id'] || null;
       // Extract attachments if present
-      if (full.attachments && Array.isArray(full.attachments)) {
+      // The email only lists its attachments. The files come from a separate call, as short-lived download links.
+      if (Array.isArray(full.attachments) && full.attachments.length > 0) {
         inboundAttachments = full.attachments;
+        const ar = await fetch(`https://api.resend.com/emails/receiving/${email_id}/attachments`, { headers: resendAuth });
+        if (ar.ok) {
+          const aj = await ar.json();
+          if (Array.isArray(aj.data) && aj.data.length > 0) inboundAttachments = aj.data;
+        } else {
+          console.error('INBOUND_ATTACHMENTS_LIST', ar.status, (await ar.text()).slice(0, 300));
+        }
       }
     }
   } catch (err) {
@@ -473,13 +482,23 @@ export async function POST(req: NextRequest) {
     folder: emailFolder,
     read: markRead,
     has_attachments: inboundAttachments.length > 0,
+    resend_message_id: email_id,
   });
 
   // Save inbound attachments to S3 + database
   if (logged && inboundAttachments.length > 0) {
     for (const att of inboundAttachments) {
       try {
-        const buf = Buffer.from(att.content, 'base64');
+        let buf: Buffer;
+        if (att.content) {
+          buf = Buffer.from(att.content, 'base64');
+        } else if (att.download_url) {
+          const fr = await fetch(att.download_url);
+          if (!fr.ok) throw new Error(`download ${fr.status}`);
+          buf = Buffer.from(await fr.arrayBuffer());
+        } else {
+          throw new Error('no content or download link');
+        }
         const { s3_key, s3_url } = await uploadToS3(buf, att.filename, att.content_type || 'application/octet-stream');
         await supabase.from('email_attachments').insert({
           message_id: logged.id,
