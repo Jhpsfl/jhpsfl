@@ -105,6 +105,22 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 const cleanPreview = (s: string) => (s || "").replace(/\[image:[^\]]*\]/gi, " ").replace(/\s+/g, " ").trim();
 const snippet = (m: Message) => cleanPreview(m.body_text || (m.body_html || "").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).slice(0, 140);
 
+/** The quoted history a reply carries ("On … wrote:" + the earlier messages). Hidden by default, like Gmail. */
+const QUOTE_HTML = /class=["'][^"']*(gmail_quote|yahoo_quoted|moz-cite-prefix)|type=["']cite["']|id=["'](divRplyFwdMsg|appendonsend)["']/i;
+const QUOTE_TEXT = /\n\s*(On .{4,200}wrote:|-{2,}\s*Original Message\s*-{2,}|From: .+\n(Sent|Date): )/i;
+function stripQuotedText(t: string): string {
+  const m = t.match(QUOTE_TEXT);
+  let out = m && m.index !== undefined ? t.slice(0, m.index) : t;
+  const lines = out.split("\n");
+  // drop a trailing run of "> quoted" lines
+  let cut = lines.length;
+  while (cut > 0 && (!lines[cut - 1].trim() || lines[cut - 1].startsWith(">"))) cut--;
+  if (lines.slice(cut).some((l) => l.startsWith(">"))) out = lines.slice(0, cut).join("\n");
+  return out.trimEnd();
+}
+const hasQuoted = (m: { body_html: string | null; body_text: string | null }) =>
+  m.body_html ? QUOTE_HTML.test(m.body_html) : stripQuotedText(m.body_text || "") !== (m.body_text || "").trimEnd();
+
 /** Plain-text email bodies with tappable links */
 function Linkified({ text }: { text: string }) {
   const parts = text.split(/((?:https?:\/\/|www\.)[^\s<>"']+)/gi);
@@ -247,6 +263,10 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
 
   // thread view
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** newest message first; the older ones stay folded under "N earlier messages" until tapped */
+  const [showAllMsgs, setShowAllMsgs] = useState(false);
+  /** messages whose quoted history (the "On … wrote:" part) is shown */
+  const [quotesShown, setQuotesShown] = useState<Set<string>>(new Set());
   const [details, setDetails] = useState<Set<string>>(new Set());
   const [originalColors, setOriginalColors] = useState<Set<string>>(new Set());
   const [msgMenu, setMsgMenu] = useState<Message | null>(null);
@@ -467,7 +487,7 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
     setSelectedThread(thread);
     selectedRef.current = thread;
     setLead(null);
-    setExpanded(new Set()); setDetails(new Set()); setOriginalColors(new Set());
+    setExpanded(new Set()); setDetails(new Set()); setOriginalColors(new Set()); setShowAllMsgs(false); setQuotesShown(new Set());
     goToView("thread");
     setThreadError(null);
     const key = `inbox:thread:${thread.thread_id}:${activeAccount?.email || "all"}`;
@@ -511,14 +531,10 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
       setLoadingThread(false);
     }
   };
-  // a long conversation opens at its newest message
+  // a conversation opens at the top (the newest message is first)
   useEffect(() => {
-    if (view !== "thread" || messages.length < 2) return;
-    const sc = scrollerRef.current;
-    const el = sc?.querySelector<HTMLElement>("[data-last-message]");
-    if (sc && el) sc.scrollTop += el.getBoundingClientRect().top - sc.getBoundingClientRect().top - 4;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, view]);
+    if (view === "thread" && scrollerRef.current) scrollerRef.current.scrollTop = 0;
+  }, [selectedThread?.thread_id, view]);
 
   // ── Thread actions: tell the server at once, update the screen optimistically, re-sync afterwards.
   //    Undo waits for the original request to finish so it can never overtake it (a slow "trash" landing
@@ -1254,14 +1270,22 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
           <div className="px-3 pb-6 space-y-2.5">
             {loadingThread && !messages.length ? (
               <div className="flex justify-center py-16"><Loader2 size={24} className="text-jh-accent animate-spin" /></div>
-            ) : messages.map((msg, i) => {
+            ) : (() => {
+              const ordered = [...messages].reverse();
+              const visible = showAllMsgs ? ordered : ordered.filter((m, i) => i === 0 || !m.read);
+              const hidden = ordered.length - visible.length;
+              return (<>{visible.map((msg) => {
+              const i = messages.indexOf(msg);
               const open = expanded.has(msg.id);
               const isLast = i === messages.length - 1;
+              const hasQuote = hasQuoted(msg);
+              const showQuote = quotesShown.has(msg.id);
+              const toggleQuote = () => setQuotesShown(prev => { const nx = new Set(prev); if (nx.has(msg.id)) nx.delete(msg.id); else nx.add(msg.id); return nx; });
               const who = msg.from_email;
               const name = msg.direction === "outbound" ? (accountName(who) || senderLabel(who)) : (msg.from_name || t.customer_name || t.counterparty_name || senderLabel(who));
               const toLabel = msg.direction === "outbound" ? msg.to_email : (accountByEmail.has(msg.to_email.toLowerCase()) || !activeAccount ? msg.to_email : "me");
               return (
-                <div key={msg.id} data-last-message={isLast ? "" : undefined} className={cn("bg-jh-deep/50 rounded-2xl", open ? "" : "opacity-90")}>
+                <div key={msg.id} className={cn("bg-jh-deep/50 rounded-2xl", open ? "" : "opacity-90")}>
                   {/* Header: tap to open/close */}
                   <div role="button" tabIndex={0} onClick={() => toggleExpand(msg.id)} onKeyDown={(e) => e.key === "Enter" && toggleExpand(msg.id)}
                     className="flex items-center gap-3 px-3.5 py-3 cursor-pointer select-none">
@@ -1301,9 +1325,13 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
                   {open && (
                     <div className="px-2 pb-2">
                       {msg.body_html ? (
-                        <div className="rounded-xl overflow-hidden"><EmailBody html={msg.body_html} dark={!light} original={originalColors.has(msg.id)} /></div>
+                        <div className="rounded-xl overflow-hidden"><EmailBody html={msg.body_html} dark={!light} original={originalColors.has(msg.id)} hideQuotes={!showQuote} /></div>
                       ) : (
-                        <pre className="px-2 py-1 text-[15px] text-jh-text-secondary whitespace-pre-wrap break-words font-body leading-relaxed"><Linkified text={msg.body_text || "(no content)"} /></pre>
+                        <pre className="px-2 py-1 text-[15px] text-jh-text-secondary whitespace-pre-wrap break-words font-body leading-relaxed"><Linkified text={(showQuote ? msg.body_text : stripQuotedText(msg.body_text || "")) || "(no content)"} /></pre>
+                      )}
+                      {hasQuote && (
+                        <button onClick={toggleQuote} aria-label={showQuote ? "Hide quoted text" : "Show quoted text"} title={showQuote ? "Hide quoted text" : "Show quoted text"}
+                          className="mt-1 ml-1 px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-jh-text-muted text-sm font-bold leading-none tracking-widest hover:text-jh-accent">•••</button>
                       )}
                       {msg.attachments?.length > 0 && (
                         <div className="mt-2 px-1">
@@ -1332,6 +1360,14 @@ export default function AdminInbox({ backRef, onNavigate, onExit, initialThreadI
                 </div>
               );
             })}
+            {hidden > 0 && (
+              <button onClick={() => setShowAllMsgs(true)} className="w-full flex items-center gap-3 py-2">
+                <span className="flex-1 h-px bg-white/10" />
+                <span className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-jh-text-secondary">{hidden} earlier message{hidden === 1 ? "" : "s"}</span>
+                <span className="flex-1 h-px bg-white/10" />
+              </button>
+            )}</>);
+            })()}
           </div>
         </div>
 

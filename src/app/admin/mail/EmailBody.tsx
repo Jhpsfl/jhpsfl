@@ -15,7 +15,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * A document is never shorter than its viewport, so measuring scrollHeight and feeding it back as the frame
  * height grows forever ("ever-expanding page" bug).
  */
-type Props = { html: string; dark: boolean; original?: boolean; className?: string };
+type Props = { html: string; dark: boolean; original?: boolean; className?: string; hideQuotes?: boolean };
+
+/** hides a reply's quoted history (Gmail, Apple Mail, Yahoo, Thunderbird, Outlook) */
+const HIDE_QUOTES_CSS = `.gmail_quote,.gmail_quote_container,blockquote[type="cite"],.yahoo_quoted,.moz-cite-prefix,.moz-cite-prefix~blockquote,#divRplyFwdMsg,#divRplyFwdMsg~*,#appendonsend,#appendonsend~*{display:none!important}`;
 
 const BASE_CSS = `
 html,body{margin:0;padding:0;height:auto!important;min-height:0!important;max-height:none!important}
@@ -50,11 +53,11 @@ function buildDoc(html: string, css: string) {
 
 type ZoomBody = HTMLElement & { style: CSSStyleDeclaration & { zoom?: string } };
 
-export default function EmailBody({ html, dark, original, className }: Props) {
+export default function EmailBody({ html, dark, original, className, hideQuotes }: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(140);
   const [zoomed, setZoomed] = useState(false);
-  const doc = useMemo(() => buildDoc(html, dark && !original ? DARK_INVERT_CSS : LIGHT_CSS), [html, dark, original]);
+  const doc = useMemo(() => buildDoc(html, (dark && !original ? DARK_INVERT_CSS : LIGHT_CSS) + (hideQuotes ? HIDE_QUOTES_CSS : "")), [html, dark, original, hideQuotes]);
 
   useEffect(() => {
     const frame = ref.current;
