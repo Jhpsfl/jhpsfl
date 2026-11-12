@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { randomUUID } from 'crypto';
+import { uploadToS3, isAttachmentKey } from '@/lib/s3';
+import { getSignedViewUrl } from '@/lib/b2Storage';
 
-const s3 = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+async function isAdmin() {
+  const { userId } = await auth();
+  if (!userId) return false;
+  const { data } = await createSupabaseAdmin().from('admin_users').select('id').eq('clerk_user_id', userId).maybeSingle();
+  return !!data;
+}
 
-const BUCKET = process.env.AWS_S3_BUCKET || 'jhpsfl-uploads';
+// GET ?key=…: admins only; opens the stored file through a short-lived link.
+export async function GET(req: NextRequest) {
+  if (!(await isAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const key = req.nextUrl.searchParams.get('key') || '';
+  if (!isAttachmentKey(key)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return NextResponse.redirect(await getSignedViewUrl(key, 600), 302);
+}
 
-// POST: Upload attachment to S3
+// POST: Upload attachment
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,23 +38,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 });
   }
 
-  const ext = file.name.split('.').pop() || 'bin';
-  const s3Key = `email-attachments/${randomUUID()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-
+  let s3Key: string;
+  let s3Url: string;
   try {
-    await s3.send(new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: s3Key,
-      Body: buffer,
-      ContentType: file.type || 'application/octet-stream',
-    }));
+    ({ s3_key: s3Key, s3_url: s3Url } = await uploadToS3(buffer, file.name, file.type || 'application/octet-stream'));
   } catch (err) {
-    console.error('S3 upload error:', err);
+    console.error('Attachment upload error:', err);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
-
-  const s3Url = `https://${BUCKET}.s3.amazonaws.com/${s3Key}`;
 
   return NextResponse.json({
     attachment: {

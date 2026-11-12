@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createSupabaseAdmin } from '@/lib/supabase';
 import { logEmail, buildReplyHtml } from '@/lib/email';
+import { attachmentSendUrl } from '@/lib/s3';
 import { auth } from '@clerk/nextjs/server';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
@@ -54,8 +55,8 @@ export async function POST(req: NextRequest) {
   // Build Resend attachments from S3 URLs
   const resendAttachments: Array<{ filename: string; path: string }> = [];
   if (attachments?.length) {
-    for (const att of attachments as Array<{ filename: string; s3_url: string }>) {
-      resendAttachments.push({ filename: att.filename, path: att.s3_url });
+    for (const att of attachments as Array<{ filename: string; s3_key?: string; s3_url: string }>) {
+      resendAttachments.push({ filename: att.filename, path: await attachmentSendUrl(att) });
     }
   }
 

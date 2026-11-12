@@ -482,7 +482,6 @@ export async function POST(req: NextRequest) {
     folder: emailFolder,
     read: markRead,
     has_attachments: inboundAttachments.length > 0,
-    resend_message_id: email_id,
   });
 
   // Save inbound attachments to S3 + database

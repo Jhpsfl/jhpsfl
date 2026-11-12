@@ -1,30 +1,28 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import { getSignedViewUrl, uploadToB2 } from '@/lib/b2Storage';
 
-const s3 = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+/**
+ * Email and quote attachments live in Backblaze B2 (private), like video quotes.
+ * Production has no AWS keys, so the old S3 bucket never stored anything.
+ * The names stay s3_* because the email_attachments columns use them.
+ */
 
-const BUCKET = process.env.AWS_S3_BUCKET || 'jhpsfl-uploads';
+const KEY_PREFIX = 'email-attachments/';
 
-/** Upload a buffer to S3 and return { s3_key, s3_url } */
+/** Admin-only link the inbox uses to show or download a file. */
+export const attachmentViewPath = (key: string) => `/api/email/attachments?key=${encodeURIComponent(key)}`;
+
+export const isAttachmentKey = (key: string) => key.startsWith(KEY_PREFIX) && !key.includes('..');
+
+/** Upload a buffer and return { s3_key, s3_url } */
 export async function uploadToS3(buffer: Buffer, filename: string, contentType: string): Promise<{ s3_key: string; s3_url: string }> {
-  const ext = filename.split('.').pop() || 'bin';
-  const s3Key = `email-attachments/${randomUUID()}.${ext}`;
+  const ext = (filename.split('.').pop() || 'bin').replace(/[^\w]/g, '').slice(0, 10) || 'bin';
+  const s3Key = `${KEY_PREFIX}${randomUUID()}.${ext}`;
+  await uploadToB2(buffer, s3Key, contentType);
+  return { s3_key: s3Key, s3_url: attachmentViewPath(s3Key) };
+}
 
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
-    Key: s3Key,
-    Body: buffer,
-    ContentType: contentType,
-  }));
-
-  return {
-    s3_key: s3Key,
-    s3_url: `https://${BUCKET}.s3.amazonaws.com/${s3Key}`,
-  };
+/** Short-lived public link, so Resend can fetch a file when sending an email. */
+export async function attachmentSendUrl(att: { s3_key?: string; s3_url: string }): Promise<string> {
+  return att.s3_key && isAttachmentKey(att.s3_key) ? getSignedViewUrl(att.s3_key, 3600) : att.s3_url;
 }
