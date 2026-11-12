@@ -31,6 +31,7 @@
     "@vercel/analytics": "^1.6.1",
     "google-auth-library": "^10.6.1",
     "groq-sdk": "^0.37.0",
+    "lucide-react": "^1.72.0",
     "next": "16.1.6",
     "next-sanity": "^11.6.12",
     "nodemailer": "^8.0.3",

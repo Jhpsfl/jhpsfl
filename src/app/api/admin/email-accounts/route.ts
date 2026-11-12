@@ -63,10 +63,15 @@ export async function PATCH(req: NextRequest) {
   const { data: admin } = await supabase.from('admin_users').select('id').eq('clerk_user_id', userId).single();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { id, display_name, color, initials } = await req.json();
+  const { id, display_name, color, initials, is_default } = await req.json();
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | boolean> = {};
+  if (is_default === true) {
+    // one default mailbox: clear the others first
+    await supabase.from('email_accounts').update({ is_default: false }).neq('id', id);
+    updates.is_default = true;
+  }
   if (display_name !== undefined) updates.display_name = display_name;
   if (color !== undefined) updates.color = color;
   if (initials !== undefined) updates.initials = initials.toUpperCase().slice(0, 2);

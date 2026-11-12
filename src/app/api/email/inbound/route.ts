@@ -6,6 +6,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 import { sendPushToAllAdmins } from '@/lib/pushNotify';
 import { uploadToS3 } from '@/lib/s3';
 import { checkSpam, groqSpamCheck } from '@/lib/spam-filter';
+import { fileFolder } from '@/lib/email-rules';
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
@@ -446,10 +447,28 @@ export async function POST(req: NextRequest) {
   const isYelp = from_email.endsWith('@yelp.com') || from_email.endsWith('@messaging.yelp.com');
 
   // ── Spam filter (rule-based, free, instant) ──
-  let emailFolder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'yelp' | undefined = isYelp ? 'yelp' : undefined;
+  let emailFolder: string | undefined = isYelp ? 'yelp' : undefined;
   let markRead = isYelp ? true : undefined;
 
-  if (!isYelp && !threadId) {
+  // Folders & filters / blocked senders (set in the mail client). A blocked sender always goes to Spam;
+  // a filter files the mail into its folder; folders with alerts off are filed quietly.
+  let ruleNotify = true;
+  let ruleMatched = false;
+  if (!isYelp) {
+    try {
+      const rule = await fileFolder(from_email, subjectStr);
+      if (rule.folder) {
+        ruleMatched = true;
+        emailFolder = rule.folder;
+        ruleNotify = rule.notify;
+        if (rule.folder === 'spam' || rule.folder === 'trash') markRead = true;
+      }
+    } catch (err) {
+      console.error('INBOUND_RULES', err);
+    }
+  }
+
+  if (!isYelp && !threadId && !ruleMatched) {
     // Only check new threads from non-Yelp senders (existing threads are trusted)
     const spam = checkSpam({ from_email, to_email, subject: subjectStr, body_text, body_html });
     if (spam.isSpam) {
@@ -514,8 +533,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Send push notification to all admins (skip for spam)
-  if (emailFolder === 'spam') {
-    // Silent — no notification for spam
+  if (emailFolder === 'spam' || emailFolder === 'trash' || !ruleNotify) {
+    // Silent — no notification for spam, trash or a folder with alerts off
   } else if (isYelp) {
     const isNewLead = subjectStr.includes('new lead on Yelp');
     await sendPushToAllAdmins({
@@ -527,7 +546,7 @@ export async function POST(req: NextRequest) {
     await sendPushToAllAdmins({
       title: '✉️ New Email',
       body: `From: ${from_email}`,
-      url: '/admin?tab=messages',
+      url: logged?.thread_id ? `/admin?tab=messages&thread=${logged.thread_id}` : '/admin?tab=messages',
     });
   }
 

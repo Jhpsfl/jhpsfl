@@ -14,10 +14,15 @@ export const attachmentViewPath = (key: string) => `/api/email/attachments?key=$
 
 export const isAttachmentKey = (key: string) => key.startsWith(KEY_PREFIX) && !key.includes('..');
 
+/** A new storage key for a file: email-attachments/<uuid>.<ext> */
+export function newAttachmentKey(filename: string): string {
+  const ext = (filename.split('.').pop() || 'bin').replace(/[^\w]/g, '').slice(0, 10) || 'bin';
+  return `${KEY_PREFIX}${randomUUID()}.${ext}`;
+}
+
 /** Upload a buffer and return { s3_key, s3_url } */
 export async function uploadToS3(buffer: Buffer, filename: string, contentType: string): Promise<{ s3_key: string; s3_url: string }> {
-  const ext = (filename.split('.').pop() || 'bin').replace(/[^\w]/g, '').slice(0, 10) || 'bin';
-  const s3Key = `${KEY_PREFIX}${randomUUID()}.${ext}`;
+  const s3Key = newAttachmentKey(filename);
   await uploadToB2(buffer, s3Key, contentType);
   return { s3_key: s3Key, s3_url: attachmentViewPath(s3Key) };
 }

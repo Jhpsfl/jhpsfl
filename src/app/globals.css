@@ -24,3 +24,93 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ═══════════════════════════════════════════════════
+   JHPS Mail (admin inbox, AdminInbox.tsx)
+   Colour tokens for the mail client's utility classes (bg-jh-void, text-jh-accent, …).
+   ═══════════════════════════════════════════════════ */
+@theme {
+  --color-jh-void: #050e05;
+  --color-jh-abyss: #081408;
+  --color-jh-deep: #0e1c0e;
+  --color-jh-slate: #152915;
+  --color-jh-accent: #4CAF50;
+  --color-jh-text-primary: #e8f5e8;
+  --color-jh-text-secondary: #c8e0c8;
+  --color-jh-text-muted: #8fb58f;
+  --color-jh-warning: #FFB74D;
+  --color-jh-error: #ef5350;
+  --font-display: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --shadow-jh-glow-sm: 0 0 10px rgba(76, 175, 80, 0.2);
+  --shadow-jh-glow: 0 0 20px rgba(76, 175, 80, 0.22), 0 0 40px rgba(76, 175, 80, 0.1);
+  --animate-jh-fade-up: jh-fade-up .22s ease-out both;
+  --animate-jh-slide-in-left: jh-slide-in-left .22s ease-out both;
+  @keyframes jh-fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes jh-slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+}
+
+.jh-mail { font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+:where(.jh-mail button, .jh-mail [role="button"]) { -webkit-tap-highlight-color: transparent; text-align: inherit; }
+:where(.jh-mail select option) { color: #10200f; background: #fff; }
+:where(.jh-mail textarea) { resize: none; }
+.jh-gradient-text { background-image: linear-gradient(90deg, #81C784, #4CAF50); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* backdrop: deep green with soft glows */
+.jh-mail > .bg-jh-void, .jh-mail > .fixed.bg-jh-void {
+  background-color: #061006 !important;
+  background-image:
+    radial-gradient(900px 600px at 0% -10%, rgba(76,175,80,.13), transparent 60%),
+    radial-gradient(700px 500px at 110% 110%, rgba(46,125,50,.14), transparent 60%) !important;
+}
+.jh-mail .bg-jh-void:not(.fixed) { background-color: rgba(6,16,6,.8) !important; }
+.jh-mail .border-white\/\[0\.04\] { border-color: rgba(255,255,255,.10) !important; }
+.jh-mail .border-white\/5 { border-color: rgba(255,255,255,.12) !important; }
+.jh-mail .border-white\/10 { border-color: rgba(255,255,255,.16) !important; }
+.jh-mail [data-thread] { border-bottom: 1px solid rgba(255,255,255,.08); }
+
+/* ── light mode: the components keep their dark classes; this scope re-colours them ── */
+.jh-light { color-scheme: light; }
+.jh-mail.jh-light > .bg-jh-void, .jh-mail.jh-light > .fixed.bg-jh-void {
+  background-color: #f1f7f0 !important;
+  background-image:
+    radial-gradient(900px 600px at 0% -10%, rgba(76,175,80,.14), transparent 60%),
+    radial-gradient(700px 500px at 110% 110%, rgba(46,125,50,.10), transparent 60%) !important;
+}
+.jh-light .bg-jh-void:not(.fixed) { background-color: rgba(250,253,249,.88) !important; }
+.jh-light .bg-jh-abyss, .jh-light .bg-jh-deep { background-color: #ffffff !important; }
+.jh-light .bg-jh-deep\/50 { background-color: #ffffff !important; box-shadow: 0 1px 2px rgba(16, 40, 16, .07); }
+.jh-light .bg-jh-void\/60 { background-color: #f1f7f0 !important; }
+.jh-light .hover\:bg-jh-slate:hover { background-color: #e4efe2 !important; }
+.jh-light .bg-white\/5, .jh-light .bg-white\/\[0\.03\] { background-color: rgba(16, 40, 16, .05) !important; }
+.jh-light .hover\:bg-white\/5:hover, .jh-light .hover\:bg-white\/\[0\.03\]:hover, .jh-light .active\:bg-white\/5:active, .jh-light .active\:bg-white\/\[0\.03\]:active { background-color: rgba(16, 40, 16, .07) !important; }
+.jh-light .bg-white\/15 { background-color: rgba(16, 40, 16, .18) !important; }
+.jh-light .bg-jh-accent\/5, .jh-light .bg-jh-accent\/\[0\.02\] { background-color: rgba(46, 125, 50, .07) !important; }
+.jh-light .bg-jh-accent\/10 { background-color: rgba(46, 125, 50, .12) !important; }
+.jh-light .bg-jh-accent\/15 { background-color: rgba(46, 125, 50, .14) !important; }
+.jh-light .bg-jh-accent\/20 { background-color: rgba(46, 125, 50, .18) !important; }
+.jh-light .bg-black\/50, .jh-light .bg-black\/60 { background-color: rgba(16, 40, 16, .35) !important; }
+.jh-light .border-white\/5, .jh-light .border-white\/\[0\.04\] { border-color: rgba(16, 40, 16, .10) !important; }
+.jh-light .border-white\/10 { border-color: rgba(16, 40, 16, .15) !important; }
+.jh-light .hover\:border-white\/30:hover { border-color: rgba(16, 40, 16, .3) !important; }
+.jh-light .border-white { border-color: #10200f !important; }
+.jh-light [data-thread] { border-bottom-color: rgba(16, 40, 16, .10); }
+.jh-light .text-jh-text-primary, .jh-light .hover\:text-jh-text-primary:hover { color: #10200f !important; }
+.jh-light .text-jh-text-secondary { color: #33503a !important; }
+.jh-light .text-jh-text-muted, .jh-light .placeholder\:text-jh-text-muted::placeholder { color: #557259 !important; }
+.jh-light .text-jh-text-muted\/30 { color: rgba(85, 114, 89, .35) !important; }
+.jh-light .text-jh-text-muted\/40 { color: rgba(85, 114, 89, .45) !important; }
+.jh-light .text-jh-text-muted\/50 { color: rgba(85, 114, 89, .55) !important; }
+.jh-light .text-jh-text-muted\/70 { color: rgba(85, 114, 89, .8) !important; }
+.jh-light .text-jh-accent, .jh-light .hover\:text-jh-accent:hover { color: #2E7D32 !important; }
+.jh-light .bg-jh-accent { background-color: #2E7D32 !important; }
+.jh-light .text-jh-abyss { color: #ffffff !important; }
+.jh-light .border-jh-accent, .jh-light .border-jh-accent\/20, .jh-light .border-jh-accent\/30, .jh-light .focus\:border-jh-accent\/50:focus { border-color: rgba(46, 125, 50, .4) !important; }
+.jh-light .shadow-jh-glow, .jh-light .shadow-jh-glow-sm { box-shadow: 0 6px 20px rgba(16, 40, 16, .12) !important; }
+.jh-light .jh-gradient-text { background-image: linear-gradient(90deg, #2E7D32, #388E3C) !important; }
+.jh-light .text-jh-warning { color: #a3621c !important; }
+.jh-light .text-jh-error, .jh-light .hover\:text-jh-error:hover { color: #c62828 !important; }
+.jh-light .bg-jh-warning\/15 { background-color: rgba(163, 98, 28, .12) !important; }
+.jh-light .bg-jh-error\/20 { background-color: rgba(198, 40, 40, .12) !important; }
+.jh-light .bg-jh-deep\/50 pre, .jh-light .bg-jh-deep\/50 .text-jh-text-secondary { color: #23372a !important; }
+.jh-light .fill-jh-warning { fill: #a3621c !important; }

@@ -210,6 +210,19 @@ export default function AdminDashboard() {
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
+  const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
+
+  // Deep link from a phone alert: /admin?tab=messages&thread=<id> (also ?tab=yelp_leads etc.)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const tab = p.get("tab") as Tab | null;
+    const TABS: Tab[] = ["overview", "customers", "jobs", "payments", "subscriptions", "video_leads", "yelp_leads", "messages", "invoices", "quotes", "analytics", "settings"];
+    if (!tab || !TABS.includes(tab)) return;
+    if (tab === "messages") setPendingThreadId(p.get("thread"));
+    setActiveTab(tab);
+    tabHistoryRef.current = tab === "overview" ? ["overview"] : ["overview", tab];
+    try { window.history.replaceState(window.history.state, "", "/admin"); } catch { /* ignore */ }
+  }, []);
   const [pendingInvoiceCustomerId, setPendingInvoiceCustomerId] = useState<string | null>(null);
   const [pendingQuoteId, setPendingQuoteId] = useState<string | null>(null);
 
@@ -1960,7 +1973,7 @@ export default function AdminDashboard() {
 
                     {/* ─── MESSAGES TAB ─── */}
                     {activeTab === "messages" && userId && (
-                      <AdminInbox userId={userId} backRef={inboxBackRef} onNavigate={pushSentinel} />
+                      <AdminInbox backRef={inboxBackRef} onNavigate={pushSentinel} onExit={() => switchTab("overview")} initialThreadId={pendingThreadId} onInitialThreadConsumed={() => setPendingThreadId(null)} />
                     )}
 
                     {/* ─── INVOICES TAB ─── */}

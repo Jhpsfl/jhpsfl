@@ -1,7 +1,8 @@
 import { createSupabaseAdmin } from './supabase';
 
 // ── Types ──────────────────────────────────────────────────────
-export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'yelp';
+/** system folders, or the key of a custom folder from Folders & filters */
+export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'yelp' | (string & {});
 
 export interface EmailMessage {
   id: string;

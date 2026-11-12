@@ -23,8 +23,10 @@ export async function POST(req: NextRequest) {
     reply_html,
     lead_id,
     attachments,
+    cc_emails,
     from_email: fromEmail,
   } = body;
+  const ccList: string[] = Array.isArray(cc_emails) ? cc_emails.filter((e: unknown) => typeof e === 'string' && e.includes('@')) : [];
 
   const senderEmail = fromEmail || 'info@jhpsfl.com';
 
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest) {
         'References': inReplyToHeader,
       };
     }
+    if (ccList.length) sendParams.cc = ccList;
     if (resendAttachments.length) sendParams.attachments = resendAttachments;
 
     const { data, error } = await r.emails.send(sendParams);
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest) {
     resend_message_id: resendMessageId,
     folder: 'sent',
     has_attachments: resendAttachments.length > 0,
+    cc_emails: ccList,
   });
 
   // Log attachments
