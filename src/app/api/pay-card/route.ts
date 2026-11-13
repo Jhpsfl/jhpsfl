@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { Currency, deleteStoredCard, ensureSquareCustomer, nexaLocationId as locationId, squareClient, storeCardOnFile } from '@/lib/square';
 import { billingEmail, emailFirstPaymentReceipt, staffEmail } from '@/lib/recurring-billing';
 import { balanceCents, checkCharge, loadInvoice, settleInvoice } from '@/lib/invoice-payment';
-import { STATEMENT_NAME, authorizationText, longDate, usd } from '@/lib/recurring-text';
+import { STATEMENT_NAME, authorizationText, creditAuthorizationText, isCreditWallet, longDate, usd } from '@/lib/recurring-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     square_card_id: card.cardId, card_brand: card.brand || null, card_last4: card.last4 || null, status,
     card_authorized_at: now,
     card_auth: {
-      at: now, text: authorizationText(sub, dueCents), paid_today_cents: dueCents,
+      at: now, text: isCreditWallet(sub) ? creditAuthorizationText() : authorizationText(sub, dueCents), paid_today_cents: dueCents,
       ip: req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
       user_agent: (req.headers.get('user-agent') || '').slice(0, 300),
     },
@@ -114,6 +114,13 @@ export async function POST(req: Request) {
   }
 
   const name = sub.customers?.name || sub.plan_name;
+  if (isCreditWallet(sub)) {
+    await billingEmail(sub, staffEmail(sub), `Card ${firstTime ? 'saved' : 'updated'} for AI credit: ${name}`,
+      `<p><b>${name}</b> ${firstTime ? 'saved' : 'updated'} a card (ending ${card.last4 || ''}) for AI credit top-ups (${sub.plan_name}).</p>`);
+    await billingEmail(sub, sub.customers?.email, 'Your card is saved for AI credit',
+      `<p>Your card ending in ${card.last4 || ''} is saved. Nothing was charged. It is charged only when credit is added in your app, and you get a receipt each time.</p><p>Charges appear on your card statement as ${STATEMENT_NAME}.</p>`);
+    return NextResponse.json({ saved: true, last4: card.last4 || '', paidCents: dueCents });
+  }
   await billingEmail(sub, staffEmail(sub), `Card ${firstTime ? 'saved' : 'updated'}: ${name}`,
     `<p><b>${name}</b> ${firstTime ? 'saved' : 'updated'} their card (ending ${card.last4 || ''}) for automatic billing.</p><p>${sub.next_billing_date ? `Next charge: ${longDate(sub.next_billing_date)}.` : 'No charge date is set yet. Set the first charge date on their proposal when monthly service starts.'}</p>`);
   await billingEmail(sub, sub.customers?.email, 'Your card is saved for automatic billing',

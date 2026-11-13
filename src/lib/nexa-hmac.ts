@@ -28,3 +28,25 @@ export async function verifyNexaSignature(message: string, ts: string | null, si
   const got = Buffer.from(sig);
   return want.length === got.length && timingSafeEqual(want, got);
 }
+
+/**
+ * Client apps running the Nexa AI module (prepaid AI credit) sign with their OWN key,
+ * never the master one above, so one client can only ever reach its own wallet.
+ * Keys live in app_secrets as NEXA_CREDIT_KEY:<client>.
+ */
+const clientCache = new Map<string, { v: string; at: number }>();
+export async function verifyClientSignature(client: string, message: string, ts: string | null, sig: string | null) {
+  if (!/^[a-z0-9-]{2,24}$/.test(client) || !ts || !sig) return false;
+  let hit = clientCache.get(client);
+  if (!hit || Date.now() - hit.at > 5 * 60_000) {
+    const { data } = await createSupabaseAdmin().from('app_secrets').select('value').eq('key', `NEXA_CREDIT_KEY:${client}`).maybeSingle();
+    if (!data?.value) return false;
+    hit = { v: data.value, at: Date.now() };
+    clientCache.set(client, hit);
+  }
+  const age = Math.abs(Date.now() / 1000 - Number(ts));
+  if (!Number.isFinite(age) || age > 300) return false;
+  const want = Buffer.from('sha256=' + createHmac('sha256', hit.v).update(`${ts}.${message}`).digest('hex'));
+  const got = Buffer.from(sig);
+  return want.length === got.length && timingSafeEqual(want, got);
+}

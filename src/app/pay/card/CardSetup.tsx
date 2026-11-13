@@ -8,9 +8,9 @@ import { usd } from '@/lib/recurring-text';
 const brand = getBrand('nexa');
 const c = brand.colors;
 
-type Props = { token: string; active: boolean; plan: string; name: string; email: string; phone: string; last4: string; authorization: string; returnUrl: string; dueCents: number; monthly: number };
+type Props = { token: string; active: boolean; plan: string; name: string; email: string; phone: string; last4: string; authorization: string; returnUrl: string; dueCents: number; monthly: number; credit?: boolean };
 
-export default function CardSetup({ token, active, plan, name, email, phone, last4, authorization, returnUrl, dueCents, monthly }: Props) {
+export default function CardSetup({ token, active, plan, name, email, phone, last4, authorization, returnUrl, dueCents, monthly, credit }: Props) {
   const cardRef = useRef<any>(null);
   const [sdk, setSdk] = useState(false);
   const [ready, setReady] = useState(false);
@@ -88,8 +88,8 @@ export default function CardSetup({ token, active, plan, name, email, phone, las
         ) : saved ? (
           <>
             <h1 style={h1}>{paid ? "You're all set" : 'Your card is saved'}</h1>
-            <p style={para}>{paid ? `Your payment of ${usd(paid / 100)} went through. ` : ''}Your card ending in {saved} is set up for automatic billing. We sent a confirmation to {email}.</p>
-            <a href={returnUrl} style={{ ...btn, display: 'inline-block', textAlign: 'center', textDecoration: 'none', marginTop: 12 }}>Back to your project</a>
+            <p style={para}>{paid ? `Your payment of ${usd(paid / 100)} went through. ` : ''}Your card ending in {saved} is {credit ? 'saved. Go back to the app to add credit' : 'set up for automatic billing'}. We sent a confirmation to {email}.</p>
+            <a href={returnUrl} style={{ ...btn, display: 'inline-block', textAlign: 'center', textDecoration: 'none', marginTop: 12 }}>{credit ? 'Back to the app' : 'Back to your project'}</a>
           </>
         ) : (
           <>

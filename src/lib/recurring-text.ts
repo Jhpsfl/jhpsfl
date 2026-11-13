@@ -20,3 +20,18 @@ export function authorizationText(sub: { amount: number | string; next_billing_d
     `You can stop automatic billing any time by emailing info@nexavisiongroup.com.`,
   ].join(' ');
 }
+
+/** A card saved for prepaid AI credit (the Nexa AI module), not for monthly billing. */
+export const CREDIT_SERVICE = 'AI credits';
+export const isCreditWallet = (sub: { service_type?: string | null } | null | undefined) => sub?.service_type === CREDIT_SERVICE;
+
+export function creditAuthorizationText() {
+  return [
+    `I authorize NexaVision Group to save this card and charge it for AI credit in my app.`,
+    `It is charged only when someone on my account adds credit, for the amount they choose, or automatically if automatic top-up is turned on in the app, for the amount set there.`,
+    `Nothing is charged today.`,
+    `We email a receipt after every charge.`,
+    `Charges appear on the card statement as ${STATEMENT_NAME}.`,
+    `You can remove this card any time in the app or by emailing info@nexavisiongroup.com.`,
+  ].join(' ');
+}

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import CardSetup from './CardSetup';
 import { createSupabaseAdmin } from '@/lib/supabase';
-import { authorizationText } from '@/lib/recurring-text';
+import { authorizationText, creditAuthorizationText, isCreditWallet } from '@/lib/recurring-text';
 import { balanceCents, loadInvoice } from '@/lib/invoice-payment';
 import { nexaPayMetadata } from '@/lib/nexa-pay-metadata';
 
@@ -25,7 +25,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       email={sub?.customers?.email || ''}
       phone={sub?.customers?.phone || ''}
       last4={active ? sub?.card_last4 || '' : ''}
-      authorization={active ? authorizationText(sub, dueCents) : ''}
+      authorization={active ? (isCreditWallet(sub) ? creditAuthorizationText() : authorizationText(sub, dueCents)) : ''}
+      credit={isCreditWallet(sub)}
       dueCents={dueCents}
       monthly={active ? Number(sub.amount) : 0}
       returnUrl={sub?.return_url || 'https://nexavisiongroup.com'}
