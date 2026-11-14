@@ -1,5 +1,6 @@
 // Safe for the browser. The customer reads this wording and the same wording is saved with their consent.
-export const STATEMENT_NAME = 'SQ *JENKINS HOME & PROPE';
+// Only used for NexaVision-brand charges (run at the Nexa Square location, business name "NexaVision Group").
+export const STATEMENT_NAME = 'SQ *NEXAVISION GROUP';
 
 export const usd = (n: number) =>
   Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
