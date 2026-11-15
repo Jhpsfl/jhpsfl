@@ -25,6 +25,7 @@ import { formatDate, formatCurrency, timeAgo } from "./components/formatters";
 import StatusBadge from "./components/StatusBadge";
 import { DataTable, TableRow, Td } from "./components/DataTable";
 import NavItem from "./components/NavItem";
+import NexaBooksNavItem from "./components/NexaBooksNavItem";
 import JobModal from "./components/JobModal";
 import CustomerModal from "./components/CustomerModal";
 import SubscriptionModal from "./components/SubscriptionModal";
@@ -190,6 +191,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const tabHistoryRef = useRef<Tab[]>(["overview"]);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [canOpenBooks, setCanOpenBooks] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [customersCollapsed, setCustomersCollapsed] = useState(false);
@@ -309,6 +311,17 @@ export default function AdminDashboard() {
     const n = Date.now();
     window.history.pushState({ sentinel: true, n }, "", `/admin#nav${n}`);
   }, []);
+
+  // Bookkeeping (NexaBooks) item: shown only to admins whose role may open it (checked on the server).
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetch("/api/admin/nexabooks-access", { cache: "no-store" })
+      .then(r => (r.ok ? r.json() : { allowed: false }))
+      .then(d => { if (!cancelled) setCanOpenBooks(!!d.allowed); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // AI Assistant navigation & refresh events
   useEffect(() => {
@@ -1049,6 +1062,7 @@ export default function AdminDashboard() {
                   <NavItem icon="✉️" label="Email" active={activeTab === "messages"} onClick={() => switchTab("messages")} badge={badgeCounts.unreadEmail} />
                   <NavItem icon="📄" label="Invoices" active={activeTab === "invoices"} onClick={() => switchTab("invoices")} />
                   <NavItem icon="📋" label="Estimates" active={activeTab === "quotes"} onClick={() => switchTab("quotes")} />
+                  {canOpenBooks && <NexaBooksNavItem onNavigate={() => setSidebarOpen(false)} />}
 
                   <div style={{ borderTop: "1px solid #1a3a1a", margin: "16px 0" }} />
                   <div style={{ fontSize: 10, color: "#2a4a2a", letterSpacing: 2, padding: "0 16px", marginBottom: 8, fontWeight: 700 }}>COMING SOON</div>
