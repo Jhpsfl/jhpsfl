@@ -4,8 +4,10 @@
 //
 // Sales come from the processors themselves (the payments table misses a charge when no customer row
 // could be matched), and the payments table says which brand and flow each charge belongs to.
-// NexaVision-branded charges (brand 'nexa') are NexaVision's sales and are left out here; they are
-// still inside the processor payouts, because JHPS's Square and Stripe accounts collect them.
+// NexaVision-branded charges (brand 'nexa') are collected by JHPS's Square and Stripe accounts (the
+// JHPS pay bridge) and land in JHPS's payouts, and NexaVision's own NexaBooks has no adapter, so they
+// are booked here, in their own channels ("Square · NexaVision", "Stripe · NexaVision"), so the owner
+// can see them apart and the card deposits reconcile.
 import { createSupabaseAdmin } from '@/lib/supabase';
 import type { Payout, SalesDay, SalesSource } from './verify';
 
@@ -135,8 +137,9 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
 
   const charges: Charge[] = [];
   const refunds: Refund[] = [];
+  const ch = (base: string, nexa: boolean) => (nexa ? `${base} · NexaVision` : base);
 
-  // Square: JHPS's location. (NexaVision's own location is NexaVision's business.)
+  // Square: JHPS's location, where both brands' charges are taken. (NexaVision's own location has its own payout account.)
   if (squareToken() && jhpsLocation()) {
     const loc = encodeURIComponent(jhpsLocation()!);
     const qs = `location_id=${loc}&begin_time=${encodeURIComponent(start.toISOString())}&end_time=${encodeURIComponent(end.toISOString())}&limit=100`;
@@ -148,11 +151,11 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
       const row = bySquare.get(p.id);
       const nexa = row ? row.brand === 'nexa' : /nexavision/i.test(p.note ?? '');
       paymentInfo.set(p.id, { nexa, source: sqSource(p, row) });
-      if (p.status !== 'COMPLETED' || nexa) continue;
+      if (p.status !== 'COMPLETED') continue;
       const date = etDay(p.created_at);
       if (!inRange(date)) continue;
       const total = p.total_money?.amount ?? p.amount_money?.amount ?? 0;
-      charges.push({ date, source: sqSource(p, row), channel: 'Square', total, tip: p.tip_money?.amount ?? 0, card: total, cash: 0, other: 0 });
+      charges.push({ date, source: sqSource(p, row), channel: ch('Square', nexa), total, tip: p.tip_money?.amount ?? 0, card: total, cash: 0, other: 0 });
     }
     const sqRefunds = await squareAll<SquareRefund>(`/v2/refunds?${qs}`, 'refunds');
     for (const r of sqRefunds) {
@@ -162,8 +165,7 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
       const known = r.payment_id ? paymentInfo.get(r.payment_id) : undefined;
       const row = r.payment_id ? bySquare.get(r.payment_id) : undefined;
       const nexa = known?.nexa ?? row?.brand === 'nexa';
-      if (nexa) continue;
-      refunds.push({ date, source: known?.source ?? (row?.subscription_id ? 'other' : 'online'), channel: 'Square', amount: r.amount_money?.amount ?? 0 });
+      refunds.push({ date, source: known?.source ?? (row?.subscription_id ? 'other' : 'online'), channel: ch('Square', nexa), amount: r.amount_money?.amount ?? 0 });
     }
   }
 
@@ -179,10 +181,10 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
       return !!meta?.invoiceNumber && invBrand.get(meta.invoiceNumber) === 'nexa';
     };
     for (const c of list) {
-      if (c.status !== 'succeeded' || !c.paid || isNexa(c.payment_intent, c.metadata)) continue;
+      if (c.status !== 'succeeded' || !c.paid) continue;
       const date = etDay(c.created * 1000);
       if (!inRange(date)) continue;
-      charges.push({ date, source: 'online', channel: 'Stripe', total: c.amount, tip: 0, card: c.amount, cash: 0, other: 0 });
+      charges.push({ date, source: 'online', channel: ch('Stripe', isNexa(c.payment_intent, c.metadata)), total: c.amount, tip: 0, card: c.amount, cash: 0, other: 0 });
     }
     const stRefunds = await stripeAll<StripeRefund>(`/v1/refunds?${range}`);
     const chargeMeta = new Map(list.map(c => [c.id, c.metadata]));
@@ -190,15 +192,14 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
       if (r.status !== 'succeeded') continue;
       const date = etDay(r.created * 1000);
       if (!inRange(date)) continue;
-      if (isNexa(r.payment_intent, r.charge ? chargeMeta.get(r.charge) : undefined)) continue;
-      refunds.push({ date, source: 'online', channel: 'Stripe', amount: r.amount });
+      refunds.push({ date, source: 'online', channel: ch('Stripe', isNexa(r.payment_intent, r.charge ? chargeMeta.get(r.charge) : undefined)), amount: r.amount });
     }
   }
 
   // Payments recorded by hand in the admin (cash, check, Zelle...). Card payments recorded by hand are
   // left out: a card is taken through Square or Stripe, which are already counted above.
   for (const p of db) {
-    if (p.status !== 'completed' || p.brand === 'nexa' || p.square_payment_id || p.stripe_payment_id) continue;
+    if (p.status !== 'completed' || p.square_payment_id || p.stripe_payment_id) continue;
     const method = (p.payment_method ?? '').toLowerCase();
     if (method === 'card' || method === 'test') continue;
     const date = etDay(p.paid_at ?? p.created_at);
@@ -206,7 +207,7 @@ export async function buildSales(from: string, to: string): Promise<SalesDay[]> 
     const total = cents(p.amount);
     if (total <= 0) continue;
     const cash = method === 'cash' ? total : 0;
-    charges.push({ date, source: 'other', channel: HAND_CHANNEL, total, tip: 0, card: 0, cash, other: total - cash });
+    charges.push({ date, source: 'other', channel: ch(HAND_CHANNEL, p.brand === 'nexa'), total, tip: 0, card: 0, cash, other: total - cash });
   }
 
   // One SalesDay per day per channel.
