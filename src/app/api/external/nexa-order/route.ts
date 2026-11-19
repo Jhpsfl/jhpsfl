@@ -22,6 +22,7 @@ type InBody = {
   kind?: 'service';
   /** 4% card fee, service invoices only */
   surcharge?: boolean;
+  surcharge_rate?: number;
   order_id: string;
   customer: { name: string; email: string; phone?: string; company?: string; address?: { line1?: string; line2?: string; city?: string; state?: string; zip?: string } };
   items: InItem[];
@@ -119,7 +120,9 @@ export async function POST(req: Request) {
     if (!(shipCents >= 0 && shipCents <= 100_000)) return NextResponse.json({ error: 'invalid shipping' }, { status: 400 });
     if (shipCents > 0) lineItems.push({ id: randomBytes(6).toString('hex'), description: desc, quantity: 1, unit_price: shipCents / 100, amount: shipCents / 100, taxable: false });
   }
-  const surchargeCents = isService && b.surcharge ? Math.round(subtotalCents * 0.04) : 0;
+  // Card fee percent from the Nexa proposal (default 4%, never above 4%).
+  const rate = Number(b.surcharge_rate) > 0 && Number(b.surcharge_rate) <= 4 ? Number(b.surcharge_rate) : 4;
+  const surchargeCents = isService && b.surcharge ? Math.round((subtotalCents * rate) / 100) : 0;
   const totalCents = subtotalCents + shipCents + taxCents + surchargeCents;
   if (totalCents < 50) return NextResponse.json({ error: 'total too small' }, { status: 400 });
 
