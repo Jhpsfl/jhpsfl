@@ -98,7 +98,6 @@ export default function CardSetup({ token, active, plan, name, email, phone, las
             {due > 0 && (
               <dl style={{ margin: '16px 0 0', display: 'grid', gap: 8, fontSize: 17 }}>
                 <div style={row}><dt>Due today</dt><dd style={{ margin: 0, fontWeight: 700 }}>{usd(due / 100)}</dd></div>
-                <div style={row}><dt style={{ color: c.textSecondary }}>Then each month</dt><dd style={{ margin: 0, color: c.textSecondary }}>{usd(monthly)}</dd></div>
               </dl>
             )}
             <div style={{ background: c.bgCard, border: `1px solid ${c.border}`, borderRadius: 16, padding: 18, marginTop: 18 }}>
