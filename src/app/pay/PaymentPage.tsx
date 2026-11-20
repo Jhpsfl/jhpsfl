@@ -1435,7 +1435,7 @@ export default function PaymentPage() {
                                     </div>
                                     {(invoiceData.surcharge_amount || 0) > 0 && (
                                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: brand.colors.textMuted }}>
-                                        <span>4% Surcharge</span>
+                                        <span>Card processing fee</span>
                                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${(invoiceData.surcharge_amount || 0).toFixed(2)}</span>
                                       </div>
                                     )}
@@ -2004,7 +2004,7 @@ export default function PaymentPage() {
                       ))}
                       {(invoiceData.surcharge_amount || 0) > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4, color: brand.colors.textMuted }}>
-                          <span>4% Surcharge</span>
+                          <span>Card processing fee</span>
                           <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>${(invoiceData.surcharge_amount || 0).toFixed(2)}</span>
                         </div>
                       )}

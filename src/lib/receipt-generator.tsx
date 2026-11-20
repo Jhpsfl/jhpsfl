@@ -734,7 +734,7 @@ const InvoiceDoc: React.FC<{ data: InvoiceData; logoUrl?: string }> = ({ data, l
           </View>
           {(data.surchargeAmount || 0) > 0 && (
             <View style={s.totalsRow}>
-              <Text style={s.totalsLabel}>4% Surcharge</Text>
+              <Text style={s.totalsLabel}>Card processing fee</Text>
               <Text style={s.totalsVal}>{fmt(data.surchargeAmount || 0)}</Text>
             </View>
           )}
