@@ -14,7 +14,7 @@ export function authorizationText(sub: { amount: number | string; next_billing_d
     : `${dueTodayCents > 0 ? 'No monthly charge is made today.' : 'Nothing is charged today.'} We will email you the first monthly charge date before it happens.`;
   return [
     `${dueTodayCents > 0 ? `I authorize NexaVision Group to charge this card ${usd(dueTodayCents / 100)} today, and to ` : 'I authorize NexaVision Group to '}charge this card each month for the services in my signed agreement${sub.reference ? ` ${sub.reference}` : ''}.`,
-    `The monthly price is currently ${usd(Number(sub.amount))}. Each charge can also include usage-based or other amounts allowed by that agreement, so the total can change from month to month.`,
+    `The monthly price is set in that agreement. Each charge can also include usage-based or other amounts allowed by that agreement, so the total can change from month to month.`,
     when,
     `We will email you the amount before any charge that differs from the last one, and a receipt after every charge.`,
     `Charges appear on your card statement as ${STATEMENT_NAME}.`,
